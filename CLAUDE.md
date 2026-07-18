@@ -70,11 +70,13 @@ HF_TOKEN=hf_xxx python align.py clip.wav --diar diar.json --out out.json # step 
 
 ## Architecture (the big picture)
 
-Two tiers (DESIGN §4). **Edge tier** (`edge/`) captures IO on the Pi and can *optionally* run
-face detect on-device: camera → deterministic **parametric sprite params** (never raw video);
-USB mic → speaker embedding; a **hardware GPIO mute** button + LED (`gpiozero`). **App/cloud
-tier** (`server/` + `app/`) does the binding, storage, and non-real-time storytelling: bind
-utterance→character, store, summarize, replay.
+Two tiers (DESIGN §4). **Edge tier** (`edge/` on the Pi) captures the **camera** and can
+*optionally* run face detect on-device: camera → deterministic **parametric sprite params +
+ts** (never raw video); a **hardware GPIO mute** button + LED (`gpiozero`) that cuts the
+camera. The **microphone is app/phone-side**, not on the Pi. **App/cloud tier**
+(`server/` + `app/`) does the **timeline alignment** (Pi frames ⟷ app audio by `ts`),
+binding, storage, and non-real-time storytelling: bind utterance→character, store,
+summarize, replay.
 
 Data flow: Pi emits derived events (sprite params, embeddings, transcript text — no raw faces) →
 `server/` upserts `people`, appends `events`, and at day-end an LLM writes a `recap` → `app/`

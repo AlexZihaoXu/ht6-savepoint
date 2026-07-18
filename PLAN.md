@@ -129,7 +129,7 @@ the **hardware mute** and capture visibly stops.
 
 | Risk | Severity | Mitigation | Owner |
 |---|---|---|---|
-| **Cross-device audio↔video sync** | 🟠 High | Put a **USB mic on the Pi** (one clock) instead of phone audio — dissolves the sync problem. If you keep phone audio, make **tap-to-assign** the real demo and treat auto-binding as a stretch. | A+B |
+| **Cross-device audio↔video sync** | 🟠 High | **Decided:** mic = app/phone, camera = Pi; the **server aligns the two streams by timestamp**. Needs comparable clocks (NTP) on both devices; likely decouple `/ingest` into separate frame/audio streams joined by `ts`. Keep **tap-to-assign** as the demo fallback if alignment is loose on stage. | A+B+D |
 | **Recap/bio LLM backend** | 🟢 Resolved | `recap.py` is **implemented on gemma** (M3, live) behind a pluggable `LLMClient` — swapping to Gemini/Backboard/FreeSolo is one config value. FreeSolo spike done (SAV-51): fine-tuning-only, a prize-track option not a dependency. | B/D |
 | **Thin-AI perception** | 🟠 High | Face-attribute detection alone reads as pedestrian. Lean the "creative AI" story on the deterministic-sprite identity + diarized who-said-what + the narrated recap. | B |
 | **Scope creep** | 🟠 High | 6+ screens is too much. Build the 2 hero screens (character scene + day-view), mock the rest. Honor the cut-lines. | All |
@@ -155,8 +155,9 @@ legitimately satisfy; each is judged independently.
 
 ## 6. Proposed stack
 
-- **Edge:** Pi 5 on a **regular Raspberry Pi OS** image; Pi Camera + USB mic; *optional*
-  on-device OpenCV / ONNX face detect and a GPIO mute switch + LED. **No QNX / RTOS.**
+- **Edge:** Pi 5 on a **regular Raspberry Pi OS** image; **Pi Camera only** (mic is
+  app/phone-side; server timeline-aligns); *optional* on-device OpenCV / ONNX face detect
+  and a GPIO mute switch + LED. **No QNX / RTOS.**
 - **Speech:** the vendored **diarization → transcription** pipeline (merged
   `Speaker N: text`), behind a `Transcriber` protocol (stub for CI, real pipeline via a
   subprocess).
@@ -178,8 +179,9 @@ legitimately satisfy; each is judged independently.
    wiring `app/` to the live API, or is the team building it? (Blocks the M2 app milestone.)
 3. **Speaker → Person link** — dialogue events currently carry diarized `Speaker N` labels,
    not identified people. Need a mechanic to tie a line to the right character sprite.
-4. **USB mic on the Pi, or keep audio on the phone?** (Recommend the Pi mic — dissolves
-   cross-device sync.)
+4. **Cross-device sync (decided):** mic = app/phone, camera = Pi, **server aligns by
+   timestamp**. Open: the clock-sync scheme (NTP?) and whether to split `/ingest` into
+   separate frame/audio streams joined by `ts`.
 5. **Auto-binding vs. tap-to-assign** as the primary who-said-what for the demo.
 6. **How far to push M5** (on-device / Pi hardware polish) given remaining time.
 
