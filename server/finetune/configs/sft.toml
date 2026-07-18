@@ -1,0 +1,17 @@
+model = "Qwen/Qwen3.5-4B"
+algorithm = "sft"
+
+[environment]
+id = "ht6-savepoint/savepoint-recap"
+
+[train]
+epochs = 8
+max_examples = 47  # full expanded dataset (18 original + 29 added to fix overfitting)
+lora_rank = 32
+batch_size = 8  # ~6 steps/epoch x 8 epochs = ~48 steps. Run 2 (60 steps on only 18
+                # rows) hit ~0.0017 loss / 99.97% token accuracy -- pure memorization,
+                # fabricated content on held-out days. More data + fewer epochs this
+                # time so the model has to learn the input->output mapping instead of
+                # memorizing 18 fixed strings.
+# GPU and HF artifacts are managed automatically by the platform: the GPU is
+# the cheapest fitting managed class, and artifacts live in a private environment-scoped repo.
