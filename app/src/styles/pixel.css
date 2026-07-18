@@ -192,11 +192,18 @@
     left 0.9s cubic-bezier(0.4, 0, 0.2, 1),
     top 0.9s cubic-bezier(0.4, 0, 0.2, 1);
 }
+/* Wandering actors: positions are written per animation frame from the
+   wander sim — no left/top transition (it would lag every frame). */
+.sp-actor-free {
+  position: absolute;
+}
+/* Per-frame facing-flip + hop transform target (pivot at the feet). */
+.sp-flip {
+  transform-origin: 50% 100%;
+  will-change: transform;
+}
 .sp-bob {
   animation: sp-bob 2.6s ease-in-out infinite;
-}
-.sp-drift {
-  animation: sp-drift 6s ease-in-out infinite;
 }
 @keyframes sp-bob {
   0%,
@@ -205,15 +212,6 @@
   }
   50% {
     transform: translateY(-3px);
-  }
-}
-@keyframes sp-drift {
-  0%,
-  100% {
-    margin-left: 0;
-  }
-  50% {
-    margin-left: var(--drift, 6px);
   }
 }
 

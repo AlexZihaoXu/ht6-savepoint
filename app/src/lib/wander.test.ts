@@ -1,0 +1,112 @@
+import { describe, expect, it } from "vitest";
+import {
+  createWanderer,
+  hopOffset,
+  stepWanderers,
+  HOP_DURATION,
+  type Wanderer,
+} from "./wander";
+import { rand } from "./scene-utils";
+
+/** Deterministic rng from scene-utils' hash (same trick the page uses). */
+function seededRng(seed: string) {
+  let n = 0;
+  return () => rand(seed, n++);
+}
+
+/** rng pinned to 0.5 → zero steering jitter, so paths are fully predictable. */
+const flat = () => 0.5;
+
+const BOUNDS = { w: 400, h: 300 };
+
+function make(id: string, x: number, y: number, heading = 0): Wanderer {
+  const w = createWanderer(id, x, y, seededRng(id));
+  w.heading = heading;
+  w.turnIn = 999; // no spontaneous intent changes during the test
+  w.hopIn = 999; // no hops during the test
+  return w;
+}
+
+describe("wander sim", () => {
+  it("never leaves the plot over a long random walk", () => {
+    const ws = ["a", "b", "c", "d", "e", "f", "g"].map((id, i) =>
+      createWanderer(id, 50 + i * 40, 60 + (i % 3) * 60, seededRng(id)),
+    );
+    const rng = seededRng("world");
+    for (let step = 0; step < 3000; step++) {
+      stepWanderers(ws, 1 / 30, BOUNDS, rng);
+      for (const w of ws) {
+        expect(w.x).toBeGreaterThanOrEqual(0);
+        expect(w.x).toBeLessThanOrEqual(BOUNDS.w);
+        expect(w.y).toBeGreaterThanOrEqual(0);
+        expect(w.y).toBeLessThanOrEqual(BOUNDS.h);
+      }
+    }
+  });
+
+  it("reflects off a wall instead of clipping through", () => {
+    const w = make("wall", 395, 150, 0); // heading right, at the right edge
+    stepWanderers([w], 1 / 30, BOUNDS, flat);
+    expect(w.x).toBeLessThanOrEqual(BOUNDS.w - 29);
+    expect(Math.cos(w.heading)).toBeLessThan(0); // now heading left
+  });
+
+  it("bumps two characters apart when close in BOTH axes", () => {
+    const a = make("a", 100, 100, 0); // walking right…
+    const b = make("b", 120, 106, Math.PI); // …into b walking left
+    const d0 = Math.hypot(b.x - a.x, b.y - a.y);
+    stepWanderers([a, b], 1 / 30, BOUNDS, flat);
+    expect(a.bumpCooldown).toBeGreaterThan(0);
+    expect(b.bumpCooldown).toBeGreaterThan(0);
+    // They turn onto diverging courses and separate over the next second.
+    for (let i = 0; i < 30; i++) stepWanderers([a, b], 1 / 30, BOUNDS, flat);
+    expect(Math.hypot(b.x - a.x, b.y - a.y)).toBeGreaterThan(d0);
+  });
+
+  it("does NOT collide when overlapping in x but far apart in y (depth levels)", () => {
+    const a = make("a", 100, 60, 0);
+    const b = make("b", 104, 160, Math.PI); // same x zone, other depth level
+    stepWanderers([a, b], 1 / 30, BOUNDS, flat);
+    expect(a.bumpCooldown).toBe(0);
+    expect(b.bumpCooldown).toBe(0);
+    expect(a.heading).toBeCloseTo(0, 5); // course unchanged — they pass by
+    expect(b.heading).toBeCloseTo(Math.PI, 5);
+  });
+
+  it("freezes a selected character but keeps the others moving", () => {
+    const a = make("a", 100, 100, 0);
+    const b = make("b", 300, 200, Math.PI);
+    a.frozen = true;
+    stepWanderers([a, b], 1 / 30, BOUNDS, flat);
+    expect(a.x).toBe(100);
+    expect(a.y).toBe(100);
+    expect(b.x).not.toBe(300);
+  });
+
+  it("faces the direction of travel", () => {
+    const right = make("r", 200, 150, 0);
+    const left = make("l", 200, 150, Math.PI);
+    left.x = 100;
+    stepWanderers([right, left], 1 / 30, BOUNDS, flat);
+    expect(right.facing).toBe(1);
+    expect(left.facing).toBe(-1);
+  });
+
+  it("staggers hop timing per character (deterministic per id)", () => {
+    const a = createWanderer("a", 0, 0, seededRng("a"));
+    const b = createWanderer("b", 0, 0, seededRng("b"));
+    const a2 = createWanderer("a", 0, 0, seededRng("a"));
+    expect(a.hopIn).not.toBe(b.hopIn);
+    expect(a.hopIn).toBe(a2.hopIn); // same id → same phase
+  });
+
+  it("hops in two beats: up-tilt-right then up-tilt-left", () => {
+    expect(hopOffset(-1)).toEqual({ dy: 0, tilt: 0 });
+    const first = hopOffset(HOP_DURATION * 0.25);
+    const second = hopOffset(HOP_DURATION * 0.75);
+    expect(first.dy).toBeLessThan(0); // airborne
+    expect(second.dy).toBeLessThan(0);
+    expect(first.tilt).toBeGreaterThan(0); // right…
+    expect(second.tilt).toBeLessThan(0); // …then left
+  });
+});
