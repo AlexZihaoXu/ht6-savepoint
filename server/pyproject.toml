@@ -12,6 +12,10 @@ dependencies = [
     "pydantic==2.10.4",
     "pydantic-settings==2.7.1",
     "motor==3.6.0",
+    "opencv-python-headless>=4.9,<5",
+    "numpy>=2.5.1",
+    "pillow>=12.3.0",
+    "python-multipart>=0.0.32",
 ]
 
 [project.scripts]
@@ -62,6 +66,15 @@ extra_checks = true
 [[tool.mypy.overrides]]
 module = ["motor.*", "pymongo.*"]
 ignore_missing_imports = true
+
+# opencv-python-headless ships only partial type stubs (no cv2.data /
+# cv2.CascadeClassifier), so treat cv2 as untyped rather than fight incomplete
+# stubs. NumPy and Pillow are checked normally.
+[[tool.mypy.overrides]]
+module = ["cv2", "cv2.*"]
+ignore_missing_imports = true
+follow_imports = "skip"
+follow_imports_for_stubs = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

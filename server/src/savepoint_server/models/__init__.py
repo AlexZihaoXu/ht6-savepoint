@@ -7,14 +7,17 @@ from savepoint_server.models.day import Day
 from savepoint_server.models.event import Event, EventType
 from savepoint_server.models.person import AvatarParams, Person
 from savepoint_server.models.recap import Recap, RecapScope
+from savepoint_server.models.sprite import FaceAnalysis, SpriteParams
 
 __all__ = [
     "AvatarParams",
     "Day",
     "Event",
     "EventType",
+    "FaceAnalysis",
     "MongoModel",
     "Person",
     "Recap",
     "RecapScope",
+    "SpriteParams",
 ]
