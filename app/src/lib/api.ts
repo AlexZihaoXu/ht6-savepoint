@@ -86,5 +86,8 @@ export function displayName(p: ApiPerson): string {
   if (p.name) return p.name;
   // "Speaker 1" ids read fine as-is; face ids get a short friendly stand-in.
   if (/^speaker/i.test(p.local_id)) return p.local_id;
-  return `Neighbor ${p.local_id.replace(/[^0-9a-f]/gi, "").slice(0, 3).toUpperCase()}`;
+  return `Neighbor ${p.local_id
+    .replace(/[^0-9a-f]/gi, "")
+    .slice(0, 3)
+    .toUpperCase()}`;
 }

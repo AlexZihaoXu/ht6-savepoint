@@ -1,0 +1,234 @@
+/*
+ * Cozy-pixel layer for the redesigned screens (plaza / garden / day scene).
+ *
+ * Ground rules: LPC tile art + the Press Start 2P display font render at
+ * integer-ish scales with `image-rendering: pixelated`; interface chrome
+ * (wood header, gray pixel buttons, speech bubbles) is plain CSS so it stays
+ * crisp at any DPR and themes cleanly. Scene art keeps its fixed palette in
+ * both themes — dark mode just dims the world a little (nighttime plaza).
+ */
+
+@font-face {
+  font-family: "Press Start 2P";
+  src: url("/assets/fonts/PressStart2P.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+.font-pixel {
+  font-family: "Press Start 2P", ui-monospace, monospace;
+  letter-spacing: 0.02em;
+}
+
+/* ---- ground + props ------------------------------------------------------ */
+
+.grass-bg {
+  background-image: url("/assets/tiles/grass.png");
+  background-size: 48px 48px;
+  image-rendering: pixelated;
+}
+
+/* Rounded dirt plot: the LPC 3x3 scalloped patch as a border-image, so any
+   box becomes an organic plot over the grass. */
+.dirt-plot {
+  border: 22px solid transparent;
+  border-image: url("/assets/tiles/dirt-patch.png") 32 fill round;
+  image-rendering: pixelated;
+}
+
+/* Night mode: dim the pixel scene instead of recoloring the art. */
+.dark .scene-dimmable {
+  filter: brightness(0.78) saturate(0.9);
+}
+
+/* ---- chrome -------------------------------------------------------------- */
+
+.wood-bar {
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.07), rgba(0, 0, 0, 0.08)), #6d4a30;
+  border-bottom: 3px solid #4a3120;
+  color: #fff6e6;
+}
+
+.pixel-btn {
+  background: var(--pixel-btn-bg);
+  color: var(--pixel-btn-fg);
+  border: none;
+  box-shadow:
+    0 2px 0 rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  image-rendering: pixelated;
+}
+.pixel-btn:active {
+  transform: translateY(1px);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.28);
+}
+
+.pixel-bar {
+  background: var(--pixel-bar-bg);
+  border-top: 2px solid var(--pixel-bar-border);
+}
+
+:root {
+  --pixel-btn-bg: #e9e4d8;
+  --pixel-btn-fg: #241f18;
+  --pixel-bar-bg: #f7f4ec;
+  --pixel-bar-border: #d9d2c2;
+  --bubble-bg: #ffffff;
+  --bubble-fg: #241f18;
+}
+.dark {
+  --pixel-btn-bg: #3b382f;
+  --pixel-btn-fg: #f0ead8;
+  --pixel-bar-bg: #211f1a;
+  --pixel-bar-border: #3b382f;
+  --bubble-bg: #2c2a24;
+  --bubble-fg: #f0ead8;
+}
+
+/* ---- speech bubble ------------------------------------------------------- */
+
+.pixel-bubble {
+  background: var(--bubble-bg);
+  color: var(--bubble-fg);
+  border-radius: 14px;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.22);
+}
+.pixel-bubble-tail {
+  position: absolute;
+  top: 100%;
+  width: 0;
+  height: 0;
+  border: 9px solid transparent;
+  border-top-color: var(--bubble-bg);
+  border-bottom-width: 0;
+}
+
+/* Floating name tags in the scene: white pixel text with a hard outline. */
+.pixel-name {
+  color: #fff;
+  text-shadow:
+    1px 0 0 #1d1712,
+    -1px 0 0 #1d1712,
+    0 1px 0 #1d1712,
+    0 -1px 0 #1d1712,
+    1px 1px 0 #1d1712;
+}
+
+/* ---- Stardew dialogue box ------------------------------------------------ */
+
+.dlg-wood {
+  background: #c89d63;
+  border: 3px solid #4a3120;
+  box-shadow:
+    inset 0 0 0 3px #e8c288,
+    inset 0 0 0 6px #a9764a;
+  image-rendering: pixelated;
+}
+.dlg-portrait {
+  background: #4b3b54;
+  border: 3px solid #2f2438;
+  box-shadow: inset 0 0 0 2px #6a5576;
+}
+.dlg-text {
+  background: #f7e9c8;
+  color: #4a3120;
+  border: 2px solid #d9b98c;
+  border-radius: 10px;
+}
+
+/* ---- timeline scrubber --------------------------------------------------- */
+
+.scrub {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 30px;
+  background: transparent;
+  cursor: pointer;
+}
+.scrub::-webkit-slider-runnable-track {
+  height: 10px;
+  background: #cfc3ae;
+  border: 2px solid #7c7260;
+  box-shadow: inset 0 2px 0 rgba(0, 0, 0, 0.18);
+}
+.scrub::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 24px;
+  height: 24px;
+  margin-top: -9px;
+  background: #e9dcc0;
+  border: 3px solid #8d8272;
+  border-radius: 7px 10px 8px 9px;
+  box-shadow:
+    inset -3px -3px 0 rgba(0, 0, 0, 0.16),
+    inset 2px 2px 0 rgba(255, 255, 255, 0.55);
+}
+.scrub::-moz-range-track {
+  height: 10px;
+  background: #cfc3ae;
+  border: 2px solid #7c7260;
+}
+.scrub::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  background: #e9dcc0;
+  border: 3px solid #8d8272;
+  border-radius: 7px 10px 8px 9px;
+}
+.scrub:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* ---- scene actors -------------------------------------------------------- */
+
+.sp-actor {
+  position: absolute;
+  transition:
+    left 0.9s cubic-bezier(0.4, 0, 0.2, 1),
+    top 0.9s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.sp-bob {
+  animation: sp-bob 2.6s ease-in-out infinite;
+}
+.sp-drift {
+  animation: sp-drift 6s ease-in-out infinite;
+}
+@keyframes sp-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+@keyframes sp-drift {
+  0%,
+  100% {
+    margin-left: 0;
+  }
+  50% {
+    margin-left: var(--drift, 6px);
+  }
+}
+
+/* ---- misc ---------------------------------------------------------------- */
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Full-bleed immersive column (phone-frame width, no side padding). */
+.app-column-flush {
+  width: 100%;
+  max-width: 30rem;
+  margin-inline: auto;
+}

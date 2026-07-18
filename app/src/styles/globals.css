@@ -11,6 +11,7 @@
 @import "tailwindcss";
 @import "@heroui/styles";
 @import "./theme.css";
+@import "./pixel.css";
 
 /* ---- Fonts -------------------------------------------------------------- */
 /* theme.css sets `--font-sans: var(--font-dm-sans)`; define the family here.
@@ -122,6 +123,12 @@
     flex: 1 1 auto;
     padding-top: 1rem;
     padding-bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Immersive screens (plaza / day scene): no padding, page owns the chrome. */
+  .app-main-flush {
+    flex: 1 1 auto;
+    padding: 0;
   }
 
   /* Touch-friendly hit target (Apple/Material ~44px minimum). */

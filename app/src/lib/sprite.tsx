@@ -132,7 +132,9 @@ function Hair({ style, hair }: { style: string; hair: string }) {
   const top = shade(hair, 0.1);
   switch (style) {
     case "buzz":
-      return <path d="M5.6 6.3 Q10 3.2 14.4 6.3 L14.4 5 Q10 3 5.6 5 Z" fill={hair} />;
+      return (
+        <path d="M5.6 6.3 Q10 3.2 14.4 6.3 L14.4 5 Q10 3 5.6 5 Z" fill={hair} />
+      );
     case "long":
       return (
         <g fill={hair}>
@@ -179,8 +181,22 @@ function Hair({ style, hair }: { style: string; hair: string }) {
 function Glasses() {
   return (
     <g fill="none" stroke="#2a2320" strokeWidth="0.5">
-      <rect x="7.1" y="6.9" width="2.5" height="2.4" rx="0.6" fill="rgba(255,255,255,0.28)" />
-      <rect x="10.4" y="6.9" width="2.5" height="2.4" rx="0.6" fill="rgba(255,255,255,0.28)" />
+      <rect
+        x="7.1"
+        y="6.9"
+        width="2.5"
+        height="2.4"
+        rx="0.6"
+        fill="rgba(255,255,255,0.28)"
+      />
+      <rect
+        x="10.4"
+        y="6.9"
+        width="2.5"
+        height="2.4"
+        rx="0.6"
+        fill="rgba(255,255,255,0.28)"
+      />
       <line x1="9.6" y1="7.9" x2="10.4" y2="7.9" />
     </g>
   );
@@ -191,8 +207,18 @@ function Hat({ kind, hair }: { kind: string; hair: string }) {
     const c = shade(hair, 0.35);
     return (
       <g>
-        <path d="M5.2 5.4 Q10 1.2 14.8 5.4 L14.8 6.2 L5.2 6.2 Z" fill="#c0553f" />
-        <rect x="5.1" y="5.9" width="9.8" height="1.4" rx="0.7" fill={shade("#c0553f", -0.15)} />
+        <path
+          d="M5.2 5.4 Q10 1.2 14.8 5.4 L14.8 6.2 L5.2 6.2 Z"
+          fill="#c0553f"
+        />
+        <rect
+          x="5.1"
+          y="5.9"
+          width="9.8"
+          height="1.4"
+          rx="0.7"
+          fill={shade("#c0553f", -0.15)}
+        />
         <rect x="9.4" y="1.9" width="1.2" height="1.2" rx="0.6" fill={c} />
       </g>
     );
@@ -215,7 +241,10 @@ function shade(hex: string, t: number): string {
       ? m.split("").map((c) => parseInt(c + c, 16))
       : [0, 2, 4].map((i) => parseInt(m.slice(i, i + 2), 16));
   const adj = n.map((v) =>
-    Math.max(0, Math.min(255, Math.round(t >= 0 ? v + (255 - v) * t : v * (1 + t)))),
+    Math.max(
+      0,
+      Math.min(255, Math.round(t >= 0 ? v + (255 - v) * t : v * (1 + t))),
+    ),
   );
   return `#${adj.map((v) => v.toString(16).padStart(2, "0")).join("")}`;
 }
