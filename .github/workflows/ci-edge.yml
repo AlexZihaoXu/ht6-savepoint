@@ -17,9 +17,6 @@ on:
       - 'edge/**'
       - '.github/workflows/ci-edge.yml'
   pull_request:
-    paths:
-      - 'edge/**'
-      - '.github/workflows/ci-edge.yml'
 
 concurrency:
   group: ci-edge-${{ github.ref }}

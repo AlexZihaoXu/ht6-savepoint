@@ -19,7 +19,7 @@ needs to click.
 | Service       | Dir         | Command                                                                 | Port   |
 | ------------- | ----------- | ----------------------------------------------------------------------- | ------ |
 | App (PWA)     | `app/`      | `pnpm dev --host 0.0.0.0`                                                | 5173   |
-| Backend API   | `server/`   | `uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000`        | 8000   |
+| Backend API   | `server/`   | `uv run uvicorn savepoint_server.main:app --reload --host 0.0.0.0 --port 8000`        | 8000   |
 | Speech demo   | `pipeline/` | see `pipeline/README.md`                                                 | varies |
 
 ## Sharing a service (demo links)

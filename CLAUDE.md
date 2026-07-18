@@ -22,8 +22,8 @@ the subproject first.
 
 | Path        | Stack                                              | Status                          |
 | ----------- | -------------------------------------------------- | ------------------------------- |
-| `app/`      | React 19 + TS + HeroUI v3 + Tailwind v4 (Vite), pnpm | Scaffold, runs on seed data     |
-| `server/`   | FastAPI + MongoDB (Motor), Python 3.12, uv         | Skeleton (`/health` + models)   |
+| `app/`      | React 19 + TS + HeroUI v3 + Tailwind v4 (Vite), pnpm | M0 scaffold (Calendar garden, code-split); on seed data |
+| `server/`   | FastAPI + MongoDB (Motor), Python 3.12, uv         | **M1 done** — `/ingest` + read API + vision + speech |
 | `pipeline/` | Speech: pyannote → SepFormer → faster-whisper, uv  | Working, validated offline      |
 | `edge/`     | Pi 5 capture, Raspberry Pi OS + Python, uv         | Sim mode working; hardware backend unverified |
 

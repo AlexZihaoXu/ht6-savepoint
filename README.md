@@ -46,7 +46,7 @@ pnpm dev --host 0.0.0.0    # Vite dev server, reachable on the tailnet
 ```bash
 cd server
 uv sync
-uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uv run uvicorn savepoint_server.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 Dev services bind to `0.0.0.0` so teammates can reach them over the tailnet (or via a
