@@ -36,9 +36,10 @@ export function PersonPage() {
 
   return (
     <section className="flex flex-col gap-5" aria-labelledby="person-heading">
+      {/* py/-my + px/-mx grow the tap target to ≥44px without moving layout. */}
       <Link
         to="/people"
-        className="inline-flex items-center gap-1 text-sm text-[var(--muted)]"
+        className="-mx-2 -my-3 inline-flex items-center gap-1 self-start px-2 py-3 text-sm text-[var(--muted)] hover:text-[var(--foreground)]"
       >
         <Icon icon={PiCaretLeft} /> People
       </Link>
@@ -90,14 +91,14 @@ export function PersonPage() {
         <Card.Content className="flex flex-col gap-2">
           <Link
             to={`/day/${TODAY_ISO}`}
-            className="flex items-center justify-between border border-[var(--separator)] px-3 py-2 text-sm hover:bg-[var(--surface-tertiary)]"
+            className="touch-target flex items-center justify-between border border-[var(--separator)] px-3 py-2 text-sm transition-colors hover:bg-[var(--surface-tertiary)]"
           >
             <span>Today · morning</span>
             <Icon icon={PiCaretRight} className="text-[var(--muted)]" />
           </Link>
           <Link
             to="/day/2026-07-15"
-            className="flex items-center justify-between border border-[var(--separator)] px-3 py-2 text-sm hover:bg-[var(--surface-tertiary)]"
+            className="touch-target flex items-center justify-between border border-[var(--separator)] px-3 py-2 text-sm transition-colors hover:bg-[var(--surface-tertiary)]"
           >
             <span>Jul 15 · afternoon</span>
             <Icon icon={PiCaretRight} className="text-[var(--muted)]" />

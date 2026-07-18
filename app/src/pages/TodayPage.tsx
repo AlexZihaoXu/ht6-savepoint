@@ -38,7 +38,7 @@ export function TodayPage() {
                 <Link
                   key={p.id}
                   to={`/people/${p.id}`}
-                  className="flex w-16 flex-col items-center gap-1.5 text-center"
+                  className="flex w-16 flex-col items-center gap-1.5 text-center transition-transform active:scale-95"
                   aria-label={`Open ${p.name}`}
                 >
                   <span className="sprite-bob">

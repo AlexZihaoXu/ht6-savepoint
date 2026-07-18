@@ -65,6 +65,22 @@
     image-rendering: crisp-edges;
   }
 
+  /* Keyboard focus: a high-visibility accent outline on plain interactive
+     elements, in both themes. HeroUI components paint their own focus ring
+     (React Aria marks them with [data-focus-visible]) — excluded here so
+     rings never double up. */
+  :where(a, button, input, select, textarea, summary):focus-visible:not(
+      [data-focus-visible]
+    ) {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  /* The skip-link target is focused programmatically — no ring needed. */
+  .app-main:focus {
+    outline: none;
+  }
+
   /* Themed scrollbars using the theme's --scrollbar token. */
   * {
     scrollbar-color: var(--scrollbar) transparent;
@@ -112,6 +128,24 @@
   .touch-target {
     min-height: 44px;
     min-width: 44px;
+  }
+
+  /* Skip-to-content link: parked off-screen until keyboard-focused, then
+     drops in over the top bar in accent colours. */
+  .skip-link {
+    position: fixed;
+    top: 0.75rem;
+    left: 0.75rem;
+    z-index: 60;
+    transform: translateY(-250%);
+    background: var(--accent);
+    color: var(--accent-foreground);
+    padding: 0.5rem 0.875rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+  .skip-link:focus-visible {
+    transform: none;
   }
 
   /* Cozy idle bob for scene sprites (no movement AI, just charm).

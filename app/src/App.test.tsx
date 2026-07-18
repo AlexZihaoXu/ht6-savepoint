@@ -4,14 +4,20 @@ import userEvent from "@testing-library/user-event";
 import { App } from "./App";
 
 describe("App shell", () => {
-  it("renders the SavePoint shell on the Today screen", () => {
+  it("renders the SavePoint shell on the Today screen", async () => {
     render(<App />);
 
     expect(
       screen.getByRole("link", { name: /savepoint.*home/i }),
     ).toBeInTheDocument();
+    // Pages are lazy-loaded (route code-splitting) — await the Suspense
+    // boundary resolving the Today chunk.
     expect(
-      screen.getByRole("heading", { level: 1, name: /today/i }),
+      await screen.findByRole(
+        "heading",
+        { level: 1, name: /today/i },
+        { timeout: 3000 },
+      ),
     ).toBeInTheDocument();
   });
 

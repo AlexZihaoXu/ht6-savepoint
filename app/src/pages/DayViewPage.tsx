@@ -26,9 +26,10 @@ export function DayViewPage() {
   return (
     <section className="flex flex-col gap-5" aria-labelledby="day-heading">
       <header className="flex flex-col gap-1">
+        {/* py/-my + px/-mx grow the tap target to ≥44px without moving layout. */}
         <Link
           to="/garden"
-          className="inline-flex items-center gap-1 text-sm text-[var(--muted)]"
+          className="-mx-2 -my-3 inline-flex items-center gap-1 self-start px-2 py-3 text-sm text-[var(--muted)] hover:text-[var(--foreground)]"
         >
           <Icon icon={PiCaretLeft} /> Garden
         </Link>
@@ -88,8 +89,10 @@ export function DayViewPage() {
         </Card.Footer>
       </Card>
 
-      {/* Timeline strip with flags */}
+      {/* Timeline strip with flags. role="group" so the aria-label actually
+          reaches assistive tech (a bare div's label is ignored). */}
       <div
+        role="group"
         className="flex items-center gap-2 overflow-x-auto py-2"
         aria-label="Timeline"
       >

@@ -44,6 +44,13 @@ globalThis.ResizeObserver ??=
 globalThis.IntersectionObserver ??=
   IntersectionObserverStub as unknown as typeof IntersectionObserver;
 
+// jsdom logs "Not implemented" for window.scrollTo, which the AppShell calls
+// on every route change (scroll-to-top). Replace it with a quiet no-op.
+Object.defineProperty(window, "scrollTo", {
+  writable: true,
+  value: () => {},
+});
+
 afterEach(() => {
   cleanup();
 });

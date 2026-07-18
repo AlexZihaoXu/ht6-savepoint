@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Card, Chip } from "@heroui/react";
-import { PiCaretRight, PiStarFill } from "react-icons/pi";
+import { PiCaretRight, PiStarFill, PiUsersThree } from "react-icons/pi";
 import { Icon } from "@/components/Icon";
 import { SpriteAvatar } from "@/components/SpriteAvatar";
 import { people } from "@/lib/seed";
@@ -46,6 +46,17 @@ export function PeoplePage() {
           </button>
         ))}
       </div>
+
+      {list.length === 0 && (
+        <div className="flex flex-col items-center gap-2 py-8 text-center">
+          <Icon icon={PiUsersThree} className="text-4xl text-[var(--muted)]" />
+          <p className="text-sm text-[var(--muted)]">
+            {filter === "Favorites"
+              ? "No favorites yet — star someone you love running into."
+              : "No one today yet — your next chat will show up here."}
+          </p>
+        </div>
+      )}
 
       <ul className="flex flex-col gap-2">
         {list.map((p) => (

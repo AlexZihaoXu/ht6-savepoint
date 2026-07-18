@@ -27,6 +27,35 @@ export default defineConfig({
     host: "0.0.0.0",
     port: 4173,
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // Split long-lived vendor code into its own cacheable chunks. HeroUI /
+        // React Aria are deliberately NOT pinned here: Rollup then splits them
+        // naturally, so route-only pieces (e.g. the Calendar used solely by the
+        // Garden) land in that route's lazy chunk instead of the initial load.
+        manualChunks(id: string) {
+          if (!id.includes("node_modules")) return undefined;
+          if (
+            id.includes("/node_modules/framer-motion/") ||
+            id.includes("/node_modules/motion-dom/") ||
+            id.includes("/node_modules/motion-utils/")
+          ) {
+            return "motion";
+          }
+          if (id.includes("/node_modules/react-router")) return "router";
+          if (
+            id.includes("/node_modules/react/") ||
+            id.includes("/node_modules/react-dom/") ||
+            id.includes("/node_modules/scheduler/")
+          ) {
+            return "react";
+          }
+          return undefined;
+        },
+      },
+    },
+  },
   test: {
     globals: true,
     environment: "jsdom",
