@@ -27,8 +27,9 @@ from savepoint_server.api import ingest as ingest_api
 from savepoint_server.api import read as read_api
 from savepoint_server.db import Repositories
 from savepoint_server.main import app
-from savepoint_server.models import Event, EventType, Person
+from savepoint_server.models import Event, EventType, Person, Transcript, TranscriptSegment
 from savepoint_server.models.person import AvatarParams
+from savepoint_server.services.speech import AudioInput
 
 DAY = "2026-07-18"
 BASE = datetime(2026, 7, 18, 9, 0, tzinfo=UTC)
@@ -355,3 +356,111 @@ async def test_decoupled_streams_align_on_shared_day(repos: Repositories) -> Non
     assert [p["local_id"] for p in post["people"]] == ["alex"]
     spoke = [e for e in post["events"] if e["type"] == "spoke"]
     assert spoke and all(e["person_id"] == "alex" for e in spoke)
+
+
+# --------------------------------------------------------------------------- #
+# POST /ingest/audio/clip  (multipart clip -> diarize -> NTP-anchored ingest)
+# --------------------------------------------------------------------------- #
+
+
+def _fake_transcript() -> Transcript:
+    """A tiny 2-segment transcript with clip-RELATIVE second offsets."""
+    return Transcript(
+        segments=[
+            TranscriptSegment(speaker="Speaker 1", text="hello there", start=0.0, end=1.0),
+            TranscriptSegment(speaker="Speaker 2", text="general kenobi", start=1.0, end=2.0),
+        ]
+    )
+
+
+class _FakeTranscriber:
+    """Deterministic transcriber: ignores the audio bytes, returns fixed segments."""
+
+    def __init__(self, transcript: Transcript) -> None:
+        self._transcript = transcript
+
+    def transcribe(self, audio: AudioInput) -> Transcript:
+        return self._transcript.model_copy(deep=True)
+
+
+@asynccontextmanager
+async def _clip_client(
+    repos: Repositories, transcriber: _FakeTranscriber
+) -> AsyncIterator[AsyncClient]:
+    """ASGI client with the ingest ``repos`` + transcriber dependencies overridden."""
+    app.dependency_overrides[ingest_api.get_repos] = lambda: repos
+    app.dependency_overrides[ingest_api.get_transcriber_dep] = lambda: transcriber
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+            yield client
+    finally:
+        app.dependency_overrides.pop(ingest_api.get_repos, None)
+        app.dependency_overrides.pop(ingest_api.get_transcriber_dep, None)
+
+
+async def test_ingest_audio_clip_anchors_segments_on_started_at(repos: Repositories) -> None:
+    """Clip + started_at -> 2 SPOKE events, each ts = started_at + its relative offset."""
+    started = datetime(2026, 7, 18, 9, 0, tzinfo=UTC)
+    async with _clip_client(repos, _FakeTranscriber(_fake_transcript())) as client:
+        resp = await client.post(
+            "/ingest/audio/clip",
+            files={"audio": ("clip.webm", b"fake clip bytes", "audio/webm")},
+            data={"started_at": started.isoformat()},
+        )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body["events"]) == 2
+    assert [d["_id"] for d in body["days"]] == [DAY]
+
+    events = await repos.events.list_for_day(DAY)
+    assert [e.person_id for e in events] == ["Speaker 1", "Speaker 2"]
+    assert [e.text for e in events] == ["hello there", "general kenobi"]
+    assert all(e.type is EventType.SPOKE for e in events)
+    # PROVE the NTP anchoring: relative 0s/1s offsets land at started_at + offset.
+    assert events[0].ts == started + timedelta(seconds=0)
+    assert events[1].ts == started + timedelta(seconds=1)
+
+    # The day rolled up with a garden-plant stage.
+    day = await repos.days.get_by_date(date.fromisoformat(DAY))
+    assert day is not None and day.summary is not None
+    assert day.summary.events == 2
+    assert day.plant_stage is not None
+
+
+async def test_ingest_audio_clip_bad_started_at_400(repos: Repositories) -> None:
+    """A malformed started_at is a clean 400; nothing is written."""
+    async with _clip_client(repos, _FakeTranscriber(_fake_transcript())) as client:
+        resp = await client.post(
+            "/ingest/audio/clip",
+            files={"audio": ("clip.webm", b"fake clip bytes", "audio/webm")},
+            data={"started_at": "not-a-datetime"},
+        )
+    assert resp.status_code == 400
+    assert await repos.events.count() == 0
+
+
+async def test_ingest_audio_clip_naive_started_at_400(repos: Repositories) -> None:
+    """A timezone-naive started_at is rejected so SPOKE ts stay NTP/UTC-comparable."""
+    async with _clip_client(repos, _FakeTranscriber(_fake_transcript())) as client:
+        resp = await client.post(
+            "/ingest/audio/clip",
+            files={"audio": ("clip.webm", b"fake clip bytes", "audio/webm")},
+            data={"started_at": "2026-07-18T09:00:00"},  # no UTC offset
+        )
+    assert resp.status_code == 400
+    assert await repos.events.count() == 0
+
+
+async def test_ingest_audio_clip_empty_upload_400(repos: Repositories) -> None:
+    """An empty (zero-byte) clip is a clean 400; nothing is written."""
+    started = datetime(2026, 7, 18, 9, 0, tzinfo=UTC)
+    async with _clip_client(repos, _FakeTranscriber(_fake_transcript())) as client:
+        resp = await client.post(
+            "/ingest/audio/clip",
+            files={"audio": ("clip.webm", b"", "audio/webm")},
+            data={"started_at": started.isoformat()},
+        )
+    assert resp.status_code == 400
+    assert await repos.events.count() == 0

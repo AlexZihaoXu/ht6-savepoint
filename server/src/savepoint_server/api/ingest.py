@@ -11,11 +11,16 @@ Three write endpoints, all persisting to Mongo and CI-safe (no torch):
   and the app posts audio-derived transcript segments (speaker/text + ts) as JSON
   — **no raw media crosses the wire**. Both carry absolute NTP-synced timestamps,
   so the server lands them on one shared day timeline (aligned implicitly by ts).
+* ``POST /ingest/audio/clip`` — the SAV-40 **option-A** bridge for a raw mic clip
+  (multipart): the app uploads recorded ``audio`` bytes plus ``started_at`` (the
+  absolute NTP-synced time the recording began). The server diarizes the clip
+  (stub by default, no torch), anchors each segment's relative offset onto
+  ``started_at``, and lands the turns through the same ``/ingest/audio`` path.
 """
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -24,14 +29,17 @@ from savepoint_server.db import Repositories, get_repositories
 from savepoint_server.services.ingest import (
     AudioIngestRequest,
     AudioIngestResult,
+    AudioSegment,
     EdgeEvent,
     IngestResult,
     IngestValidationError,
     VideoIngestResult,
+    _parse_iso_datetime,
     ingest_audio_segments,
     ingest_day,
     ingest_video_detections,
 )
+from savepoint_server.services.speech import Transcriber, get_transcriber
 from savepoint_server.services.vision import ImageDecodeError
 
 router = APIRouter(prefix="/ingest", tags=["ingest"])
@@ -40,6 +48,11 @@ router = APIRouter(prefix="/ingest", tags=["ingest"])
 def get_repos() -> Repositories:
     """Provide the repository bundle (overridable in tests via dependency_overrides)."""
     return get_repositories()
+
+
+def get_transcriber_dep() -> Transcriber:
+    """Provide the configured transcriber (stub default; overridable in tests)."""
+    return get_transcriber()
 
 
 def _parse_iso_date(value: str) -> date:
@@ -103,5 +116,58 @@ async def ingest_audio(
     """Land the app's audio-derived JSON: record diarized SPOKE events by ts."""
     try:
         return await ingest_audio_segments(body, repos=repos)
+    except IngestValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+StartedAtForm = Annotated[
+    str,
+    Form(description="Absolute ISO-8601 wall-clock time the recording BEGAN (NTP-synced anchor)."),
+]
+
+
+@router.post("/audio/clip", response_model=AudioIngestResult)
+async def ingest_audio_clip(
+    audio: AudioUpload,
+    started_at: StartedAtForm,
+    repos: Annotated[Repositories, Depends(get_repos)],
+    transcriber: Annotated[Transcriber, Depends(get_transcriber_dep)],
+) -> AudioIngestResult:
+    """Upload a recorded clip -> diarize -> NTP-anchored SPOKE events (SAV-40 option A).
+
+    The bridge from a raw microphone clip to the decoupled audio stream. The app
+    sends the clip bytes plus ``started_at`` (the absolute, NTP-synced wall-clock
+    time the recording *began*). The server diarizes the clip — the CI-safe
+    :class:`~savepoint_server.services.speech.StubTranscriber` by default, the real
+    pipeline on opt-in — into segments whose ``start``/``end`` are offsets *relative*
+    to the clip, then anchors every offset onto ``started_at`` so each turn gets an
+    absolute timestamp. Those become :class:`AudioSegment` rows landed through the
+    exact same :func:`ingest_audio_segments` path as ``POST /ingest/audio``, so the
+    resulting SPOKE events line up with the Pi's SEEN events on one shared timeline.
+    """
+    audio_bytes = await audio.read()
+    if not audio_bytes:
+        raise HTTPException(status_code=400, detail="Empty audio upload; expected clip bytes.")
+    try:
+        # Anchor: parse the absolute start (400 on a bad value, like the sibling
+        # ingest routes) and require it be timezone-aware, so the derived SPOKE
+        # timestamps stay comparable with the UTC-aware SEEN events.
+        anchor = _parse_iso_datetime(started_at, field="started_at")
+        if anchor.tzinfo is None:
+            raise IngestValidationError(
+                f"Invalid started_at '{started_at}'; expected a timezone-aware ISO-8601 "
+                "datetime (include a UTC offset) so events align on the NTP timeline."
+            )
+        transcript = transcriber.transcribe(audio_bytes)
+        segments = [
+            AudioSegment(
+                speaker=seg.speaker,
+                start=(anchor + timedelta(seconds=seg.start)).isoformat(),
+                end=(anchor + timedelta(seconds=seg.end)).isoformat(),
+                text=seg.text,
+            )
+            for seg in transcript.segments
+        ]
+        return await ingest_audio_segments(AudioIngestRequest(segments=segments), repos=repos)
     except IngestValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
