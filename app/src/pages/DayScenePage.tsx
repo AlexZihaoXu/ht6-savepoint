@@ -1,9 +1,13 @@
 /**
- * Day/Today view — a cinematic letterboxed replay of one day (mockup screen 3):
- * black bars frame a little plot where the people present stand ([you] +
- * everyone met so far), a Stardew-style wooden dialogue box plays the active
- * utterance, a top-right toggle opens the transcript history, and a stone
- * timeline scrubber at the bottom moves through the day.
+ * Day/Today view — a cinematic letterboxed replay of one day, staged like a
+ * visual-novel conversation: only TWO characters are ever on the otherwise
+ * empty garden — [you] fixed on the LEFT and the current conversation
+ * partner on the RIGHT (swapping as the day moves between people). Whoever
+ * is speaking stands lit at full opacity with a nameplate riding the
+ * dialogue box; the listener waits dimmed. A Stardew-style wooden dialogue
+ * box plays the active utterance (typewriter, tap-to-advance), a top-right
+ * toggle opens the transcript history, and a stone timeline scrubber at the
+ * bottom moves through the day.
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -25,6 +29,7 @@ import {
   fallbackAvatar,
   formatClock,
   nameFor,
+  partnerAt,
   YOU_AVATAR,
 } from "@/lib/scene-utils";
 
@@ -73,17 +78,17 @@ export function DayScenePage() {
     return idx;
   }, [events, t]);
 
-  // Who is on stage: [you] + everyone seen up to the scrub point (first-seen order).
-  const present = useMemo(() => {
-    const ids: string[] = [];
-    for (let i = 0; i <= activeIdx && i < events.length; i++) {
-      const id = events[i].person_id;
-      if (id !== "you" && !ids.includes(id)) ids.push(id);
-    }
-    return ids.slice(0, 6);
-  }, [events, activeIdx]);
+  // Who shares the stage with you right now (the RIGHT-side character).
+  const partnerId = useMemo(
+    () => partnerAt(events, activeIdx),
+    [events, activeIdx],
+  );
 
   const active: ApiEvent | undefined = events[activeIdx];
+  const youSpeaking = active?.person_id === "you";
+  const speakerName = active
+    ? nameFor(active.person_id, peopleById, displayName)
+    : "";
   const dateLabel = (view?.day?.date ?? (isToday ? "today" : date)) as string;
 
   const jumpTo = (i: number) => {
@@ -137,51 +142,43 @@ export function DayScenePage() {
               </p>
             )}
 
-            {/* [you] — always on stage, left side */}
-            {!error && (
-              <SceneActor
-                name="You"
-                x={16}
-                y={78}
-                active={active?.person_id === "you"}
-              >
-                <ParametricSprite params={YOU_AVATAR} size={52} />
+            {/* only the two of you on the empty garden: [you] LEFT … */}
+            {!error && view && events.length > 0 && (
+              <SceneActor name="You" x={24} y={82} lit={youSpeaking}>
+                <ParametricSprite params={YOU_AVATAR} size={56} />
               </SceneActor>
             )}
 
-            {/* everyone met so far */}
-            {present.map((id, i) => {
-              // Two staggered rows so up to six guests keep readable labels.
-              const row = i % 2;
-              const col = Math.floor(i / 2);
-              const x = present.length === 1 ? 62 : 36 + col * 22 + row * 11;
-              const y = row === 0 ? 78 : 46;
-              const p = peopleById.get(id);
-              return (
-                <SceneActor
-                  key={id}
-                  name={nameFor(id, peopleById, displayName)}
-                  x={x}
-                  y={y}
-                  active={active?.person_id === id}
-                >
-                  <ParametricSprite
-                    params={p ? p.avatar_params : fallbackAvatar(id)}
-                    size={52}
-                  />
-                </SceneActor>
-              );
-            })}
+            {/* … and the current conversation partner RIGHT (keyed so a
+                partner change pops the newcomer in) */}
+            {!error && view && events.length > 0 && partnerId && (
+              <SceneActor
+                key={partnerId}
+                name={nameFor(partnerId, peopleById, displayName)}
+                x={76}
+                y={82}
+                lit={!youSpeaking}
+                enter
+              >
+                <ParametricSprite
+                  params={
+                    peopleById.get(partnerId)?.avatar_params ??
+                    fallbackAvatar(partnerId)
+                  }
+                  size={56}
+                />
+              </SceneActor>
+            )}
           </div>
         </div>
 
         {/* dialogue box */}
-        <div className="flex-none px-2 pt-3">
+        <div className="flex-none px-2 pt-4">
           {active && (
             <DialogueBox
               event={active}
-              person={peopleById.get(active.person_id)}
-              peopleById={peopleById}
+              name={speakerName}
+              side={youSpeaking ? "left" : "right"}
               hasNext={activeIdx < events.length - 1}
               onAdvance={() =>
                 jumpTo(Math.min(activeIdx + 1, events.length - 1))
@@ -237,41 +234,60 @@ export function DayScenePage() {
 
 /* ---- scene actor ---------------------------------------------------------- */
 
+/**
+ * One of the two conversation characters. The speaker (`lit`) stands at full
+ * opacity, gently bobbing and slightly raised; the listener waits dimmed,
+ * desaturated and set a step back (ref: speaker lit, non-speaker faded).
+ */
 function SceneActor({
   name,
   x,
   y,
-  active,
+  lit,
+  enter,
   children,
 }: {
   name: string;
   x: number;
   y: number;
-  active: boolean;
+  lit: boolean;
+  enter?: boolean;
   children: React.ReactNode;
 }) {
+  const reduce = useReducedMotion();
   return (
     <div
       className="sp-actor"
       style={{ left: `${x}%`, top: `${y}%`, zIndex: Math.round(y) }}
     >
       <div
-        className={`sp-bob relative -translate-x-1/2 -translate-y-full transition-transform ${
-          active ? "scale-110" : ""
+        className={`relative -translate-x-1/2 -translate-y-full ${
+          enter && !reduce ? "sp-enter" : ""
         }`}
       >
-        <span className="pixel-name font-pixel absolute -top-4 left-1/2 -translate-x-1/2 text-[7px] whitespace-nowrap">
-          [{name}]
-        </span>
-        {active && (
-          <span
-            aria-hidden
-            className="absolute -top-9 left-1/2 -translate-x-1/2 animate-bounce text-[#ffdf8a]"
-          >
-            <Icon icon={PiCaretDown} size={16} />
+        <div
+          className={`transition-[opacity,filter,transform] duration-500 ${
+            lit && !reduce ? "sp-bob" : ""
+          }`}
+          style={
+            lit
+              ? {
+                  opacity: 1,
+                  filter: "none",
+                  transform: reduce ? "translateY(-4px)" : undefined,
+                }
+              : {
+                  opacity: 0.4,
+                  filter: "saturate(0.35) brightness(0.92)",
+                  transform: "translateY(3px) scale(0.94)",
+                }
+          }
+        >
+          <span className="pixel-name font-pixel absolute -top-4 left-1/2 -translate-x-1/2 text-[7px] whitespace-nowrap">
+            [{name}]
           </span>
-        )}
-        {children}
+          {children}
+        </div>
       </div>
     </div>
   );
@@ -281,19 +297,19 @@ function SceneActor({
 
 function DialogueBox({
   event,
-  person,
-  peopleById,
+  name,
+  side,
   hasNext,
   onAdvance,
 }: {
   event: ApiEvent;
-  person: ApiPerson | undefined;
-  peopleById: Map<string, ApiPerson>;
+  name: string;
+  /** Which stage side the speaker stands on — anchors the nameplate. */
+  side: "left" | "right";
   hasNext: boolean;
   onAdvance: () => void;
 }) {
   const reduce = useReducedMotion();
-  const name = nameFor(event.person_id, peopleById, displayName);
   const text =
     event.type === "spoke" && event.text ? event.text : `(${name} stopped by.)`;
 
@@ -322,33 +338,25 @@ function DialogueBox({
   const meta = [event.place, formatClock(event.ts)].filter(Boolean).join(" · ");
 
   return (
-    <button
-      type="button"
-      className="dlg-wood block w-full cursor-pointer p-3 text-left"
-      onClick={() =>
-        shown < text.length ? setShown(text.length) : hasNext && onAdvance()
-      }
-      aria-label="Dialogue — tap to continue"
-    >
-      <div className="flex items-stretch gap-3">
-        {/* portrait slot */}
-        <div className="dlg-portrait flex w-20 flex-none items-end justify-center overflow-hidden">
-          <ParametricSprite
-            params={
-              event.person_id === "you"
-                ? fallbackAvatar("you")
-                : (person?.avatar_params ?? fallbackAvatar(event.person_id))
-            }
-            size={70}
-            className="translate-y-2"
-          />
-        </div>
-        {/* text area */}
-        <div className="dlg-text relative min-h-24 flex-1 px-3 py-2">
-          <p className="font-pixel text-[9px] opacity-70">
-            {name}
-            {meta ? ` — ${meta}` : ""}
-          </p>
+    <div className="relative">
+      {/* speaker nameplate riding the box's top edge, on the speaker's side */}
+      <span
+        className={`dlg-nameplate font-pixel absolute -top-4 z-10 px-2.5 py-1.5 text-[9px] ${
+          side === "left" ? "left-2" : "right-2"
+        }`}
+      >
+        {name}
+      </span>
+      <button
+        type="button"
+        className="dlg-wood block w-full cursor-pointer p-3 text-left"
+        onClick={() =>
+          shown < text.length ? setShown(text.length) : hasNext && onAdvance()
+        }
+        aria-label="Dialogue — tap to continue"
+      >
+        <div className="dlg-text relative min-h-24 px-3 py-2">
+          {meta && <p className="font-pixel text-[8px] opacity-60">{meta}</p>}
           <p className="mt-1.5 text-[15px] leading-snug font-medium">
             {text.slice(0, shown)}
           </p>
@@ -361,8 +369,8 @@ function DialogueBox({
             </span>
           )}
         </div>
-      </div>
-    </button>
+      </button>
+    </div>
   );
 }
 

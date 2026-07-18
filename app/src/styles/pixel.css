@@ -126,10 +126,13 @@
     inset 0 0 0 6px #a9764a;
   image-rendering: pixelated;
 }
-.dlg-portrait {
-  background: #4b3b54;
-  border: 3px solid #2f2438;
-  box-shadow: inset 0 0 0 2px #6a5576;
+/* Speaker nameplate riding the top edge of the dialogue box (ref style). */
+.dlg-nameplate {
+  background: #f7e9c8;
+  color: #4a3120;
+  border: 3px solid #4a3120;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.3);
+  image-rendering: pixelated;
 }
 .dlg-text {
   background: #f7e9c8;
@@ -204,6 +207,20 @@
 }
 .sp-bob {
   animation: sp-bob 2.6s ease-in-out infinite;
+}
+/* A swapped-in scene actor pops up from the ground (keyed remount). */
+.sp-enter {
+  animation: sp-enter 0.45s ease-out;
+}
+@keyframes sp-enter {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-100% + 10px));
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -100%);
+  }
 }
 @keyframes sp-bob {
   0%,

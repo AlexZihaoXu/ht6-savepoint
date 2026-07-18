@@ -4,7 +4,7 @@
  * split so component files export only components, keeping Fast Refresh happy.)
  */
 
-import type { AvatarParams, ApiPerson } from "./api";
+import type { ApiEvent, AvatarParams, ApiPerson } from "./api";
 
 /** Stable 0..1 pseudo-random from a string + salt (deterministic per id). */
 export function rand(seed: string, salt: number): number {
@@ -55,6 +55,27 @@ export function fallbackAvatar(id: string): AvatarParams {
     hat: null,
     shirt_color: pick(SHIRTS, 55),
   };
+}
+
+/**
+ * Who "you" are talking to at event `activeIdx`: the nearest non-"you"
+ * person at or before it (when you speak, that's whoever spoke last), else
+ * the next one coming up (a day that opens with you talking). Null only
+ * when the day has no other people at all.
+ */
+export function partnerAt(
+  events: ApiEvent[],
+  activeIdx: number,
+): string | null {
+  for (let i = Math.min(activeIdx, events.length - 1); i >= 0; i--) {
+    const id = events[i]?.person_id;
+    if (id && id !== "you") return id;
+  }
+  for (let i = activeIdx + 1; i < events.length; i++) {
+    const id = events[i].person_id;
+    if (id !== "you") return id;
+  }
+  return null;
 }
 
 /** Name for an event's person_id, given the day's resolved people. */
