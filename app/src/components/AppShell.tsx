@@ -24,6 +24,9 @@ const PersonPage = lazy(() =>
 const DayViewPage = lazy(() =>
   import("@/pages/DayViewPage").then((m) => ({ default: m.DayViewPage })),
 );
+const PlazaPage = lazy(() =>
+  import("@/pages/PlazaPage").then((m) => ({ default: m.PlazaPage })),
+);
 
 /**
  * Animated, suspense-wrapped route element. The Suspense boundary sits INSIDE
@@ -64,6 +67,7 @@ export function AppShell() {
           <Routes location={location} key={location.pathname}>
             <Route path="/" element={page(TodayPage)} />
             <Route path="/garden" element={page(GardenPage)} />
+            <Route path="/plaza" element={page(PlazaPage)} />
             <Route path="/people" element={page(PeoplePage)} />
             <Route path="/people/:id" element={page(PersonPage)} />
             <Route path="/day/:date" element={page(DayViewPage)} />
