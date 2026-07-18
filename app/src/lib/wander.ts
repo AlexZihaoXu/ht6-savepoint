@@ -4,10 +4,13 @@
  * writes the results to element styles).
  *
  * Model: each wanderer is a point (the character's feet) in plot pixel space
- * with a heading + speed. It strolls, occasionally picks a new intent
- * (heading/speed), reflects off the plot walls, and periodically does a
- * little two-beat hop (up + tilt right, up + tilt left). Characters bump
- * only when close in BOTH axes — vertically separated characters are on
+ * with a heading + speed. It strolls at its own per-character pace (some
+ * amble, some brisk — and the pace drifts over time), occasionally picks a
+ * new intent (heading/speed), sometimes just STOPS for a stretch (idle
+ * pause), and reflects off the plot walls. The walk itself is a continuous
+ * two-beat bounce (up + tilt right, up + tilt left) that runs ONLY while
+ * moving — an idle or frozen character stands still. Characters bump only
+ * when close in BOTH axes — vertically separated characters are on
  * different depth "levels" and pass in front of / behind each other instead
  * (the renderer z-sorts by y).
  */
@@ -20,16 +23,20 @@ export interface Wanderer {
   /** Travel direction (radians) + speed (px/s). */
   heading: number;
   speed: number;
+  /** This character's personal pace (px/s) — speeds re-roll around it. */
+  baseSpeed: number;
   /** Which way the sprite faces while moving: 1 = right, -1 = left. */
   facing: 1 | -1;
   /** Seconds until the next spontaneous change of intent. */
   turnIn: number;
   /** Seconds of post-bump grace so a pair doesn't re-collide jitter. */
   bumpCooldown: number;
-  /** Seconds until the next hop starts. */
-  hopIn: number;
-  /** Elapsed seconds of the current hop, or -1 when not hopping. */
-  hopT: number;
+  /** Seconds until the next idle pause (counts down while walking). */
+  idleIn: number;
+  /** Remaining idle-pause seconds; > 0 = standing still, no bounce. */
+  idleFor: number;
+  /** Walk-bounce phase (s); advances only while actually moving. */
+  gaitT: number;
   /** Paused (selected/bubble open) — keeps position, ignores the tick. */
   frozen: boolean;
 }
@@ -41,13 +48,25 @@ export interface WanderBounds {
 
 export type Rng = () => number;
 
-/** Two-beat hop: up + tilt right, then up + tilt left. */
+/** Two-beat walk bounce: up + tilt right, then up + tilt left. */
 export const HOP_DURATION = 0.8;
 const HOP_HEIGHT = 8;
 const HOP_TILT_DEG = 8;
 
-const SPEED_MIN = 14;
-const SPEED_MAX = 30;
+/** Personal paces span amblers to brisk walkers. */
+const BASE_SPEED_MIN = 11;
+const BASE_SPEED_MAX = 34;
+/** Hard clamp for the per-intent speed re-rolls around baseSpeed. */
+const SPEED_MIN = 7;
+const SPEED_MAX = 42;
+
+/** Idle pauses: how often + how long a character just stands there. */
+const IDLE_EVERY_MIN = 4;
+const IDLE_EVERY_VAR = 9;
+const IDLE_LEN_MIN = 1.2;
+const IDLE_LEN_VAR = 3.4;
+/** Only drop into idle near a gait phase boundary (feet on the ground). */
+const IDLE_PHASE_WINDOW = 0.07;
 
 /** Bump only when closer than this in BOTH axes (px). */
 const COLLIDE_X = 34;
@@ -68,18 +87,22 @@ export function createWanderer(
   y: number,
   rng: Rng,
 ): Wanderer {
+  const baseSpeed = BASE_SPEED_MIN + rng() * (BASE_SPEED_MAX - BASE_SPEED_MIN);
   return {
     id,
     x,
     y,
     heading: rng() * Math.PI * 2,
-    speed: SPEED_MIN + rng() * (SPEED_MAX - SPEED_MIN),
+    speed: baseSpeed,
+    baseSpeed,
     facing: rng() < 0.5 ? -1 : 1,
     turnIn: 0.6 + rng() * 2.4,
     bumpCooldown: 0,
-    // Staggered hops: phase + interval are per-character random.
-    hopIn: 0.8 + rng() * 5,
-    hopT: -1,
+    // Staggered idles + gait phase: per-character random so the crowd never
+    // pauses or bounces in sync.
+    idleIn: 1.5 + rng() * IDLE_EVERY_VAR,
+    idleFor: 0,
+    gaitT: rng() * HOP_DURATION,
     frozen: false,
   };
 }
@@ -106,11 +129,41 @@ export function stepWanderers(
     if (w.bumpCooldown > 0) w.bumpCooldown = Math.max(0, w.bumpCooldown - dt);
     if (w.frozen) continue;
 
-    // Occasional new intent + continuous gentle steering noise.
+    // Idle pause: stand still (no move, no bounce) until it elapses.
+    if (w.idleFor > 0) {
+      w.idleFor -= dt;
+      if (w.idleFor <= 0) {
+        w.idleFor = 0;
+        w.idleIn = IDLE_EVERY_MIN + rng() * IDLE_EVERY_VAR;
+        // Wander off refreshed: new direction + a re-roll of the pace.
+        w.heading = rng() * Math.PI * 2;
+        w.speed = rerollSpeed(w.baseSpeed, rng);
+        w.turnIn = 1.2 + rng() * 3;
+      }
+      continue;
+    }
+
+    // Time for a pause? Wait for the feet to touch the ground (gait phase
+    // boundary) so the bounce never freezes mid-air.
+    w.idleIn -= dt;
+    const phase = w.gaitT % (HOP_DURATION / 2);
+    if (
+      w.idleIn <= 0 &&
+      (phase < IDLE_PHASE_WINDOW ||
+        phase > HOP_DURATION / 2 - IDLE_PHASE_WINDOW)
+    ) {
+      w.idleFor = IDLE_LEN_MIN + rng() * IDLE_LEN_VAR;
+      w.gaitT = 0;
+      continue;
+    }
+
+    // Occasional new intent + continuous gentle steering noise. Speed
+    // re-rolls around this character's personal pace, so it varies over
+    // time AND differs per character.
     w.turnIn -= dt;
     if (w.turnIn <= 0) {
       w.heading += (rng() - 0.5) * 2.4;
-      w.speed = SPEED_MIN + rng() * (SPEED_MAX - SPEED_MIN);
+      w.speed = rerollSpeed(w.baseSpeed, rng);
       w.turnIn = 1.2 + rng() * 3;
     }
     w.heading += (rng() - 0.5) * 1.4 * dt;
@@ -140,17 +193,8 @@ export function stepWanderers(
     if (cx > 0.25) w.facing = 1;
     else if (cx < -0.25) w.facing = -1;
 
-    // Hop clock.
-    if (w.hopT >= 0) {
-      w.hopT += dt;
-      if (w.hopT >= HOP_DURATION) {
-        w.hopT = -1;
-        w.hopIn = 2.5 + rng() * 4.5;
-      }
-    } else {
-      w.hopIn -= dt;
-      if (w.hopIn <= 0) w.hopT = 0;
-    }
+    // The walk bounce advances only while actually moving.
+    w.gaitT = (w.gaitT + dt) % HOP_DURATION;
   }
 
   // Pairwise bumps — only when near in BOTH axes. Vertically separated
@@ -198,8 +242,13 @@ export function stepWanderers(
   }
 }
 
+/** A fresh speed around a character's personal pace (±~40%). */
+function rerollSpeed(baseSpeed: number, rng: Rng): number {
+  return clamp(baseSpeed * (0.6 + rng() * 0.8), SPEED_MIN, SPEED_MAX);
+}
+
 /**
- * Vertical offset + tilt for the two-beat hop at elapsed time `hopT`:
+ * Vertical offset + tilt for the two-beat walk bounce at phase `hopT`:
  * first half bounces up tilting right, second half bounces up tilting left.
  */
 export function hopOffset(hopT: number): { dy: number; tilt: number } {
@@ -212,4 +261,16 @@ export function hopOffset(hopT: number): { dy: number; tilt: number } {
     dy: -HOP_HEIGHT * arc,
     tilt: (second ? -HOP_TILT_DEG : HOP_TILT_DEG) * arc,
   };
+}
+
+/**
+ * The render-facing bounce for one wanderer: zero while idle or frozen
+ * (a stopped character does NOT bounce), and amplitude-scaled by speed
+ * while walking (amblers bob gently, brisk walkers bounce harder).
+ */
+export function gaitOffset(w: Wanderer): { dy: number; tilt: number } {
+  if (w.frozen || w.idleFor > 0) return { dy: 0, tilt: 0 };
+  const k = 0.55 + 0.45 * clamp(w.speed / SPEED_MAX, 0, 1);
+  const { dy, tilt } = hopOffset(w.gaitT);
+  return { dy: dy * k, tilt: tilt * k };
 }

@@ -20,7 +20,7 @@ import { FenceRow, Pine, PlantSprite, Rock, Tree } from "@/lib/scene";
 import { rand } from "@/lib/scene-utils";
 import {
   createWanderer,
-  hopOffset,
+  gaitOffset,
   stepWanderers,
   type Rng,
   type Wanderer,
@@ -234,7 +234,7 @@ function PlazaPanel({
     const sim = simRef.current;
     for (const s of sim) {
       s.frozen = s.id === selected?.id;
-      if (s.frozen) s.hopT = -1; // land before the bubble opens
+      if (s.frozen) s.gaitT = 0; // land before the bubble opens
     }
 
     const paint = (s: Wanderer, moving: boolean) => {
@@ -249,7 +249,7 @@ function PlazaPanel({
       const sp = spriteEls.current.get(s.id);
       if (sp) {
         if (moving) {
-          const { dy, tilt } = hopOffset(s.hopT);
+          const { dy, tilt } = gaitOffset(s);
           sp.style.transform = `translateY(${dy}px) rotate(${tilt}deg) scaleX(${s.facing})`;
         } else {
           sp.style.transform = "";
@@ -270,7 +270,7 @@ function PlazaPanel({
       sim.forEach((s, i) => {
         s.x = (placed[i].lx / 100) * w;
         s.y = (placed[i].ly / 100) * h;
-        s.hopT = -1;
+        s.gaitT = 0;
         paint(s, false);
       });
       return;
@@ -282,7 +282,7 @@ function PlazaPanel({
       sim.forEach((s, i) => {
         s.x = (placed[i].sx / 100) * w;
         s.y = (placed[i].sy / 100) * h;
-        s.hopT = -1;
+        s.gaitT = 0;
         paint(s, false);
       });
       return;

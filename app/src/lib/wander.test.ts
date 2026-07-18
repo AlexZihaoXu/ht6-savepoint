@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   createWanderer,
+  gaitOffset,
   hopOffset,
   stepWanderers,
   HOP_DURATION,
@@ -23,7 +24,7 @@ function make(id: string, x: number, y: number, heading = 0): Wanderer {
   const w = createWanderer(id, x, y, seededRng(id));
   w.heading = heading;
   w.turnIn = 999; // no spontaneous intent changes during the test
-  w.hopIn = 999; // no hops during the test
+  w.idleIn = 999; // no idle pauses during the test
   return w;
 }
 
@@ -92,15 +93,27 @@ describe("wander sim", () => {
     expect(left.facing).toBe(-1);
   });
 
-  it("staggers hop timing per character (deterministic per id)", () => {
+  it("gives each character its own pace + gait phase (deterministic per id)", () => {
     const a = createWanderer("a", 0, 0, seededRng("a"));
     const b = createWanderer("b", 0, 0, seededRng("b"));
     const a2 = createWanderer("a", 0, 0, seededRng("a"));
-    expect(a.hopIn).not.toBe(b.hopIn);
-    expect(a.hopIn).toBe(a2.hopIn); // same id → same phase
+    expect(a.baseSpeed).not.toBe(b.baseSpeed); // amblers vs brisk walkers
+    expect(a.gaitT).not.toBe(b.gaitT); // staggered bounce phase
+    expect(a.idleIn).not.toBe(b.idleIn); // staggered pauses
+    expect(a.baseSpeed).toBe(a2.baseSpeed); // same id → same personality
+    expect(a.gaitT).toBe(a2.gaitT);
   });
 
-  it("hops in two beats: up-tilt-right then up-tilt-left", () => {
+  it("varies a character's speed over time around its own pace", () => {
+    const w = make("pace", 200, 150, 0);
+    const before = w.speed;
+    w.turnIn = 0; // force an intent change
+    stepWanderers([w], 1 / 30, BOUNDS, seededRng("roll"));
+    expect(w.speed).not.toBe(before);
+    expect(w.speed).toBeGreaterThan(0);
+  });
+
+  it("bounces in two beats: up-tilt-right then up-tilt-left", () => {
     expect(hopOffset(-1)).toEqual({ dy: 0, tilt: 0 });
     const first = hopOffset(HOP_DURATION * 0.25);
     const second = hopOffset(HOP_DURATION * 0.75);
@@ -108,5 +121,48 @@ describe("wander sim", () => {
     expect(second.dy).toBeLessThan(0);
     expect(first.tilt).toBeGreaterThan(0); // right…
     expect(second.tilt).toBeLessThan(0); // …then left
+  });
+
+  it("bounces ONLY while moving — idle or frozen characters stand still", () => {
+    const w = make("gait", 200, 150, 0);
+    w.gaitT = HOP_DURATION * 0.25; // mid-stride
+    expect(gaitOffset(w).dy).toBeLessThan(0); // walking → airborne
+
+    w.idleFor = 2; // paused → no bounce
+    expect(gaitOffset(w)).toEqual({ dy: 0, tilt: 0 });
+
+    w.idleFor = 0;
+    w.frozen = true; // tapped → no bounce
+    expect(gaitOffset(w)).toEqual({ dy: 0, tilt: 0 });
+  });
+
+  it("advances the gait only while walking", () => {
+    const walking = make("walk", 200, 150, 0);
+    walking.gaitT = 0;
+    stepWanderers([walking], 1 / 30, BOUNDS, flat);
+    expect(walking.gaitT).toBeGreaterThan(0);
+
+    const idle = make("stand", 200, 150, 0);
+    idle.gaitT = 0;
+    idle.idleFor = 5;
+    stepWanderers([idle], 1 / 30, BOUNDS, flat);
+    expect(idle.gaitT).toBe(0);
+  });
+
+  it("takes an idle pause — stops moving, then resumes", () => {
+    const w = make("pause", 200, 150, 0);
+    w.idleIn = 0.001; // pause imminent
+    w.gaitT = 0; // feet on the ground
+    stepWanderers([w], 1 / 30, BOUNDS, flat);
+    expect(w.idleFor).toBeGreaterThan(0); // now idling…
+    const [x0, y0] = [w.x, w.y];
+    for (let i = 0; i < 30; i++) stepWanderers([w], 1 / 30, BOUNDS, flat);
+    if (w.idleFor > 0) {
+      expect(w.x).toBe(x0); // …not moving while idle
+      expect(w.y).toBe(y0);
+    }
+    for (let i = 0; i < 200; i++) stepWanderers([w], 1 / 30, BOUNDS, flat);
+    expect(w.idleFor).toBe(0); // pause ended
+    expect(w.x === x0 && w.y === y0).toBe(false); // walking again
   });
 });
