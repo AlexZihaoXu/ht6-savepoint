@@ -35,6 +35,10 @@ class Person(MongoModel):
     # Speaker voiceprint (ECAPA, 192-d). Kept on-device where feasible (DESIGN §8);
     # optional here for enrolled speakers bound server-side.
     voice_embedding: list[float] | None = None
+    # Face-attribute embedding from the edge detector (512-d, MobileFaceNet /
+    # w600k_mbf.onnx; see edge/types.py). Stored from EdgeEvents so future
+    # detections can nearest-neighbour match a face to a known Person (DESIGN §9).
+    face_embedding: list[float] | None = None
     tags: list[str] = Field(default_factory=list)
     favorite: bool = False
     first_seen: datetime | None = None
