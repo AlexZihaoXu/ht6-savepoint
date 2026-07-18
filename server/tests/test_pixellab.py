@@ -150,6 +150,21 @@ def test_decode_rgba_image_rejects_malformed() -> None:
         raise AssertionError(f"expected PixelLabError for {bad!r}")
 
 
+def test_extract_frames_handles_list_and_dict() -> None:
+    frame = {"type": "rgba_bytes", "width": 4, "base64": "AAAA"}
+    # Flat list of frame dicts (single-direction animate response).
+    assert pixellab._extract_frames({"images": [frame, frame]}, "east") == [frame, frame]
+    # Dict keyed by direction -> that direction's frame list.
+    assert pixellab._extract_frames({"images": {"east": [frame]}}, "east") == [frame]
+    # Dict whose only key differs -> fall back to the first value.
+    assert pixellab._extract_frames({"images": {"south": [frame]}}, "east") == [frame]
+    # A single frame dict (not a list) under the direction -> wrapped into a list.
+    assert pixellab._extract_frames({"images": {"east": frame}}, "east") == [frame]
+    # Missing / null / non-frame shapes -> empty (caller raises "no frames").
+    assert pixellab._extract_frames({}, "east") == []
+    assert pixellab._extract_frames({"images": None}, "east") == []
+
+
 def test_decode_rgba_image_typed_error_on_bad_fields() -> None:
     # A non-int width and an undecodable base64 (5 valid chars -> bad length) both surface as
     # a typed PixelLabError, never a bare ValueError / binascii.Error leaking to the caller.
