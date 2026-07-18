@@ -12,6 +12,7 @@ import { useReducedMotion } from "framer-motion";
 import { GiWhistle } from "react-icons/gi";
 import { PiCaretLeft, PiCaretRight } from "react-icons/pi";
 import { Icon } from "@/components/Icon";
+import { MicCapture } from "@/components/MicCapture";
 import { PixelBottomNav, PixelHeader } from "@/components/PixelChrome";
 import { ParametricSprite } from "@/lib/sprite";
 import { api, displayName, type ApiDay, type ApiPerson } from "@/lib/api";
@@ -98,8 +99,10 @@ export function PlazaPage() {
           <GardenPanel days={days} error={daysError} active={view === 1} />
         </div>
 
-        {/* floating controls (whistle + Past), per the mockup */}
+        {/* floating controls (mic + whistle + Past), per the mockup */}
         <div className="absolute right-3 bottom-9 z-20 flex flex-col items-end gap-2">
+          {/* SAV-40 first pass — placement is provisional, team may reposition */}
+          <MicCapture />
           <button
             type="button"
             aria-label={lined ? "Free roam" : "Whistle — line everyone up"}

@@ -91,6 +91,42 @@ async function getJSON<T>(path: string, signal?: AbortSignal): Promise<T> {
   return (await res.json()) as T;
 }
 
+/* ---- audio-clip ingest (SAV-40 — app-side mic capture) -------------------- */
+
+/** What `POST /ingest/audio/clip` hands back after diarizing the clip. */
+export interface AudioIngestResult {
+  events: unknown[];
+  days: unknown[];
+}
+
+/**
+ * Multipart body for `POST /ingest/audio/clip`: the recorded blob plus the
+ * wall-clock time recording BEGAN (the server offsets diarized segment times
+ * from it). Pure — split out so it's unit-testable without a network.
+ */
+export function buildAudioClipForm(blob: Blob, startedAt: Date): FormData {
+  const form = new FormData();
+  form.append("audio", blob, "clip.webm");
+  form.append("started_at", startedAt.toISOString());
+  return form;
+}
+
+/** Upload a recorded audio clip for diarized ingest. */
+export async function ingestAudioClip(
+  blob: Blob,
+  startedAt: Date,
+  signal?: AbortSignal,
+): Promise<AudioIngestResult> {
+  const path = "/ingest/audio/clip";
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    body: buildAudioClipForm(blob, startedAt),
+    signal,
+  });
+  if (!res.ok) throw new ApiError(res.status, path);
+  return (await res.json()) as AudioIngestResult;
+}
+
 export const api = {
   people: (signal?: AbortSignal) => getJSON<ApiPerson[]>("/people", signal),
   person: (localId: string, signal?: AbortSignal) =>
