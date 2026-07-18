@@ -18,7 +18,6 @@ export function SpriteAvatar({
   const style: CSSProperties = {
     width: size,
     height: size,
-    background: person.tint,
   };
 
   return (
@@ -27,7 +26,13 @@ export function SpriteAvatar({
       className="pixelated shrink-0 ring-1 ring-[var(--separator)]"
       style={style}
     >
-      <Avatar.Fallback className="text-sm font-semibold text-[oklch(20%_0.03_146)]">
+      {/* Tint + dark initials live on the Fallback itself: HeroUI's Fallback paints its
+          own background, which in dark mode was covering the tinted container and leaving
+          dark-on-dark initials. Tints are light pastels, so dark ink reads in both themes. */}
+      <Avatar.Fallback
+        className="flex h-full w-full items-center justify-center text-sm font-semibold"
+        style={{ background: person.tint, color: "oklch(20% 0.03 146)" }}
+      >
         {person.initials}
       </Avatar.Fallback>
     </Avatar>
