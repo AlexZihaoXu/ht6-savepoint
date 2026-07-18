@@ -1,6 +1,6 @@
 # SavePoint Server
 
-FastAPI backend for **SavePoint** — it binds edge (QNX/Pi) events and the speech
+FastAPI backend for **SavePoint** — it binds edge (Pi) events and the speech
 pipeline into people, days, and recaps, persists them in MongoDB, and serves the API
 the PWA reads. See the repo-root `DESIGN.md` (§4 architecture, §9 data model) and
 `PLAN.md` for the full picture.

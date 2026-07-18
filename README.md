@@ -2,7 +2,7 @@
 
 > **Your life autosaves.**
 
-A cozy, Stardew-Valley-style journal of your real day. A QNX-powered wearable turns the
+A cozy, Stardew-Valley-style journal of your real day. A Raspberry Pi 5 wearable turns the
 people you talk to into pixel characters; a companion PWA replays your day back as a calm,
 structured game world — people become sprites, days become plants in a garden, and
 conversations become video-game dialogue boxes you can revisit.
@@ -22,7 +22,7 @@ execution plan.
 | `app/`       | SavePoint PWA — React + TypeScript + HeroUI v3 + Tailwind v4 (Vite), cozy-pixel UI |
 | `server/`    | FastAPI backend — event ingest, MongoDB store, Gemini/Backboard recaps, app API   |
 | `pipeline/`  | Speech pipeline — diarization → overlap-split → transcription → `Speaker N: text`  |
-| `edge/`      | Pi 5 + QNX IO-source capture (face detect, GPIO mute + LED) — placeholder for now  |
+| `edge/`      | Pi 5 IO-source capture (Raspberry Pi OS, face detect, GPIO mute + LED)            |
 | `design/`    | Shared design assets (HeroUI theme baseline, tokens)                              |
 | `docs/`      | Developer docs & runbooks                                                          |
 

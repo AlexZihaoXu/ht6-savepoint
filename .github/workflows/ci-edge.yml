@@ -1,0 +1,55 @@
+# CI — Edge (sim mode / core logic only)
+#
+# picamera2 and gpiozero ship via apt, not pip (see edge/README.md's "Setup
+# on the Pi"), and both need real Raspberry Pi hardware to do anything
+# useful anyway — so CI never touches src/savepoint_edge/backends/linux/.
+# Those modules are imported lazily (only when SAVEPOINT_EDGE_BACKEND=linux
+# is selected), so sim mode and the test suite need no Pi-specific setup at
+# all — a plain `uv sync` on any machine is enough.
+#
+# ==> The linux backend is verified BY HAND on real hardware, NOT in CI.
+name: CI Edge
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'edge/**'
+      - '.github/workflows/ci-edge.yml'
+  pull_request:
+    paths:
+      - 'edge/**'
+      - '.github/workflows/ci-edge.yml'
+
+concurrency:
+  group: ci-edge-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  edge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: edge
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: edge/uv.lock
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Lint (ruff)
+        run: uv run ruff check .
+
+      - name: Tests (pytest)
+        run: uv run pytest
