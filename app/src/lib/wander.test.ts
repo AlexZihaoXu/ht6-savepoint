@@ -25,6 +25,11 @@ function make(id: string, x: number, y: number, heading = 0): Wanderer {
   w.heading = heading;
   w.turnIn = 999; // no spontaneous intent changes during the test
   w.idleIn = 999; // no idle pauses during the test
+  // Most characters SPAWN standing now — these unit tests exercise walkers,
+  // so force a mid-amble state at cruising pace.
+  w.idleFor = 0;
+  w.speed = w.baseSpeed;
+  w.targetSpeed = w.baseSpeed;
   return w;
 }
 
@@ -170,8 +175,13 @@ describe("wander sim", () => {
       expect(w.x).toBe(x0); // …not moving while idle
       expect(w.y).toBe(y0);
     }
-    for (let i = 0; i < 200; i++) stepWanderers([w], 1 / 30, BOUNDS, flat);
+    // Idle pauses are long now (up to ~13 s) — step until this one ends
+    // (a fixed count would land inside the NEXT long pause).
+    let waited = 0;
+    while (w.idleFor > 0 && waited++ < 600)
+      stepWanderers([w], 1 / 30, BOUNDS, flat);
     expect(w.idleFor).toBe(0); // pause ended
+    for (let i = 0; i < 60; i++) stepWanderers([w], 1 / 30, BOUNDS, flat);
     expect(w.x === x0 && w.y === y0).toBe(false); // walking again
   });
 
@@ -185,6 +195,44 @@ describe("wander sim", () => {
     expect(w.speed).toBeLessThan(10); // …but nowhere near cruise yet
     for (let i = 0; i < 90; i++) stepWanderers([w], 1 / 30, BOUNDS, flat);
     expect(w.speed).toBeGreaterThan(25); // eased up to cruising speed
+  });
+
+  it("spawns a calm lobby — most characters start standing, wake-ups staggered", () => {
+    const ws = Array.from({ length: 24 }, (_, i) =>
+      createWanderer(`p${i}`, 100, 100, seededRng(`p${i}`)),
+    );
+    const standing = ws.filter((w) => w.idleFor > 0 && w.speed === 0);
+    expect(standing.length).toBeGreaterThan(ws.length / 2);
+    expect(standing.length).toBeLessThan(ws.length); // …but not frozen solid
+    // Wake-ups are staggered — no two standers get moving in sync.
+    const wakeups = new Set(standing.map((w) => w.idleFor.toFixed(3)));
+    expect(wakeups.size).toBe(standing.length);
+  });
+
+  it("keeps most of the crowd idle at any moment (calm-lobby duty cycle)", () => {
+    const ws = Array.from({ length: 12 }, (_, i) =>
+      createWanderer(
+        `c${i}`,
+        60 + (i % 4) * 90,
+        60 + Math.floor(i / 4) * 80,
+        seededRng(`c${i}`),
+      ),
+    );
+    const rng = seededRng("calm-world");
+    let samples = 0;
+    let movingSum = 0;
+    // Two simulated minutes, sampled once a second (skip the first ten so
+    // the spawn stagger has fully mixed into the steady state).
+    for (let step = 0; step < 3600; step++) {
+      stepWanderers(ws, 1 / 30, BOUNDS, rng);
+      if (step >= 300 && step % 30 === 0) {
+        samples++;
+        movingSum += ws.filter((w) => w.idleFor === 0 && w.speed > 1).length;
+      }
+    }
+    const avgMoving = movingSum / samples;
+    expect(avgMoving).toBeLessThan(ws.length * 0.4); // mostly a still crowd…
+    expect(avgMoving).toBeGreaterThan(0.3); // …that still shows signs of life
   });
 
   it("fades the bounce out as speed ramps down", () => {

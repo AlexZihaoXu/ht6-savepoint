@@ -4,10 +4,12 @@
  * writes the results to element styles).
  *
  * Model: each wanderer is a point (the character's feet) in plot pixel space
- * with a heading + speed. It strolls at its own per-character pace (some
- * amble, some brisk — and the pace drifts over time), occasionally picks a
- * new intent (heading/speed), sometimes just STOPS for a stretch (idle
- * pause), and reflects off the plot walls. The walk itself is a continuous
+ * with a heading + speed. Tuned like the Wii Mii Plaza lobby: characters
+ * mostly STAND AROUND idle (long, staggered pauses — at any moment most of
+ * the crowd is still), and only occasionally take a short, slow amble — a
+ * small drift, not a purposeful crossing — before stopping again. Each has
+ * its own gentle pace, occasionally picks a new intent (heading/speed),
+ * and reflects off the plot walls. The walk itself is a continuous
  * two-beat bounce (up + tilt right, up + tilt left) that runs ONLY while
  * moving — an idle or frozen character stands still. Characters bump only
  * when close in BOTH axes — vertically separated characters are on
@@ -52,21 +54,29 @@ export type Rng = () => number;
 
 /** Two-beat walk bounce: up + tilt right, then up + tilt left. */
 export const HOP_DURATION = 0.8;
-const HOP_HEIGHT = 8;
-const HOP_TILT_DEG = 8;
+const HOP_HEIGHT = 5;
+const HOP_TILT_DEG = 6;
 
-/** Personal paces span amblers to brisk walkers. */
-const BASE_SPEED_MIN = 11;
-const BASE_SPEED_MAX = 34;
+/** Personal paces: everyone ambles — a lobby mill, nobody power-walks. */
+const BASE_SPEED_MIN = 6;
+const BASE_SPEED_MAX = 16;
 /** Hard clamp for the per-intent speed re-rolls around baseSpeed. */
-const SPEED_MIN = 7;
-const SPEED_MAX = 42;
+const SPEED_MIN = 4;
+const SPEED_MAX = 20;
 
-/** Idle pauses: how often + how long a character just stands there. */
-const IDLE_EVERY_MIN = 4;
-const IDLE_EVERY_VAR = 9;
-const IDLE_LEN_MIN = 1.2;
-const IDLE_LEN_VAR = 3.4;
+/**
+ * Idle pauses: how often + how long a character just stands there.
+ * Calm-lobby duty cycle: short walk bouts (~1.2–3.4 s) between LONG stands
+ * (~4–13 s) → any given character is idle ~4/5 of the time, so with a
+ * plaza-sized crowd only one or two are ambling at any moment.
+ */
+const IDLE_EVERY_MIN = 1.2;
+const IDLE_EVERY_VAR = 2.2;
+const IDLE_LEN_MIN = 4;
+const IDLE_LEN_VAR = 9;
+
+/** Fraction of the crowd that spawns mid-amble; the rest start standing. */
+const WALK_ON_SPAWN = 0.25;
 
 /** Speed easing time-constant (s): decelerate into stops, accelerate out. */
 const ACCEL_TAU = 0.45;
@@ -95,13 +105,17 @@ export function createWanderer(
   rng: Rng,
 ): Wanderer {
   const baseSpeed = BASE_SPEED_MIN + rng() * (BASE_SPEED_MAX - BASE_SPEED_MIN);
+  // A calm lobby from the first frame: most characters SPAWN standing still
+  // with a staggered wake-up; only a few start mid-amble (from rest they
+  // accelerate smoothly, so `speed` starts at 0 for the standers).
+  const walking = rng() < WALK_ON_SPAWN;
   return {
     id,
     x,
     y,
     heading: rng() * Math.PI * 2,
-    speed: baseSpeed,
-    targetSpeed: baseSpeed,
+    speed: walking ? baseSpeed : 0,
+    targetSpeed: walking ? baseSpeed : 0,
     baseSpeed,
     facing: rng() < 0.5 ? -1 : 1,
     turnIn: 0.6 + rng() * 2.4,
@@ -109,7 +123,7 @@ export function createWanderer(
     // Staggered idles + gait phase: per-character random so the crowd never
     // pauses or bounces in sync.
     idleIn: 1.5 + rng() * IDLE_EVERY_VAR,
-    idleFor: 0,
+    idleFor: walking ? 0 : 0.4 + rng() * IDLE_LEN_VAR,
     gaitT: rng() * HOP_DURATION,
     frozen: false,
   };
