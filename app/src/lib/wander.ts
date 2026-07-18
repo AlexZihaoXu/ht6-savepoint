@@ -15,6 +15,12 @@
  * when close in BOTH axes — vertically separated characters are on
  * different depth "levels" and pass in front of / behind each other instead
  * (the renderer z-sorts by y).
+ *
+ * Sometimes a bump becomes a CHAT instead (TALK_CHANCE): the pair stops,
+ * turns to face each other, slides onto the same depth line standing side
+ * by side, and talks for a short random moment (the renderer floats an
+ * animated chat bubble over them) before both wander off. A talking
+ * character ignores wandering, bumping, and other passers-by.
  */
 
 export interface Wanderer {
@@ -43,6 +49,13 @@ export interface Wanderer {
   gaitT: number;
   /** Paused (selected/bubble open) — keeps position, ignores the tick. */
   frozen: boolean;
+  /** Mid-conversation partner id, or null when not talking. */
+  talkPartner: string | null;
+  /** Remaining conversation seconds; counts down only while talking. */
+  talkFor: number;
+  /** Where this talker slides to stand — side-by-side, shared depth line. */
+  talkX: number;
+  talkY: number;
 }
 
 export interface WanderBounds {
@@ -98,6 +111,16 @@ const BUMP_GRACE = 1.1;
 /** Gentle per-second un-stacking push while overlapping (px/s). */
 const SEPARATE_SPEED = 70;
 
+/** Chance a bump becomes a conversation instead of a shove. */
+const TALK_CHANCE = 0.2;
+/** Conversation length: TALK_MIN..TALK_MIN+TALK_VAR seconds (~2–5 s). */
+const TALK_MIN = 2;
+const TALK_VAR = 3;
+/** Side-by-side stance — how far apart a chatting pair stands (px). */
+export const TALK_GAP = 30;
+/** How fast a talker slides into stance (px/s). */
+const TALK_ALIGN_SPEED = 40;
+
 export function createWanderer(
   id: string,
   x: number,
@@ -126,6 +149,10 @@ export function createWanderer(
     idleFor: walking ? 0 : 0.4 + rng() * IDLE_LEN_VAR,
     gaitT: rng() * HOP_DURATION,
     frozen: false,
+    talkPartner: null,
+    talkFor: 0,
+    talkX: x,
+    talkY: y,
   };
 }
 
@@ -150,6 +177,21 @@ export function stepWanderers(
   for (const w of ws) {
     if (w.bumpCooldown > 0) w.bumpCooldown = Math.max(0, w.bumpCooldown - dt);
     if (w.frozen) continue;
+
+    // Mid-conversation: no wandering — slide into the side-by-side stance
+    // (same depth line) and hold it until the talk runs out. Ending clears
+    // BOTH sides, so a pair always parts together (a frozen talker's clock
+    // pauses, but its partner's still runs and ends the chat for both).
+    if (w.talkPartner !== null) {
+      w.talkFor -= dt;
+      if (w.talkFor <= 0) {
+        endTalk(w, ws, rng);
+      } else {
+        w.x = approach(w.x, w.talkX, TALK_ALIGN_SPEED * dt);
+        w.y = approach(w.y, w.talkY, TALK_ALIGN_SPEED * dt);
+      }
+      continue;
+    }
 
     // Idle pause: stand still (no move, no bounce) until it elapses.
     if (w.idleFor > 0) {
@@ -231,10 +273,26 @@ export function stepWanderers(
     for (let j = i + 1; j < ws.length; j++) {
       const a = ws[i];
       const b = ws[j];
+      // A talking pair holds its stance — no shoving them (or by them).
+      if (a.talkPartner !== null || b.talkPartner !== null) continue;
       if (a.frozen && b.frozen) continue;
       const dx = b.x - a.x;
       const dy = b.y - a.y;
       if (Math.abs(dx) >= COLLIDE_X || Math.abs(dy) >= COLLIDE_Y) continue;
+
+      // Once per encounter (same gate as the turn-away below): a small
+      // chance the meeting becomes a conversation instead of a bump —
+      // rolled BEFORE the shove so a new pair of talkers stays close.
+      if (
+        a.bumpCooldown <= 0 &&
+        b.bumpCooldown <= 0 &&
+        !a.frozen &&
+        !b.frozen &&
+        rng() < TALK_CHANCE
+      ) {
+        startTalk(a, b, rng, minX, maxX, minY, maxY);
+        continue;
+      }
 
       // Gently push apart every frame they overlap so nobody stacks.
       const d = Math.hypot(dx, dy);
@@ -273,6 +331,76 @@ export function stepWanderers(
 /** A fresh speed around a character's personal pace (±~40%). */
 function rerollSpeed(baseSpeed: number, rng: Rng): number {
   return clamp(baseSpeed * (0.6 + rng() * 0.8), SPEED_MIN, SPEED_MAX);
+}
+
+/** Move `v` toward `target` by at most `maxStep`, landing exactly on it. */
+function approach(v: number, target: number, maxStep: number): number {
+  const d = target - v;
+  return Math.abs(d) <= maxStep ? target : v + Math.sign(d) * maxStep;
+}
+
+/**
+ * Turn a meeting into a conversation: both stop dead (no gait), face each
+ * other (whoever stands left faces right and vice versa), and get stance
+ * targets — side by side TALK_GAP apart on a shared depth line at the
+ * pair's midpoint (clamped inside the plot). One shared duration, so the
+ * pair always parts together.
+ */
+function startTalk(
+  a: Wanderer,
+  b: Wanderer,
+  rng: Rng,
+  minX: number,
+  maxX: number,
+  minY: number,
+  maxY: number,
+): void {
+  const left = a.x <= b.x ? a : b;
+  const right = left === a ? b : a;
+  const midX = clamp((a.x + b.x) / 2, minX + TALK_GAP / 2, maxX - TALK_GAP / 2);
+  const midY = clamp((a.y + b.y) / 2, minY, maxY);
+  const duration = TALK_MIN + rng() * TALK_VAR;
+  for (const w of [a, b]) {
+    w.talkFor = duration;
+    w.talkY = midY;
+    w.speed = 0;
+    w.targetSpeed = 0;
+    w.gaitT = 0;
+  }
+  a.talkPartner = b.id;
+  b.talkPartner = a.id;
+  left.talkX = midX - TALK_GAP / 2;
+  right.talkX = midX + TALK_GAP / 2;
+  left.facing = 1;
+  right.facing = -1;
+}
+
+/**
+ * A conversation ran out: clear BOTH sides and send the pair wandering off
+ * in parting directions (each away from the other), with bump grace so the
+ * goodbye doesn't instantly re-collide into another encounter.
+ */
+function endTalk(w: Wanderer, ws: Wanderer[], rng: Rng): void {
+  const partner = ws.find((p) => p.id === w.talkPartner) ?? null;
+  for (const p of partner ? [w, partner] : [w]) {
+    p.talkPartner = null;
+    p.talkFor = 0;
+    p.idleFor = 0;
+    p.idleIn = IDLE_EVERY_MIN + rng() * IDLE_EVERY_VAR;
+    p.turnIn = 1.2 + rng() * 3;
+    p.targetSpeed = rerollSpeed(p.baseSpeed, rng);
+    p.bumpCooldown = BUMP_GRACE;
+  }
+  if (partner) {
+    const dx = partner.x - w.x;
+    const dy = partner.y - w.y;
+    const away = Math.atan2(
+      Math.abs(dy) > 0.001 ? dy : rng() - 0.5,
+      Math.abs(dx) > 0.001 ? dx : rng() - 0.5,
+    );
+    w.heading = away + Math.PI + (rng() - 0.5) * 0.9;
+    partner.heading = away + (rng() - 0.5) * 0.9;
+  }
 }
 
 /**

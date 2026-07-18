@@ -10,6 +10,8 @@
  *                  while moving;
  *   moving left  → the SAME east frames mirrored (`scaleX(-1)`) — every
  *                  sheet's side view faces right, left is the flip.
+ *   talking      → `static.east` (mirrored when facing -1) — a plaza chat
+ *                  pair stands still visibly facing each other.
  *
  * Tiles carry transparent padding (the drawn character stands ~70px of the
  * 92px tile, feet at ~88% height), so the img renders slightly larger than
@@ -36,6 +38,8 @@ export function PixelSprite({
   size = 64,
   facing = 1,
   moving = false,
+  talking = false,
+  pixelScale,
   className,
 }: {
   localId: string;
@@ -48,6 +52,15 @@ export function PixelSprite({
   facing?: 1 | -1;
   /** True while actually walking — runs the frame cycle. */
   moving?: boolean;
+  /** Standing in a plaza chat — side-facing idle pose (east, mirrorable). */
+  talking?: boolean;
+  /**
+   * Crisp big-render mode (the day-view stage): draw the tile at exactly
+   * this integer multiple of its source pixels instead of the `size`-derived
+   * scale — every source pixel maps to a whole screen-pixel square, so the
+   * blow-up stays sharp. Feet still anchor to the `size` box's bottom.
+   */
+  pixelScale?: number;
   className?: string;
 }) {
   const [failed, setFailed] = useState(false);
@@ -64,7 +77,11 @@ export function PixelSprite({
   useEffect(() => {
     if (!sprite) return;
     let stale = false;
-    const files = [sprite.static.south, ...sprite.walk.east];
+    const files = [
+      sprite.static.south,
+      sprite.static.east,
+      ...sprite.walk.east,
+    ];
     const imgs = files.map((f) => {
       const img = new Image();
       img.onerror = () => {
@@ -109,8 +126,10 @@ export function PixelSprite({
     );
   }
 
-  const scaled = Math.round(size * TILE_SCALE);
-  const flip = moving && facing === -1;
+  const scaled = pixelScale
+    ? sprite.tile.w * Math.max(1, Math.round(pixelScale))
+    : Math.round(size * TILE_SCALE);
+  const flip = (moving || talking) && facing === -1;
   return (
     <span
       role="img"
@@ -124,7 +143,10 @@ export function PixelSprite({
       }}
     >
       <img
-        src={spriteUrl(localId, spriteFrameFile(sprite, moving, frame))}
+        src={spriteUrl(
+          localId,
+          spriteFrameFile(sprite, moving, frame, talking),
+        )}
         alt=""
         draggable={false}
         onError={() => setFailed(true)}

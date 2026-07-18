@@ -244,6 +244,33 @@
   }
 }
 
+/* Plaza chat bubble: chat-bubbles.png is a 96×32 strip of three 32×32
+   frames (green dots filling in). steps(3) flicks through them at 5 fps —
+   a pixel "talking…" loop. Offsets from the pair are set inline. */
+.sp-chat-bubble {
+  position: absolute;
+  width: 32px;
+  height: 32px;
+  transform: translateX(-50%);
+  background: url("/assets/sheet/chat-bubbles.png") 0 0 / 96px 32px no-repeat;
+  image-rendering: pixelated;
+  pointer-events: none;
+  animation: sp-chat-talk 0.6s steps(3) infinite;
+}
+@keyframes sp-chat-talk {
+  from {
+    background-position-x: 0;
+  }
+  to {
+    background-position-x: -96px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sp-chat-bubble {
+    animation: none;
+  }
+}
+
 /* ---- swipe affordance + scene icon buttons ------------------------------- */
 
 /* Ink-glass squares with a cream pixel border, shared by the plaza's swipe

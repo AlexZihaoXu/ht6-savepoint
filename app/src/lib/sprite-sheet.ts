@@ -10,15 +10,20 @@ import type { SpriteManifest } from "./api";
 /**
  * Which sheet file to show: `static.south` when idle (face forward), the
  * east walk cycle on the move (wrapping `frame` around however many frames
- * the sheet has). Left-facing movement reuses these same frames mirrored —
- * that flip is the renderer's job.
+ * the sheet has), and the side-facing `static.east` while standing in a
+ * plaza conversation (`talking`) so the pair visibly faces each other.
+ * Left-facing anything reuses the east art mirrored — that flip is the
+ * renderer's job.
  */
 export function spriteFrameFile(
   sprite: SpriteManifest,
   moving: boolean,
   frame: number,
+  talking = false,
 ): string {
   const frames = sprite.walk.east;
-  if (!moving || frames.length === 0) return sprite.static.south;
-  return frames[((frame % frames.length) + frames.length) % frames.length];
+  if (moving && frames.length > 0)
+    return frames[((frame % frames.length) + frames.length) % frames.length];
+  if (talking) return sprite.static.east;
+  return sprite.static.south;
 }

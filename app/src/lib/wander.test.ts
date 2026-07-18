@@ -5,6 +5,7 @@ import {
   hopOffset,
   stepWanderers,
   HOP_DURATION,
+  TALK_GAP,
   type Wanderer,
 } from "./wander";
 import { rand } from "./scene-utils";
@@ -233,6 +234,66 @@ describe("wander sim", () => {
     const avgMoving = movingSum / samples;
     expect(avgMoving).toBeLessThan(ws.length * 0.4); // mostly a still crowd…
     expect(avgMoving).toBeGreaterThan(0.3); // …that still shows signs of life
+  });
+
+  it("a bump sometimes becomes a chat — both stop, face each other, y-align", () => {
+    const a = make("a", 100, 100, 0); // walking right…
+    const b = make("b", 120, 108, Math.PI); // …into b, slightly deeper
+    const chatty = () => 0.1; // every roll under TALK_CHANCE → they chat
+    stepWanderers([a, b], 1 / 30, BOUNDS, chatty);
+    expect(a.talkPartner).toBe("b");
+    expect(b.talkPartner).toBe("a");
+    expect(a.bumpCooldown).toBe(0); // a chat, not a bump
+    expect(a.facing).toBe(1); // the left one faces right…
+    expect(b.facing).toBe(-1); // …at the right one facing left
+    // They slide onto ONE depth line, side by side, and stand still.
+    for (let i = 0; i < 45; i++) stepWanderers([a, b], 1 / 30, BOUNDS, chatty);
+    expect(a.talkPartner).toBe("b"); // ~1.5 s in — still under the 2 s floor
+    expect(Math.abs(a.y - b.y)).toBeLessThan(0.01);
+    expect(b.x - a.x).toBeCloseTo(TALK_GAP, 5);
+    expect(a.speed).toBe(0);
+    expect(b.speed).toBe(0);
+    expect(gaitOffset(a)).toEqual({ dy: 0, tilt: 0 }); // no bounce mid-chat
+  });
+
+  it("a chat ends after its short timer — the pair parts and roams again", () => {
+    const a = make("a", 100, 100, 0);
+    const b = make("b", 120, 106, Math.PI);
+    const chatty = () => 0.1;
+    stepWanderers([a, b], 1 / 30, BOUNDS, chatty);
+    expect(a.talkPartner).toBe("b");
+    let steps = 1;
+    while (a.talkPartner !== null && steps < 300) {
+      stepWanderers([a, b], 1 / 30, BOUNDS, chatty);
+      steps++;
+    }
+    expect(a.talkPartner).toBeNull(); // over…
+    expect(b.talkPartner).toBeNull(); // …for BOTH at once
+    expect(steps / 30).toBeGreaterThanOrEqual(2); // within the promised
+    expect(steps / 30).toBeLessThanOrEqual(5); // 2–5 s window
+    expect(a.targetSpeed).toBeGreaterThan(0); // both wander off…
+    expect(b.targetSpeed).toBeGreaterThan(0);
+    expect(a.bumpCooldown).toBeGreaterThan(0); // …with goodbye grace
+    // Parting courses actually separate them over the next second.
+    const d0 = Math.hypot(b.x - a.x, b.y - a.y);
+    for (let i = 0; i < 30; i++) stepWanderers([a, b], 1 / 30, BOUNDS, chatty);
+    expect(Math.hypot(b.x - a.x, b.y - a.y)).toBeGreaterThan(d0);
+  });
+
+  it("passers-by never shove a talking pair", () => {
+    const a = make("a", 100, 100, 0);
+    const b = make("b", 120, 106, Math.PI);
+    const chatty = () => 0.1;
+    stepWanderers([a, b], 1 / 30, BOUNDS, chatty); // chat starts…
+    for (let i = 0; i < 30; i++) stepWanderers([a, b], 1 / 30, BOUNDS, chatty);
+    const [ax, ay] = [a.x, a.y]; // …and the stance has settled
+    const c = make("c", a.x - 20, a.y + 4, 0); // barges straight through
+    for (let i = 0; i < 30; i++)
+      stepWanderers([a, b, c], 1 / 30, BOUNDS, chatty);
+    expect(a.talkPartner).toBe("b"); // chat undisturbed
+    expect(a.x).toBe(ax); // stance holds — c crossed behind/in front
+    expect(a.y).toBe(ay);
+    expect(c.bumpCooldown).toBe(0); // and c never "bumped" anyone
   });
 
   it("fades the bounce out as speed ramps down", () => {

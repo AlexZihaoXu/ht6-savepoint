@@ -62,6 +62,12 @@ describe("spriteFrameFile", () => {
     const still = { ...MANIFEST, walk: { east: [] } };
     expect(spriteFrameFile(still, true, 2)).toBe("south.png");
   });
+
+  it("shows the side (east) pose while standing in a chat", () => {
+    expect(spriteFrameFile(MANIFEST, false, 0, true)).toBe("east.png");
+    // walking takes precedence — mid-stride beats the chat stance
+    expect(spriteFrameFile(MANIFEST, true, 1, true)).toBe("walk_east_1.png");
+  });
 });
 
 describe("PixelSprite", () => {
@@ -113,5 +119,37 @@ describe("PixelSprite", () => {
     );
     expect(container.querySelector("svg")).not.toBeNull();
     expect(container.querySelector("img")).toBeNull();
+  });
+
+  it("faces its chat partner while talking — east pose, mirrored when left", () => {
+    const { container } = render(
+      <PixelSprite
+        localId="demo-mia"
+        sprite={MANIFEST}
+        params={PARAMS}
+        talking
+        facing={-1}
+      />,
+    );
+    const img = container.querySelector("img")!;
+    expect(img.getAttribute("src")).toBe(
+      `${API_BASE}/sprites/demo-mia/east.png`,
+    );
+    expect(img.style.transform).toBe("scaleX(-1)");
+  });
+
+  it("blows the tile up by an exact integer in pixelScale mode (stage)", () => {
+    const { container } = render(
+      <PixelSprite
+        localId="demo-mia"
+        sprite={MANIFEST}
+        params={PARAMS}
+        size={140}
+        pixelScale={2}
+      />,
+    );
+    const img = container.querySelector("img")!;
+    expect(img.style.width).toBe("184px"); // 92 × 2 — whole source pixels
+    expect(img.style.height).toBe("184px");
   });
 });

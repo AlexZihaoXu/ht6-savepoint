@@ -27,7 +27,7 @@ import {
 } from "react-icons/pi";
 import { Icon } from "@/components/Icon";
 import { PixelHeader } from "@/components/PixelChrome";
-import { DetailedSprite } from "@/lib/detailed-sprite";
+import { PixelSprite } from "@/lib/pixel-sprite";
 import { ParametricSprite } from "@/lib/sprite";
 import {
   api,
@@ -225,16 +225,21 @@ export function DayScenePage() {
           <Cabin className="absolute top-[8%] right-[8%] h-[95px] w-auto" />
         </div>
 
-        {/* dialogue box — the two detailed portraits stand right on top of
-            it, [you] LEFT / partner RIGHT, torso bottoms tucked behind it */}
+        {/* dialogue box — the two stage characters stand right on top of it,
+            [you] LEFT / partner RIGHT, feet tucked behind it */}
         <div className="flex-none px-2 pt-4">
           {active && (
             <div className="relative">
-              {/* the talking pair gets the DETAILED portrait style (mock art
-                  for now — see detailed-sprite.tsx); everywhere else keeps
-                  the small plaza sprite */}
+              {/* the talking pair shows their REAL PixelLab sprite, blown up
+                  to stage scale (integer pixel scale, so it stays crisp);
+                  anyone un-sprited keeps the parametric fallback */}
               <StageActor side="left" name="You" lit={youSpeaking}>
-                <DetailedSprite params={YOU_AVATAR} size={STAGE_SIZE} />
+                <PixelSprite
+                  localId="you"
+                  sprite={null}
+                  params={YOU_AVATAR}
+                  size={STAGE_SIZE}
+                />
               </StageActor>
               {partnerId && (
                 <StageActor
@@ -244,12 +249,15 @@ export function DayScenePage() {
                   lit={!youSpeaking}
                   enter
                 >
-                  <DetailedSprite
+                  <PixelSprite
+                    localId={partnerId}
+                    sprite={peopleById.get(partnerId)?.sprite ?? null}
                     params={
                       peopleById.get(partnerId)?.avatar_params ??
                       fallbackAvatar(partnerId)
                     }
                     size={STAGE_SIZE}
+                    pixelScale={STAGE_PIXEL_SCALE}
                   />
                 </StageActor>
               )}
@@ -333,10 +341,16 @@ export function DayScenePage() {
 
 /* ---- stage characters ------------------------------------------------------ */
 
-/** Visual-novel scale — the pair towers over the dialogue box. */
-const STAGE_SIZE = 176;
-/** The portrait's torso bottom tucks behind the box (bust framing). */
-const STAGE_CLIP = Math.round(STAGE_SIZE * 0.24);
+/**
+ * Visual-novel scale. A PixelLab tile is 92px with the drawn character
+ * ~70px of it — at 2× (STAGE_PIXEL_SCALE) the character stands ~140px, so
+ * the layout box (which the parametric fallback fills exactly) matches.
+ */
+const STAGE_SIZE = 140;
+/** Crisp integer blow-up of the sprite tile on stage (92 → 184px). */
+const STAGE_PIXEL_SCALE = 2;
+/** The characters' feet/shins tuck behind the dialogue box. */
+const STAGE_CLIP = 28;
 
 /**
  * One of the two conversation characters, anchored to the dialogue box: it
@@ -386,7 +400,9 @@ function StageActor({
                 }
           }
         >
-          <span className="pixel-name font-pixel absolute top-0 left-1/2 -translate-x-1/2 text-[8px] whitespace-nowrap">
+          {/* z-10: the blown-up sprite overflows its box upward — the head
+              tag must paint over the character, not get buried behind it */}
+          <span className="pixel-name font-pixel absolute top-0 left-1/2 z-10 -translate-x-1/2 text-[8px] whitespace-nowrap">
             [{name}]
           </span>
           {children}

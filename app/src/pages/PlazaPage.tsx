@@ -38,6 +38,7 @@ import {
   createWanderer,
   gaitOffset,
   stepWanderers,
+  TALK_GAP,
   type Rng,
   type Wanderer,
 } from "@/lib/wander";
@@ -222,13 +223,17 @@ const ACTOR_TRANSITION =
 
 /**
  * The sprite-facing animation inputs the wander sim feeds PixelSprite.
- * Position/gait stay imperative (per-frame style writes); facing + walking
- * flip rarely, so THOSE go through React state — the walk-frame cycling
- * then lives inside PixelSprite.
+ * Position/gait stay imperative (per-frame style writes); facing, walking
+ * and chatting flip rarely, so THOSE go through React state — the
+ * walk-frame cycling then lives inside PixelSprite.
  */
 interface ActorAnim {
   facing: 1 | -1;
   moving: boolean;
+  /** Mid-conversation — side-facing stance + chat bubble over the pair. */
+  talking: boolean;
+  /** The one talker per pair (its left/right-facing one) owns the bubble. */
+  bubble: boolean;
 }
 
 /** Below this speed (px/s) a wanderer reads as standing (→ south idle). */
@@ -355,16 +360,30 @@ function PlazaPanel({
       let dirty = Object.keys(prev).length !== sim.length;
       const next: Record<string, ActorAnim> = {};
       for (const s of sim) {
+        const talking = freeRoam && !s.frozen && s.talkPartner !== null;
         const moving =
-          freeRoam && !s.frozen && s.idleFor <= 0 && s.speed > WALK_EPS;
+          freeRoam &&
+          !s.frozen &&
+          !talking &&
+          s.idleFor <= 0 &&
+          s.speed > WALK_EPS;
         // Static layouts (whistle line / reduced-motion) face everyone
         // forward, matching the old un-flipped standing pose.
         const facing = freeRoam ? s.facing : 1;
+        // ONE bubble per chatting pair, floated between the two heads —
+        // owned by the left (right-facing) talker.
+        const bubble = talking && s.facing === 1;
         const cur = prev[s.id];
-        if (cur && cur.facing === facing && cur.moving === moving) {
+        if (
+          cur &&
+          cur.facing === facing &&
+          cur.moving === moving &&
+          cur.talking === talking &&
+          cur.bubble === bubble
+        ) {
           next[s.id] = cur;
         } else {
-          next[s.id] = { facing, moving };
+          next[s.id] = { facing, moving, talking, bubble };
           dirty = true;
         }
       }
@@ -382,6 +401,15 @@ function PlazaPanel({
     };
 
     const freeRoam = !lined && !reduce;
+
+    // Whistle / reduced-motion snaps everyone to attention — conversations
+    // break up (stale stance targets must not survive into the next roam).
+    if (!freeRoam) {
+      for (const s of sim) {
+        s.talkPartner = null;
+        s.talkFor = 0;
+      }
+    }
 
     // Static layouts (whistle line / reduced-motion) place from the curated
     // percentages, so they can be re-derived at any plot size.
@@ -541,9 +569,20 @@ function PlazaPanel({
                     size={60}
                     facing={anim[p.local_id]?.facing ?? 1}
                     moving={anim[p.local_id]?.moving ?? false}
+                    talking={anim[p.local_id]?.talking ?? false}
                   />
                 </span>
               </button>
+              {/* the pair's animated "…" chat bubble, centered between the
+                  two heads (this talker faces right; partner stands TALK_GAP
+                  to the right) */}
+              {anim[p.local_id]?.bubble && (
+                <span
+                  aria-hidden
+                  className="sp-chat-bubble"
+                  style={{ left: TALK_GAP / 2, top: -96 }}
+                />
+              )}
               {isSel && selected && (
                 <PersonBubble
                   person={p}
