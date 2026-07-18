@@ -1,0 +1,57 @@
+# CI — Speech pipeline (LIGHTWEIGHT ONLY)
+#
+# The full speech pipeline (pyannote / SepFormer / faster-whisper / torch) is far too
+# heavy to install and run in CI — model downloads alone blow past the time budget.
+# So CI here is deliberately minimal: it ONLY lints the code and runs the cheap,
+# dependency-free testcase-parsing tests (pipeline/tests/test_testcases.py).
+#
+# ==> The full model pipeline is validated MANUALLY (see ~/two-speaker-demo tc1-tc5),
+#     NOT in CI. Never add torch/whisper/pyannote installs to this workflow.
+name: CI Pipeline (lightweight)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'pipeline/**'
+      - '.github/workflows/ci-pipeline.yml'
+  pull_request:
+    paths:
+      - 'pipeline/**'
+      - '.github/workflows/ci-pipeline.yml'
+
+concurrency:
+  group: ci-pipeline-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: pipeline
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      # Build a throwaway venv with ONLY ruff + pytest. We never `uv sync` the project
+      # here, so none of the heavy model dependencies (torch/whisper/pyannote) get pulled.
+      - name: Install lightweight tools (ruff + pytest only)
+        run: uv venv .ci-venv && uv pip install --python .ci-venv/bin/python ruff pytest
+
+      - name: Lint (ruff — no project deps needed)
+        run: .ci-venv/bin/ruff check .
+
+      # Cheap, dependency-free test: validates the ground-truth testcase fixtures parse.
+      # Heavy model behaviour is checked by hand, not here.
+      - name: Light testcase tests
+        run: .ci-venv/bin/python -m pytest tests/test_testcases.py
