@@ -1,7 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 import { App } from "./App";
+import { AppShell } from "./components/AppShell";
 
 describe("App shell", () => {
   it("lands on the plaza (the redesign is the default app)", async () => {
@@ -46,4 +48,25 @@ describe("App shell", () => {
       ),
     ).toBeInTheDocument();
   });
+
+  it.each(["/classic", "/garden", "/day/2026-07-18", "/nope"])(
+    "redirects the retired scaffold route %s to the plaza",
+    async (path) => {
+      render(
+        <MemoryRouter initialEntries={[path]}>
+          <AppShell />
+        </MemoryRouter>,
+      );
+
+      // The old pages are deleted — every stray path lands on the plaza's
+      // immersive chrome via the wildcard redirect.
+      expect(
+        await screen.findByLabelText(
+          /plaza — everyone you have met/i,
+          undefined,
+          { timeout: 3000 },
+        ),
+      ).toBeInTheDocument();
+    },
+  );
 });

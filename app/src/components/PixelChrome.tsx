@@ -66,13 +66,6 @@ export function PixelHeader() {
           >
             People list
           </Link>
-          <Link
-            to="/classic"
-            className="px-3 py-2.5 font-medium"
-            onClick={() => setMenuOpen(false)}
-          >
-            Classic view
-          </Link>
         </div>
       )}
     </header>
