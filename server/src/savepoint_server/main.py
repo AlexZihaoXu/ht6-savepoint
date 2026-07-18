@@ -2,11 +2,25 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from savepoint_server.api import api_router
 from savepoint_server.core.config import Settings, get_settings
+from savepoint_server.db.mongo import close_client, ensure_indexes, get_db
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Connect to MongoDB and ensure indexes on startup; close on shutdown."""
+    await ensure_indexes(get_db())
+    try:
+        yield
+    finally:
+        close_client()
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -21,6 +35,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         title=settings.app_name,
         version="0.1.0",
         description="SavePoint backend API — people, days, and recaps.",
+        lifespan=lifespan,
     )
 
     app.add_middleware(

@@ -2,6 +2,32 @@
 
 from __future__ import annotations
 
-from savepoint_server.db.mongo import close_client, get_client, get_db
+from savepoint_server.db.mongo import (
+    close_client,
+    ensure_indexes,
+    get_client,
+    get_db,
+)
+from savepoint_server.db.repositories import (
+    BaseRepository,
+    DaysRepository,
+    EventsRepository,
+    PeopleRepository,
+    RecapsRepository,
+    Repositories,
+    get_repositories,
+)
 
-__all__ = ["close_client", "get_client", "get_db"]
+__all__ = [
+    "BaseRepository",
+    "DaysRepository",
+    "EventsRepository",
+    "PeopleRepository",
+    "RecapsRepository",
+    "Repositories",
+    "close_client",
+    "ensure_indexes",
+    "get_client",
+    "get_db",
+    "get_repositories",
+]
