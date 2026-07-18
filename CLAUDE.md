@@ -89,7 +89,9 @@ reads the API and renders it as a garden of days + Undertale-style dialogue play
 - `main.py` is an app factory (`create_app(settings)`), so tests inject `Settings`. `api/__init__.py`
   aggregates feature routers into `api_router`; add new routers there.
 - Mongo client (`db/mongo.py`) is **lazy** — importing the app never needs a running DB, so CI and
-  unit tests work without Mongo. `services/recap.py` is a `NotImplementedError` placeholder.
+  unit tests work without Mongo. `services/recap.py` generates a day's narrative recap via a
+  pluggable `LLMClient` (`services/llm.py`); `POST /day/{date}/recap` exposes it. Default backend
+  is self-hosted Gemma (`recap_backend` in `core/config.py`); the LLM is mocked in tests.
 - Config via `pydantic-settings`, env prefix **`SAVEPOINT_`** (e.g. `SAVEPOINT_MONGO_URI`), loaded
   from `server/.env`. mypy is strict (untyped defs disallowed).
 - LLM recaps target a self-hosted **Gemma** OpenAI-compatible endpoint; when calling it you must

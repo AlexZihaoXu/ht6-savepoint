@@ -22,6 +22,32 @@ class DaySummary(BaseModel):
     events: int = Field(default=0, ge=0, description="Events logged this day.")
 
 
+#: Highest garden-plant growth stage (0 = bare soil .. MAX = full bloom). Five stages
+#: give the calendar-view garden a legible "seed -> sprout -> growing -> budding -> bloom"
+#: progression while staying a small, art-friendly set.
+MAX_PLANT_STAGE = 4
+
+
+def compute_plant_stage(events: int, people: int) -> int:
+    """Map a day's activity to a garden-plant growth stage (``0..MAX_PLANT_STAGE``).
+
+    A busier day grows a fuller plant. Distinct people are weighted a little heavier
+    than raw event count, since meeting several people makes a "fuller" day than one
+    long monologue. A day with nothing logged stays bare soil (stage 0).
+
+    The thresholds are intentionally simple and tunable — once the design settles on
+    concrete growth frames (waterprism's calendar garden), only the buckets here move.
+    """
+    if events <= 0:
+        return 0
+    # Meeting N people counts each extra person as ~2 events of "fullness".
+    score = events + 2 * max(people - 1, 0)
+    for stage, threshold in ((4, 10), (3, 6), (2, 3), (1, 1)):
+        if score >= threshold:
+            return stage
+    return 0
+
+
 class Day(MongoModel):
     """A single day, rendered as a plant tile in the garden calendar."""
 
