@@ -17,7 +17,7 @@ import { ParametricSprite } from "@/lib/sprite";
 import { api, displayName, type ApiDay, type ApiPerson } from "@/lib/api";
 import { addMonth, monthGrid, monthName } from "@/lib/calendar";
 import { FenceRow, Pine, PlantSprite, Rock, Tree } from "@/lib/scene";
-import { rand } from "@/lib/scene-utils";
+import { rand, relativeSeen } from "@/lib/scene-utils";
 import {
   createWanderer,
   gaitOffset,
@@ -26,15 +26,6 @@ import {
   type Wanderer,
 } from "@/lib/wander";
 import { TODAY_ISO } from "@/lib/seed";
-
-function relativeSeen(iso: string | null): string {
-  if (!iso) return "a while ago";
-  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
-  if (days <= 0) return "today";
-  if (days === 1) return "yesterday";
-  if (days < 7) return `${days} days ago`;
-  return `${Math.floor(days / 7)}w ago`;
-}
 
 export function PlazaPage() {
   const [searchParams] = useSearchParams();
@@ -59,15 +50,20 @@ export function PlazaPage() {
     return () => ac.abort();
   }, []);
 
-  // Deep-link ?view=garden: land on the garden panel without animating.
+  // ?view=garden drives the panel: jump there on mount (deep link), slide
+  // there when the query changes while mounted (e.g. the journal button on
+  // this very page). User swipes never rewrite the query, so no feedback.
+  const firstPlacement = useRef(true);
   useEffect(() => {
     const el = scrollerRef.current;
-    if (el && searchParams.get("view") === "garden") {
-      el.scrollTo({ left: el.clientWidth });
-    }
-    // Initial placement only — later navigation is user-driven.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (!el) return;
+    const idx = searchParams.get("view") === "garden" ? 1 : 0;
+    el.scrollTo({
+      left: idx * el.clientWidth,
+      behavior: firstPlacement.current ? "auto" : "smooth",
+    });
+    firstPlacement.current = false;
+  }, [searchParams]);
 
   const gotoPanel = (idx: 0 | 1) => {
     const el = scrollerRef.current;

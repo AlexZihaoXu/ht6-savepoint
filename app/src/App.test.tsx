@@ -4,33 +4,44 @@ import userEvent from "@testing-library/user-event";
 import { App } from "./App";
 
 describe("App shell", () => {
-  it("renders the SavePoint shell on the Today screen", async () => {
+  it("lands on the plaza (the redesign is the default app)", async () => {
     render(<App />);
 
-    expect(
-      screen.getByRole("link", { name: /savepoint.*home/i }),
-    ).toBeInTheDocument();
-    // Pages are lazy-loaded (route code-splitting) — await the Suspense
-    // boundary resolving the Today chunk.
+    // "/" redirects to /plaza — the immersive pixel chrome renders its
+    // wooden header and the plaza panel. Pages are lazy-loaded (route
+    // code-splitting), so await the Suspense boundary.
     expect(
       await screen.findByRole(
-        "heading",
-        { level: 1, name: /today/i },
+        "link",
+        { name: /savepoint.*plaza/i },
+        { timeout: 3000 },
+      ),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByLabelText(
+        /plaza — everyone you have met/i,
+        undefined,
         { timeout: 3000 },
       ),
     ).toBeInTheDocument();
   });
 
-  it("navigates to the Garden screen via the bottom nav", async () => {
+  it("navigates to the People list via the pixel bottom bar", async () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("link", { name: /^garden$/i }));
+    await user.click(
+      await screen.findByRole(
+        "button",
+        { name: /^people$/i },
+        { timeout: 3000 },
+      ),
+    );
 
     expect(
       await screen.findByRole(
         "heading",
-        { level: 1, name: /garden/i },
+        { level: 1, name: /people/i },
         { timeout: 3000 },
       ),
     ).toBeInTheDocument();

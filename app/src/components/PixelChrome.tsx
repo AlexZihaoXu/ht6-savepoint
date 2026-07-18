@@ -67,7 +67,7 @@ export function PixelHeader() {
             People list
           </Link>
           <Link
-            to="/"
+            to="/classic"
             className="px-3 py-2.5 font-medium"
             onClick={() => setMenuOpen(false)}
           >
@@ -95,9 +95,9 @@ export function PixelBottomNav() {
       </button>
       <button
         type="button"
-        aria-label="Journal"
+        aria-label="Journal — the garden of days"
         className="pixel-btn touch-target flex w-14 items-center justify-center"
-        onClick={() => navigate("/")}
+        onClick={() => navigate("/plaza?view=garden")}
       >
         <Icon icon={PiNotePencil} size={22} />
       </button>

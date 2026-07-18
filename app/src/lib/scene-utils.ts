@@ -89,6 +89,16 @@ export function nameFor(
   return p ? displayName(p) : id;
 }
 
+/** "today" / "yesterday" / "n days ago" for a last-seen timestamp. */
+export function relativeSeen(iso: string | null): string {
+  if (!iso) return "a while ago";
+  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+  if (days <= 0) return "today";
+  if (days === 1) return "yesterday";
+  if (days < 7) return `${days} days ago`;
+  return `${Math.floor(days / 7)}w ago`;
+}
+
 /**
  * Format an event timestamp as the wall-clock it was recorded at. Event `ts`
  * values are stored as UTC and treated as wall-clock in this prototype, so we

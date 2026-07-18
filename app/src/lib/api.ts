@@ -67,14 +67,32 @@ export interface ApiDayView {
   recap: ApiRecap | null;
 }
 
+/** GET /people/{local_id} — the person plus their recent events. */
+export interface ApiPersonDetail extends ApiPerson {
+  events: ApiEvent[];
+}
+
+/** Error that keeps the HTTP status, so 404s can render as "not found". */
+export class ApiError extends Error {
+  status: number;
+
+  constructor(status: number, path: string) {
+    super(`${path} → HTTP ${status}`);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
 async function getJSON<T>(path: string, signal?: AbortSignal): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, { signal });
-  if (!res.ok) throw new Error(`${path} → HTTP ${res.status}`);
+  if (!res.ok) throw new ApiError(res.status, path);
   return (await res.json()) as T;
 }
 
 export const api = {
   people: (signal?: AbortSignal) => getJSON<ApiPerson[]>("/people", signal),
+  person: (localId: string, signal?: AbortSignal) =>
+    getJSON<ApiPersonDetail>(`/people/${encodeURIComponent(localId)}`, signal),
   days: (signal?: AbortSignal) => getJSON<ApiDay[]>("/days", signal),
   day: (date: string, signal?: AbortSignal) =>
     getJSON<ApiDayView>(`/day/${date}`, signal),

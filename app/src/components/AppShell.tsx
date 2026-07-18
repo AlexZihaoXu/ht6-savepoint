@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, type ComponentType } from "react";
 import { AnimatePresence } from "framer-motion";
-import { Route, Routes, useLocation } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { TopBar } from "./TopBar";
 import { BottomNav } from "./BottomNav";
 import { PageTransition } from "./PageTransition";
@@ -79,7 +79,9 @@ export function AppShell() {
       >
         <AnimatePresence mode="wait">
           <Routes location={location} key={location.pathname}>
-            <Route path="/" element={page(TodayPage)} />
+            {/* the redesign IS the app — land on the plaza */}
+            <Route path="/" element={<Navigate to="/plaza" replace />} />
+            <Route path="/classic" element={page(TodayPage)} />
             <Route path="/garden" element={page(GardenPage)} />
             <Route path="/plaza" element={page(PlazaPage, true)} />
             <Route path="/scene" element={page(DayScenePage, true)} />
@@ -87,7 +89,7 @@ export function AppShell() {
             <Route path="/people" element={page(PeoplePage)} />
             <Route path="/people/:id" element={page(PersonPage)} />
             <Route path="/day/:date" element={page(DayViewPage)} />
-            <Route path="*" element={page(TodayPage)} />
+            <Route path="*" element={<Navigate to="/plaza" replace />} />
           </Routes>
         </AnimatePresence>
       </main>

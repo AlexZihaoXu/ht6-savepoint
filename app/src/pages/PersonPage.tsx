@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Button, Card, Chip } from "@heroui/react";
 import {
@@ -7,25 +8,75 @@ import {
   PiUserCircleDashed,
 } from "react-icons/pi";
 import { Icon } from "@/components/Icon";
-import { SpriteAvatar } from "@/components/SpriteAvatar";
-import { findPerson, TODAY_ISO } from "@/lib/seed";
+import { ParametricSprite } from "@/lib/sprite";
+import { api, ApiError, displayName, type ApiPersonDetail } from "@/lib/api";
+import { formatClock, relativeSeen } from "@/lib/scene-utils";
 
-/** Person info — big sprite, notes, tags, and recent interactions. */
+function fmtDay(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+type Status = "loading" | "ready" | "missing" | "error";
+
+/** Person info — real `/people/{id}` data: sprite, notes, tags, recent days. */
 export function PersonPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const person = findPerson(id);
 
-  if (!person) {
+  const [person, setPerson] = useState<ApiPersonDetail | null>(null);
+  const [status, setStatus] = useState<Status>("loading");
+
+  useEffect(() => {
+    if (!id) {
+      setStatus("missing");
+      return;
+    }
+    const ac = new AbortController();
+    setStatus("loading");
+    setPerson(null);
+    api.person(id, ac.signal).then(
+      (p) => {
+        setPerson(p);
+        setStatus("ready");
+      },
+      (e) => {
+        if (ac.signal.aborted) return;
+        setStatus(
+          e instanceof ApiError && e.status === 404 ? "missing" : "error",
+        );
+      },
+    );
+    return () => ac.abort();
+  }, [id]);
+
+  if (status === "loading") {
+    return (
+      <section className="flex flex-col items-center gap-3 py-10 text-center">
+        <p className="animate-pulse text-sm text-[var(--muted)]">
+          Loading your world…
+        </p>
+      </section>
+    );
+  }
+
+  if (status === "missing" || status === "error" || !person) {
     return (
       <section className="flex flex-col items-center gap-3 py-10 text-center">
         <Icon
           icon={PiUserCircleDashed}
           className="text-5xl text-[var(--muted)]"
         />
-        <h1 className="text-xl font-semibold">No one here yet</h1>
+        <h1 className="text-xl font-semibold">
+          {status === "error" ? "Backend asleep…" : "No one here yet"}
+        </h1>
         <p className="text-sm text-[var(--muted)]">
-          We haven&rsquo;t met this character.
+          {status === "error"
+            ? "Couldn't reach the SavePoint API — is it up?"
+            : "We haven't met this character."}
         </p>
         <Button variant="secondary" onPress={() => navigate("/people")}>
           Back to People
@@ -33,6 +84,18 @@ export function PersonPage() {
       </section>
     );
   }
+
+  const name = displayName(person);
+  // Most recent days this person appeared in (from their event history).
+  const recentDays = [...person.events]
+    .sort((a, b) => b.ts.localeCompare(a.ts))
+    .reduce<Array<{ day: string; count: number; last: string }>>((acc, e) => {
+      const hit = acc.find((d) => d.day === e.day_id);
+      if (hit) hit.count += 1;
+      else if (acc.length < 5)
+        acc.push({ day: e.day_id, count: 1, last: e.ts });
+      return acc;
+    }, []);
 
   return (
     <section className="flex flex-col gap-5" aria-labelledby="person-heading">
@@ -46,14 +109,14 @@ export function PersonPage() {
 
       <div className="flex items-center gap-4">
         <span className="sprite-bob">
-          <SpriteAvatar person={person} size={80} />
+          <ParametricSprite params={person.avatar_params} size={84} />
         </span>
         <div className="min-w-0">
           <h1
             id="person-heading"
             className="flex items-center gap-2 text-2xl font-semibold tracking-tight"
           >
-            {person.name}
+            {name}
             {person.favorite && (
               <Icon
                 icon={PiStarFill}
@@ -63,23 +126,31 @@ export function PersonPage() {
             )}
           </h1>
           <p className="text-sm text-[var(--muted)]">
-            Last seen {person.lastSeen}
+            Seen {relativeSeen(person.last_seen)}
+            {person.first_seen
+              ? ` · first met ${fmtDay(person.first_seen)}`
+              : ""}
           </p>
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {person.tags.map((tag) => (
-          <Chip key={tag}>{tag}</Chip>
-        ))}
-      </div>
+      {person.tags.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {person.tags.map((tag) => (
+            <Chip key={tag}>{tag}</Chip>
+          ))}
+        </div>
+      )}
 
       <Card>
         <Card.Header>
           <Card.Title>Notes</Card.Title>
         </Card.Header>
         <Card.Content>
-          <p className="text-sm leading-relaxed">{person.blurb}</p>
+          <p className="text-sm leading-relaxed">
+            {person.notes?.trim() ||
+              "No notes yet — your next chat will fill this in."}
+          </p>
         </Card.Content>
       </Card>
 
@@ -89,20 +160,24 @@ export function PersonPage() {
           <Card.Description>Tap a row to replay that day</Card.Description>
         </Card.Header>
         <Card.Content className="flex flex-col gap-2">
-          <Link
-            to={`/day/${TODAY_ISO}`}
-            className="touch-target flex items-center justify-between border border-[var(--separator)] px-3 py-2 text-sm transition-colors hover:bg-[var(--surface-tertiary)]"
-          >
-            <span>Today · morning</span>
-            <Icon icon={PiCaretRight} className="text-[var(--muted)]" />
-          </Link>
-          <Link
-            to="/day/2026-07-15"
-            className="touch-target flex items-center justify-between border border-[var(--separator)] px-3 py-2 text-sm transition-colors hover:bg-[var(--surface-tertiary)]"
-          >
-            <span>Jul 15 · afternoon</span>
-            <Icon icon={PiCaretRight} className="text-[var(--muted)]" />
-          </Link>
+          {recentDays.length === 0 && (
+            <p className="text-sm text-[var(--muted)]">
+              Nothing recorded together yet.
+            </p>
+          )}
+          {recentDays.map((d) => (
+            <Link
+              key={d.day}
+              to={`/scene/${d.day}`}
+              className="touch-target flex items-center justify-between border border-[var(--separator)] px-3 py-2 text-sm transition-colors hover:bg-[var(--surface-tertiary)]"
+            >
+              <span>
+                {fmtDay(d.day + "T00:00:00Z")} · {formatClock(d.last)} ·{" "}
+                {d.count} {d.count === 1 ? "moment" : "moments"}
+              </span>
+              <Icon icon={PiCaretRight} className="text-[var(--muted)]" />
+            </Link>
+          ))}
         </Card.Content>
       </Card>
     </section>

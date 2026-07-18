@@ -51,6 +51,11 @@ Object.defineProperty(window, "scrollTo", {
   value: () => {},
 });
 
+// The plaza's swipe scroller calls Element#scrollTo, also missing in jsdom.
+if (!Element.prototype.scrollTo) {
+  Element.prototype.scrollTo = (() => {}) as Element["scrollTo"];
+}
+
 afterEach(() => {
   cleanup();
 });

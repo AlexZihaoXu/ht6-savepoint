@@ -19,7 +19,7 @@ interface Tab {
 // Mobile-first bottom tab bar. The Person and Day-view screens are reached from
 // within People / Garden / Today, so the bar stays to four primary destinations.
 const tabs: Tab[] = [
-  { to: "/", label: "Today", icon: PiSunHorizon, end: true },
+  { to: "/classic", label: "Today", icon: PiSunHorizon, end: true },
   { to: "/garden", label: "Garden", icon: PiPlant },
   { to: `/day/${TODAY_ISO}`, label: "Story", icon: PiChatCircleDots },
   { to: "/people", label: "People", icon: PiUsersThree },
