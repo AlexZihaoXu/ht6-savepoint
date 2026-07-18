@@ -49,7 +49,10 @@ export function PeoplePage() {
         {list.map((p) => (
           <li key={p.id}>
             <Link to={`/people/${p.id}`} aria-label={`Open ${p.name}`}>
-              <Card variant="secondary" className="transition-transform active:scale-[0.99]">
+              <Card
+                variant="secondary"
+                className="transition-transform active:scale-[0.99]"
+              >
                 <Card.Content className="flex items-center gap-3">
                   <SpriteAvatar person={p} size={44} />
                   <div className="min-w-0 flex-1">

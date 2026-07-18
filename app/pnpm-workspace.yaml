@@ -1,0 +1,9 @@
+# pnpm 10+ reads project config from here (the package.json "pnpm" field is ignored).
+# Approve the native build scripts we trust so esbuild (used by Vite/Vitest) sets up its binary.
+packages:
+  - '.'
+allowBuilds:
+  esbuild: true
+# Dedupe vite to a single version so plugin types (react / tailwind / vitest) don't clash.
+overrides:
+  vite: '6.4.3'

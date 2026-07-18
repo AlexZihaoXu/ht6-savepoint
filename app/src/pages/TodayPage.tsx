@@ -12,7 +12,10 @@ export function TodayPage() {
     <section className="flex flex-col gap-5" aria-labelledby="today-heading">
       <header className="flex flex-col gap-1">
         <p className="text-sm text-[var(--muted)]">Friday · July 18</p>
-        <h1 id="today-heading" className="text-2xl font-semibold tracking-tight">
+        <h1
+          id="today-heading"
+          className="text-2xl font-semibold tracking-tight"
+        >
           Today
         </h1>
       </header>
@@ -64,12 +67,16 @@ export function TodayPage() {
             <Chip color="accent">Gemini</Chip>
           </div>
           <p className="text-sm leading-relaxed">
-            You spent the morning building the garden view with Vee and caught up
-            with Dan about the Pi. It felt like a good, productive save point. 🌟
+            You spent the morning building the garden view with Vee and caught
+            up with Dan about the Pi. It felt like a good, productive save
+            point. 🌟
           </p>
         </Card.Content>
         <Card.Footer>
-          <Button variant="primary" onPress={() => navigate(`/day/${TODAY_ISO}`)}>
+          <Button
+            variant="primary"
+            onPress={() => navigate(`/day/${TODAY_ISO}`)}
+          >
             Replay today&rsquo;s story →
           </Button>
         </Card.Footer>

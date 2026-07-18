@@ -58,6 +58,8 @@ explicit = true
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+# Vendored upstream scripts (jiucheng's original pipeline) are kept verbatim — exempt from our lint.
+extend-exclude = ["align.py", "diarize.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]

@@ -38,7 +38,7 @@ export function GardenPage() {
                 to={`/day/${day.date}`}
                 aria-label={`July ${day.label}, ${day.people} people`}
                 className={[
-                  "flex aspect-square touch-target flex-col items-center justify-center gap-0.5 border transition-colors",
+                  "touch-target flex aspect-square flex-col items-center justify-center gap-0.5 border transition-colors",
                   day.isToday
                     ? "border-[var(--accent)] bg-[color-mix(in_oklch,var(--accent)_16%,transparent)]"
                     : "border-[var(--separator)] hover:bg-[var(--surface-secondary)]",
