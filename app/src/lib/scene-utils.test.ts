@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  activeEventIndex,
   fallbackAvatar,
   formatClock,
+  isUnnamedSpeaker,
   nearestEventTs,
   partnerAt,
   YOU_AVATAR,
@@ -72,6 +74,64 @@ describe("nearestEventTs (?t= deep link into a conversation)", () => {
   it("is null with no events or an invalid target (fallback: day start)", () => {
     expect(nearestEventTs([], ms("2026-07-18T08:00:00Z"))).toBeNull();
     expect(nearestEventTs(events, Number.NaN)).toBeNull();
+  });
+});
+
+describe("isUnnamedSpeaker (tap-to-name — SAV-57)", () => {
+  const nobody = new Map<string, unknown>();
+
+  it("flags raw diarizer labels with no Person doc", () => {
+    expect(isUnnamedSpeaker("Speaker 1", nobody)).toBe(true);
+    expect(isUnnamedSpeaker("speaker 2", nobody)).toBe(true);
+    expect(isUnnamedSpeaker("SPEAKER12", nobody)).toBe(true);
+  });
+
+  it("resolves once a Person exists under that exact label", () => {
+    const people = new Map<string, unknown>([["Speaker 1", {}]]);
+    expect(isUnnamedSpeaker("Speaker 1", people)).toBe(false);
+    // …but a different label on the same day still needs naming.
+    expect(isUnnamedSpeaker("Speaker 2", people)).toBe(true);
+  });
+
+  it("never flags 'you', real local_ids, or non-label strings", () => {
+    expect(isUnnamedSpeaker("you", nobody)).toBe(false);
+    expect(isUnnamedSpeaker("a1b2c3d4", nobody)).toBe(false);
+    expect(isUnnamedSpeaker("Speaker", nobody)).toBe(false);
+    expect(isUnnamedSpeaker("Speaker one", nobody)).toBe(false);
+    expect(isUnnamedSpeaker("Speaker 1 jr", nobody)).toBe(false);
+  });
+});
+
+describe("activeEventIndex (which line the scrubber sits on)", () => {
+  const at = (ts: string): ApiEvent => ({
+    _id: `e-${ts}`,
+    ts,
+    person_id: "Speaker 1",
+    type: "spoke",
+    text: "hi",
+    emotion: null,
+    place: null,
+    day_id: "d",
+  });
+  const events = [
+    at("2026-07-10T09:00:00Z"),
+    at("2026-07-10T09:05:00Z"),
+    at("2026-07-10T14:00:00Z"),
+  ];
+  const ms = (iso: string) => new Date(iso).getTime();
+
+  it("picks the last event at or before the scrub time", () => {
+    expect(activeEventIndex(events, ms("2026-07-10T09:05:00Z"))).toBe(1);
+    expect(activeEventIndex(events, ms("2026-07-10T10:00:00Z"))).toBe(1);
+  });
+
+  it("clamps to the day's first/last line at the extremes", () => {
+    expect(activeEventIndex(events, ms("2026-07-10T01:00:00Z"))).toBe(0);
+    expect(activeEventIndex(events, ms("2026-07-10T23:00:00Z"))).toBe(2);
+  });
+
+  it("is 0 with no events", () => {
+    expect(activeEventIndex([], ms("2026-07-10T09:00:00Z"))).toBe(0);
   });
 });
 

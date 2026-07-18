@@ -18,12 +18,13 @@ import {
   useSearchParams,
 } from "react-router-dom";
 import { useReducedMotion } from "framer-motion";
-import { PiCaretDown, PiScroll, PiX } from "react-icons/pi";
+import { PiCaretDown, PiScroll, PiUserPlus, PiX } from "react-icons/pi";
 import { Icon } from "@/components/Icon";
 import { PixelHeader } from "@/components/PixelChrome";
 import { ParametricSprite } from "@/lib/sprite";
 import {
   api,
+  assignSpeaker,
   displayName,
   type ApiDayView,
   type ApiEvent,
@@ -31,8 +32,10 @@ import {
 } from "@/lib/api";
 import { Cabin, FenceRow, Tree } from "@/lib/scene";
 import {
+  activeEventIndex,
   fallbackAvatar,
   formatClock,
+  isUnnamedSpeaker,
   nameFor,
   nearestEventTs,
   partnerAt,
@@ -59,6 +62,10 @@ export function DayScenePage() {
   const [error, setError] = useState<string | null>(null);
   const [scrubT, setScrubT] = useState<number | null>(null);
   const [showTranscript, setShowTranscript] = useState(false);
+  // Tap-to-name (SAV-57): the raw "Speaker N" label being assigned, or null
+  // when the picker is closed. Captured on tap so scrubbing mid-pick can't
+  // silently retarget the assignment.
+  const [namingLabel, setNamingLabel] = useState<string | null>(null);
 
   useEffect(() => {
     const ac = new AbortController();
@@ -95,13 +102,7 @@ export function DayScenePage() {
   const t = scrubT ?? t0;
 
   // Active line = the last event whose timestamp has passed the scrub time.
-  const activeIdx = useMemo(() => {
-    let idx = 0;
-    for (let i = 0; i < events.length; i++) {
-      if (new Date(events[i].ts).getTime() <= t) idx = i;
-    }
-    return idx;
-  }, [events, t]);
+  const activeIdx = useMemo(() => activeEventIndex(events, t), [events, t]);
 
   // Who shares the stage with you right now (the RIGHT-side character).
   const partnerId = useMemo(
@@ -115,6 +116,15 @@ export function DayScenePage() {
     ? nameFor(active.person_id, peopleById, displayName)
     : "";
   const dateLabel = (view?.day?.date ?? (isToday ? "today" : date)) as string;
+
+  // Tap-to-name: the current line's speaker is still a raw diarizer label
+  // with no Person behind it — the nameplate becomes the naming affordance.
+  const assignDate = view?.day?.date ?? null;
+  const canName =
+    !!assignDate &&
+    !!active &&
+    !youSpeaking &&
+    isUnnamedSpeaker(active.person_id, peopleById);
 
   const jumpTo = (i: number) => {
     const e = events[i];
@@ -212,6 +222,9 @@ export function DayScenePage() {
                   jumpTo(Math.min(activeIdx + 1, events.length - 1))
                 }
                 onDone={() => navigate("/plaza")}
+                onNameTap={
+                  canName ? () => setNamingLabel(active.person_id) : undefined
+                }
               />
             </div>
           )}
@@ -243,6 +256,22 @@ export function DayScenePage() {
           />
           <TimelineMarks events={events} t0={t0} t1={t1} />
         </div>
+
+        {/* tap-to-name person picker (SAV-57) */}
+        {namingLabel && assignDate && (
+          <SpeakerPickerSheet
+            label={namingLabel}
+            date={assignDate}
+            onClose={() => setNamingLabel(null)}
+            onAssigned={(day) => {
+              // Swap in the refreshed DayView — event timestamps are
+              // unchanged, so the scrub position (and active line) hold
+              // while the lines re-attribute to the chosen person.
+              setView(day);
+              setNamingLabel(null);
+            }}
+          />
+        )}
 
         {/* transcript history panel */}
         {showTranscript && (
@@ -339,6 +368,7 @@ function DialogueBox({
   hasNext,
   onAdvance,
   onDone,
+  onNameTap,
 }: {
   event: ApiEvent;
   name: string;
@@ -348,6 +378,9 @@ function DialogueBox({
   onAdvance: () => void;
   /** Final tap on the day's last line/page — leave the scene. */
   onDone: () => void;
+  /** Set only for un-named "Speaker N" lines — makes the nameplate the
+      tap-to-name affordance (SAV-57). */
+  onNameTap?: () => void;
 }) {
   const reduce = useReducedMotion();
   const text =
@@ -427,14 +460,31 @@ function DialogueBox({
 
   return (
     <div className="relative z-10">
-      {/* speaker nameplate riding the box's top edge, on the speaker's side */}
-      <span
-        className={`dlg-nameplate font-pixel absolute -top-4 z-10 px-2.5 py-1.5 text-[9px] ${
-          side === "left" ? "left-2" : "right-2"
-        }`}
-      >
-        {name}
-      </span>
+      {/* speaker nameplate riding the box's top edge, on the speaker's side.
+          PROVISIONAL (SAV-57): an un-named speaker's plate is a button with a
+          "who's this?" hint that opens the person picker — team may restyle. */}
+      {onNameTap ? (
+        <button
+          type="button"
+          onClick={onNameTap}
+          aria-label={`${name} — tap to say who this is`}
+          className={`dlg-nameplate font-pixel absolute -top-4 z-10 flex cursor-pointer items-center gap-1.5 px-2.5 py-1.5 text-[9px] ${
+            side === "left" ? "left-2" : "right-2"
+          }`}
+        >
+          <Icon icon={PiUserPlus} size={12} />
+          {name}
+          <span className="opacity-70">· who's this?</span>
+        </button>
+      ) : (
+        <span
+          className={`dlg-nameplate font-pixel absolute -top-4 z-10 px-2.5 py-1.5 text-[9px] ${
+            side === "left" ? "left-2" : "right-2"
+          }`}
+        >
+          {name}
+        </span>
+      )}
       <button
         type="button"
         className="dlg-wood block w-full cursor-pointer p-3 text-left"
@@ -477,6 +527,145 @@ function DialogueBox({
           )}
         </div>
       </button>
+    </div>
+  );
+}
+
+/* ---- tap-to-name person picker (SAV-57) ------------------------------------ */
+
+/**
+ * Bottom-sheet picker for naming a raw "Speaker N": lists everyone from
+ * GET /people (named people first); picking one calls
+ * POST /day/{date}/assign-speaker and hands the refreshed DayView back up so
+ * the scene re-attributes in place — no reload. PROVISIONAL placement +
+ * styling (bottom sheet, row layout) — the team may restyle.
+ */
+function SpeakerPickerSheet({
+  label,
+  date,
+  onClose,
+  onAssigned,
+}: {
+  label: string;
+  date: string;
+  onClose: () => void;
+  onAssigned: (day: ApiDayView) => void;
+}) {
+  const [people, setPeople] = useState<ApiPerson[] | null>(null);
+  const [loadError, setLoadError] = useState(false);
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState(false);
+
+  useEffect(() => {
+    const ac = new AbortController();
+    api.people(ac.signal).then(
+      (ps) =>
+        setPeople(
+          // Named people first (the likely targets), then the "Neighbor"s.
+          [...ps].sort(
+            (a, b) =>
+              Number(!!b.name) - Number(!!a.name) ||
+              displayName(a).localeCompare(displayName(b)),
+          ),
+        ),
+      () => {
+        if (!ac.signal.aborted) setLoadError(true);
+      },
+    );
+    return () => ac.abort();
+  }, []);
+
+  const pick = async (p: ApiPerson) => {
+    if (pendingId) return;
+    setSaveError(false);
+    setPendingId(p.local_id);
+    try {
+      const res = await assignSpeaker(date, label, p.local_id);
+      onAssigned(res.day);
+    } catch {
+      // Friendly retry state — the sheet stays open, nothing crashes.
+      setSaveError(true);
+      setPendingId(null);
+    }
+  };
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Who is ${label}?`}
+      className="absolute inset-0 z-50 flex flex-col justify-end bg-black/60"
+    >
+      {/* tap the dimmed scene above the sheet to dismiss */}
+      <button
+        type="button"
+        aria-label="Close picker"
+        className="min-h-0 flex-1 cursor-pointer"
+        onClick={onClose}
+      />
+      <div className="dlg-wood flex max-h-[70%] flex-none flex-col">
+        <div className="flex flex-none items-center justify-between gap-2 pb-1">
+          <h2 className="font-pixel flex items-center gap-1.5 text-[10px] text-[#663931]">
+            <Icon icon={PiUserPlus} size={14} />
+            Who is {label}?
+          </h2>
+          <button
+            type="button"
+            aria-label="Close picker"
+            className="touch-target flex items-center justify-center text-[#663931]"
+            onClick={onClose}
+          >
+            <Icon icon={PiX} size={20} />
+          </button>
+        </div>
+        {saveError && (
+          <p className="font-pixel flex-none pb-1.5 text-[8px] text-[#a4453d]">
+            Hmm, that didn't save — give it another tap?
+          </p>
+        )}
+        <ul className="min-h-0 flex-1 overflow-y-auto">
+          {people?.map((p) => (
+            <li
+              key={p.local_id}
+              className="border-b-2 border-[#d9a066]/40 last:border-0"
+            >
+              <button
+                type="button"
+                disabled={pendingId !== null}
+                onClick={() => pick(p)}
+                className={`flex w-full items-center gap-3 py-1.5 pr-1 text-left text-[#663931] disabled:opacity-60 ${
+                  pendingId === p.local_id ? "animate-pulse" : ""
+                }`}
+              >
+                <ParametricSprite params={p.avatar_params} size={40} />
+                <span className="min-w-0 flex-1 truncate text-[15px] font-medium">
+                  {displayName(p)}
+                </span>
+                {pendingId === p.local_id && (
+                  <span className="font-pixel flex-none text-[8px] opacity-70">
+                    naming…
+                  </span>
+                )}
+              </button>
+            </li>
+          ))}
+          {people && people.length === 0 && (
+            <li className="py-4 text-center text-sm text-[#663931]/70">
+              No people saved yet — meet someone first!
+            </li>
+          )}
+          {!people && !loadError && (
+            <li className="animate-pulse py-4 text-center text-sm text-[#663931]/70">
+              Fetching your people…
+            </li>
+          )}
+          {loadError && (
+            <li className="py-4 text-center text-sm text-[#a4453d]">
+              Couldn't load people — is the backend awake?
+            </li>
+          )}
+        </ul>
+      </div>
     </div>
   );
 }

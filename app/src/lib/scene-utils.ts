@@ -98,6 +98,35 @@ export function nearestEventTs(
   return best;
 }
 
+/** The diarizer's raw speaker labels ("Speaker 1", "speaker2", …). */
+const SPEAKER_LABEL = /^speaker\s*\d+$/i;
+
+/**
+ * True when an event's `person_id` is still a raw diarization label with no
+ * Person doc behind it — a speaker the user hasn't named yet. The day-view
+ * nameplate becomes a tap-to-name affordance for exactly these (SAV-57).
+ * (A Person whose local_id IS a speaker label counts as resolved.)
+ */
+export function isUnnamedSpeaker(
+  personId: string,
+  people: ReadonlyMap<string, unknown>,
+): boolean {
+  return SPEAKER_LABEL.test(personId) && !people.has(personId);
+}
+
+/**
+ * The day's active line at scrub time `t`: the index of the LAST event whose
+ * timestamp is at or before `t` (0 when the scrub sits before the first
+ * event, or when there are no events).
+ */
+export function activeEventIndex(events: ApiEvent[], t: number): number {
+  let idx = 0;
+  for (let i = 0; i < events.length; i++) {
+    if (new Date(events[i].ts).getTime() <= t) idx = i;
+  }
+  return idx;
+}
+
 /** Name for an event's person_id, given the day's resolved people. */
 export function nameFor(
   id: string,

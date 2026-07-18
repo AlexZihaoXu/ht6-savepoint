@@ -127,6 +127,43 @@ export async function ingestAudioClip(
   return (await res.json()) as AudioIngestResult;
 }
 
+/* ---- tap-to-name (SAV-57 — bind a "Speaker N" to a real Person) ----------- */
+
+/** What `POST /day/{date}/assign-speaker` hands back: the binding + fresh day. */
+export interface SpeakerAssignmentResult {
+  speaker_label: string;
+  person_local_id: string;
+  /** How many of the day's events were rebound to the person. */
+  reassigned: number;
+  /** The refreshed DayView — swap it into the scene, no reload needed. */
+  day: ApiDayView;
+}
+
+/**
+ * Assign a raw diarization label (e.g. "Speaker 1") on one day to a real
+ * Person: the backend rewrites that day's spoke-events to the person's
+ * local_id and returns the refreshed DayView.
+ */
+export async function assignSpeaker(
+  date: string,
+  speakerLabel: string,
+  personLocalId: string,
+  signal?: AbortSignal,
+): Promise<SpeakerAssignmentResult> {
+  const path = `/day/${date}/assign-speaker`;
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      speaker_label: speakerLabel,
+      person_local_id: personLocalId,
+    }),
+    signal,
+  });
+  if (!res.ok) throw new ApiError(res.status, path);
+  return (await res.json()) as SpeakerAssignmentResult;
+}
+
 export const api = {
   people: (signal?: AbortSignal) => getJSON<ApiPerson[]>("/people", signal),
   person: (localId: string, signal?: AbortSignal) =>
