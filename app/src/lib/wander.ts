@@ -20,9 +20,11 @@ export interface Wanderer {
   /** Feet position in plot pixels. */
   x: number;
   y: number;
-  /** Travel direction (radians) + speed (px/s). */
+  /** Travel direction (radians) + current speed (px/s). */
   heading: number;
   speed: number;
+  /** Where `speed` is easing to — decel/accel ramps, never instant jumps. */
+  targetSpeed: number;
   /** This character's personal pace (px/s) — speeds re-roll around it. */
   baseSpeed: number;
   /** Which way the sprite faces while moving: 1 = right, -1 = left. */
@@ -65,8 +67,13 @@ const IDLE_EVERY_MIN = 4;
 const IDLE_EVERY_VAR = 9;
 const IDLE_LEN_MIN = 1.2;
 const IDLE_LEN_VAR = 3.4;
-/** Only drop into idle near a gait phase boundary (feet on the ground). */
-const IDLE_PHASE_WINDOW = 0.07;
+
+/** Speed easing time-constant (s): decelerate into stops, accelerate out. */
+const ACCEL_TAU = 0.45;
+/** Below this (px/s) a decelerating character counts as stopped. */
+const STOP_EPS = 0.8;
+/** Bounce amplitude fades to zero below this speed (px/s). */
+const GAIT_FADE_SPEED = 10;
 
 /** Bump only when closer than this in BOTH axes (px). */
 const COLLIDE_X = 34;
@@ -94,6 +101,7 @@ export function createWanderer(
     y,
     heading: rng() * Math.PI * 2,
     speed: baseSpeed,
+    targetSpeed: baseSpeed,
     baseSpeed,
     facing: rng() < 0.5 ? -1 : 1,
     turnIn: 0.6 + rng() * 2.4,
@@ -135,38 +143,44 @@ export function stepWanderers(
       if (w.idleFor <= 0) {
         w.idleFor = 0;
         w.idleIn = IDLE_EVERY_MIN + rng() * IDLE_EVERY_VAR;
-        // Wander off refreshed: new direction + a re-roll of the pace.
+        // Wander off refreshed: new direction + a re-roll of the pace —
+        // as a TARGET, so the character accelerates smoothly from rest.
         w.heading = rng() * Math.PI * 2;
-        w.speed = rerollSpeed(w.baseSpeed, rng);
+        w.targetSpeed = rerollSpeed(w.baseSpeed, rng);
         w.turnIn = 1.2 + rng() * 3;
       }
       continue;
     }
 
-    // Time for a pause? Wait for the feet to touch the ground (gait phase
-    // boundary) so the bounce never freezes mid-air.
+    // Time for a pause? Ease the target to zero and glide down; only once
+    // the ramp has all but stopped does the idle clock start. The bounce
+    // amplitude fades with speed (gaitOffset), so the gait melts away
+    // through the deceleration instead of cutting out.
     w.idleIn -= dt;
-    const phase = w.gaitT % (HOP_DURATION / 2);
-    if (
-      w.idleIn <= 0 &&
-      (phase < IDLE_PHASE_WINDOW ||
-        phase > HOP_DURATION / 2 - IDLE_PHASE_WINDOW)
-    ) {
-      w.idleFor = IDLE_LEN_MIN + rng() * IDLE_LEN_VAR;
-      w.gaitT = 0;
-      continue;
+    if (w.idleIn <= 0) {
+      w.targetSpeed = 0;
+      if (w.speed < STOP_EPS) {
+        w.speed = 0;
+        w.idleFor = IDLE_LEN_MIN + rng() * IDLE_LEN_VAR;
+        w.gaitT = 0;
+        continue;
+      }
+    } else {
+      // Occasional new intent + continuous gentle steering noise. Speed
+      // re-rolls around this character's personal pace (as an eased
+      // target), so it varies over time AND differs per character.
+      w.turnIn -= dt;
+      if (w.turnIn <= 0) {
+        w.heading += (rng() - 0.5) * 2.4;
+        w.targetSpeed = rerollSpeed(w.baseSpeed, rng);
+        w.turnIn = 1.2 + rng() * 3;
+      }
+      w.heading += (rng() - 0.5) * 1.4 * dt;
     }
 
-    // Occasional new intent + continuous gentle steering noise. Speed
-    // re-rolls around this character's personal pace, so it varies over
-    // time AND differs per character.
-    w.turnIn -= dt;
-    if (w.turnIn <= 0) {
-      w.heading += (rng() - 0.5) * 2.4;
-      w.speed = rerollSpeed(w.baseSpeed, rng);
-      w.turnIn = 1.2 + rng() * 3;
-    }
-    w.heading += (rng() - 0.5) * 1.4 * dt;
+    // Ease the current speed toward its target (exponential ramp) —
+    // characters decelerate into stops and accelerate back out.
+    w.speed += (w.targetSpeed - w.speed) * (1 - Math.exp(-dt / ACCEL_TAU));
 
     w.x += Math.cos(w.heading) * w.speed * dt;
     w.y += Math.sin(w.heading) * w.speed * dt;
@@ -265,12 +279,16 @@ export function hopOffset(hopT: number): { dy: number; tilt: number } {
 
 /**
  * The render-facing bounce for one wanderer: zero while idle or frozen
- * (a stopped character does NOT bounce), and amplitude-scaled by speed
- * while walking (amblers bob gently, brisk walkers bounce harder).
+ * (a stopped character does NOT bounce), amplitude-scaled by speed while
+ * walking (amblers bob gently, brisk walkers bounce harder), and fading
+ * smoothly to nothing through the last ~10 px/s of a deceleration ramp —
+ * so the bounce melts out into a stop and swells back in on resume.
  */
 export function gaitOffset(w: Wanderer): { dy: number; tilt: number } {
   if (w.frozen || w.idleFor > 0) return { dy: 0, tilt: 0 };
-  const k = 0.55 + 0.45 * clamp(w.speed / SPEED_MAX, 0, 1);
+  const fade = clamp(w.speed / GAIT_FADE_SPEED, 0, 1);
+  if (fade === 0) return { dy: 0, tilt: 0 };
+  const k = fade * (0.55 + 0.45 * clamp(w.speed / SPEED_MAX, 0, 1));
   const { dy, tilt } = hopOffset(w.gaitT);
   return { dy: dy * k, tilt: tilt * k };
 }

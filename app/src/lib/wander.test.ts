@@ -149,12 +149,21 @@ describe("wander sim", () => {
     expect(idle.gaitT).toBe(0);
   });
 
-  it("takes an idle pause — stops moving, then resumes", () => {
+  it("takes an idle pause — decelerates to a stop, stands, then resumes", () => {
     const w = make("pause", 200, 150, 0);
     w.idleIn = 0.001; // pause imminent
-    w.gaitT = 0; // feet on the ground
-    stepWanderers([w], 1 / 30, BOUNDS, flat);
-    expect(w.idleFor).toBeGreaterThan(0); // now idling…
+    // Deceleration ramp: speed only shrinks until the stop lands.
+    let prev = w.speed;
+    let steps = 0;
+    while (w.idleFor === 0 && steps < 200) {
+      stepWanderers([w], 1 / 30, BOUNDS, flat);
+      expect(w.speed).toBeLessThanOrEqual(prev); // never speeds up mid-stop
+      prev = w.speed;
+      steps++;
+    }
+    expect(w.idleFor).toBeGreaterThan(0); // reached the pause…
+    expect(steps).toBeGreaterThan(3); // …but NOT instantly (eased ramp)
+    expect(w.speed).toBe(0);
     const [x0, y0] = [w.x, w.y];
     for (let i = 0; i < 30; i++) stepWanderers([w], 1 / 30, BOUNDS, flat);
     if (w.idleFor > 0) {
@@ -164,5 +173,31 @@ describe("wander sim", () => {
     for (let i = 0; i < 200; i++) stepWanderers([w], 1 / 30, BOUNDS, flat);
     expect(w.idleFor).toBe(0); // pause ended
     expect(w.x === x0 && w.y === y0).toBe(false); // walking again
+  });
+
+  it("accelerates smoothly out of a stop (no instant velocity jump)", () => {
+    const w = make("ramp", 200, 150, 0);
+    w.idleIn = 999;
+    w.speed = 0;
+    w.targetSpeed = 30;
+    stepWanderers([w], 1 / 30, BOUNDS, flat);
+    expect(w.speed).toBeGreaterThan(0); // pulling away…
+    expect(w.speed).toBeLessThan(10); // …but nowhere near cruise yet
+    for (let i = 0; i < 90; i++) stepWanderers([w], 1 / 30, BOUNDS, flat);
+    expect(w.speed).toBeGreaterThan(25); // eased up to cruising speed
+  });
+
+  it("fades the bounce out as speed ramps down", () => {
+    const w = make("fade", 200, 150, 0);
+    w.gaitT = HOP_DURATION * 0.25; // mid-stride
+    w.speed = 30;
+    const fast = Math.abs(gaitOffset(w).dy);
+    w.speed = 5; // decelerating through the fade band
+    const slow = Math.abs(gaitOffset(w).dy);
+    w.speed = 0;
+    const stopped = Math.abs(gaitOffset(w).dy);
+    expect(fast).toBeGreaterThan(slow);
+    expect(slow).toBeGreaterThan(0);
+    expect(stopped).toBe(0);
   });
 });
