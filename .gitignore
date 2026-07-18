@@ -1,0 +1,31 @@
+# ── Node / frontend ────────────────────────────────────────────────
+node_modules/
+dist/
+.vite/
+coverage/
+*.local
+
+# ── Python ─────────────────────────────────────────────────────────
+.venv/
+.venv-*/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ── Audio samples (large) ──────────────────────────────────────────
+*.mp3
+*.wav
+# …but keep the speech pipeline ground-truth testcases
+!pipeline/testcases/**
+
+# ── Models / weights ───────────────────────────────────────────────
+models/
+*.ckpt
+*.onnx
+
+# ── OS / editor / secrets ──────────────────────────────────────────
+.DS_Store
+.env
+.env.*
