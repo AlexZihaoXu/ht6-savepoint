@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from savepoint_server.models.base import MongoModel
-from savepoint_server.models.day import Day
+from savepoint_server.models.day import Day, DaySummary
 from savepoint_server.models.event import Event, EventType
 from savepoint_server.models.person import AvatarParams, Person
 from savepoint_server.models.recap import Recap, RecapScope
@@ -13,6 +13,7 @@ from savepoint_server.models.transcript import Transcript, TranscriptSegment
 __all__ = [
     "AvatarParams",
     "Day",
+    "DaySummary",
     "Event",
     "EventType",
     "FaceAnalysis",
