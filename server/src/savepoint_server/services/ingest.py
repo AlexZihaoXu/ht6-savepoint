@@ -39,6 +39,7 @@ from savepoint_server.models import (
 )
 from savepoint_server.models.person import AvatarParams
 from savepoint_server.services.speech import AudioInput, Transcriber, transcribe_and_store
+from savepoint_server.services.transcript_refine import TranscriptRefineClient, refine_segments
 from savepoint_server.services.vision import frame_to_sprite_params
 
 # --------------------------------------------------------------------------- #
@@ -408,7 +409,10 @@ async def ingest_video_detections(
 
 
 async def ingest_audio_segments(
-    request: AudioIngestRequest, *, repos: Repositories
+    request: AudioIngestRequest,
+    *,
+    repos: Repositories,
+    refiner: TranscriptRefineClient | None = None,
 ) -> AudioIngestResult:
     """Land the app's audio-derived JSON: record diarized SPOKE events by ts.
 
@@ -416,7 +420,24 @@ async def ingest_audio_segments(
     Person happens later via :func:`assign_speaker_for_day` (tap-to-name). Every
     timestamp is parsed up front (bad ``start``/``end`` -> 400, whole-batch), events
     are stored in start-time order, and each touched day is re-rolled up.
+
+    When ``refiner`` is supplied (SAV-56, opt-in via ``transcript_refine="gemini"``),
+    the turns' **text** is first run through an OPTIONAL Gemini cleanup pass before
+    events are created — speaker labels, turn count, order, and timing are left
+    untouched. That pass is best-effort and can NEVER block or 500 ingest: it is
+    guarded here (belt-and-suspenders on top of :func:`refine_segments`, which itself
+    never raises), so any failure just falls back to the raw transcript. With no
+    ``refiner`` (the default), behavior is byte-identical to plain ingest — no Gemini
+    call is made.
     """
+    segments = request.segments
+    if refiner is not None:
+        try:
+            segments = await refine_segments(segments, client=refiner)
+        except Exception:
+            # refine_segments never raises, but guard the call site too so a transcript
+            # refiner can never propagate an error onto the ingest HTTP response.
+            segments = request.segments
     parsed = sorted(
         (
             (
@@ -425,7 +446,7 @@ async def ingest_audio_segments(
                 _parse_iso_datetime(s.end, field="end"),
                 s.text,
             )
-            for s in request.segments
+            for s in segments
         ),
         key=lambda item: item[1],
     )
