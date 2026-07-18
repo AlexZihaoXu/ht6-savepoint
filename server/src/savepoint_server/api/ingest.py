@@ -25,6 +25,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
+from savepoint_server.core.config import get_settings
 from savepoint_server.db import Repositories, get_repositories
 from savepoint_server.services.ingest import (
     AudioIngestRequest,
@@ -33,12 +34,14 @@ from savepoint_server.services.ingest import (
     EdgeEvent,
     IngestResult,
     IngestValidationError,
+    NewPersonHook,
     VideoIngestResult,
     _parse_iso_datetime,
     ingest_audio_segments,
     ingest_day,
     ingest_video_detections,
 )
+from savepoint_server.services.pixellab import build_sprite_hook
 from savepoint_server.services.speech import Transcriber, get_transcriber
 from savepoint_server.services.transcript_refine import (
     TranscriptRefineClient,
@@ -57,6 +60,19 @@ def get_repos() -> Repositories:
 def get_transcriber_dep() -> Transcriber:
     """Provide the configured transcriber (stub default; overridable in tests)."""
     return get_transcriber()
+
+
+def get_sprite_hook_dep(
+    repos: Annotated[Repositories, Depends(get_repos)],
+) -> NewPersonHook | None:
+    """Provide the PixelLab on-new-person hook, or ``None`` when the feature is off.
+
+    Default-off (no key / ``pixellab_enabled=False``): returns ``None``, so ingest
+    never constructs a client and behaves exactly as before. Overridable in tests via
+    ``dependency_overrides``. Bound to the same request ``repos`` so a scheduled
+    sprite job writes back to the right database.
+    """
+    return build_sprite_hook(get_settings(), repos)
 
 
 def get_transcript_refiner_dep() -> list[TranscriptRefineClient] | None:
@@ -85,6 +101,7 @@ async def ingest(
     frame: FrameUpload,
     audio: AudioUpload,
     repos: Annotated[Repositories, Depends(get_repos)],
+    sprite_hook: Annotated[NewPersonHook | None, Depends(get_sprite_hook_dep)],
     day_id: Annotated[str | None, Form(description="ISO day bucket; defaults to today.")] = None,
     person_key: Annotated[
         str | None, Form(description="Explicit stable person id; else derived from the face.")
@@ -102,6 +119,7 @@ async def ingest(
             day_id=day_id,
             repos=repos,
             person_key=person_key,
+            sprite_hook=sprite_hook,
         )
     except ImageDecodeError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -111,10 +129,11 @@ async def ingest(
 async def ingest_video(
     body: list[EdgeEvent],
     repos: Annotated[Repositories, Depends(get_repos)],
+    sprite_hook: Annotated[NewPersonHook | None, Depends(get_sprite_hook_dep)],
 ) -> VideoIngestResult:
     """Land the Pi's edge detections (``list[EdgeEvent]``): upsert People + SEEN events."""
     try:
-        return await ingest_video_detections(body, repos=repos)
+        return await ingest_video_detections(body, repos=repos, sprite_hook=sprite_hook)
     except IngestValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

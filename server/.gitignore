@@ -13,3 +13,6 @@ build/
 .env
 .env.*
 !.env.example
+
+# Generated PixelLab sprite PNGs (SAV-61) — persistent cache, never committed.
+/.sprites/
