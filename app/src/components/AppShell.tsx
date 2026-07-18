@@ -42,15 +42,19 @@ function page(Page: ComponentType, fullBleed = false) {
  * fixed BottomNav. Routes are wrapped in <AnimatePresence mode="wait"> keyed on
  * the pathname so every navigation animates (fade + slide) via PageTransition.
  *
- * The immersive pixel screens (/plaza and /scene/*) bring their OWN chrome —
- * wooden header + mockup bottom bar — so the classic TopBar/BottomNav and the
- * padded reading column are skipped for them.
+ * The immersive pixel screens (/plaza, /scene/*, /people*) bring their OWN
+ * chrome — wooden header + mockup bottom bar — so the classic TopBar/BottomNav
+ * and the padded reading column are skipped for them.
  */
 export function AppShell() {
   const location = useLocation();
+  // Every current screen brings its own pixel chrome (wooden header + mockup
+  // bottom bar) — the classic TopBar/BottomNav shell stays for any future
+  // plain page (settings etc.).
   const immersive =
     location.pathname.startsWith("/plaza") ||
-    location.pathname.startsWith("/scene");
+    location.pathname.startsWith("/scene") ||
+    location.pathname.startsWith("/people");
 
   // New screen → start reading from the top (the window is the scroller).
   useEffect(() => {
@@ -77,8 +81,8 @@ export function AppShell() {
             <Route path="/plaza" element={page(PlazaPage, true)} />
             <Route path="/scene" element={page(DayScenePage, true)} />
             <Route path="/scene/:date" element={page(DayScenePage, true)} />
-            <Route path="/people" element={page(PeoplePage)} />
-            <Route path="/people/:id" element={page(PersonPage)} />
+            <Route path="/people" element={page(PeoplePage, true)} />
+            <Route path="/people/:id" element={page(PersonPage, true)} />
             <Route path="*" element={<Navigate to="/plaza" replace />} />
           </Routes>
         </AnimatePresence>

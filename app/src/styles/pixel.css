@@ -244,12 +244,13 @@
   }
 }
 
-/* ---- swipe affordance ---------------------------------------------------- */
+/* ---- swipe affordance + scene icon buttons ------------------------------- */
 
-/* Subtle tap-target for users who don't realize the plaza↔garden world
-   swipes: an ink-glass square with a cream pixel border, riding mid-edge.
-   The caret inside nudges toward the neighboring panel. */
-.swipe-arrow {
+/* Ink-glass squares with a cream pixel border, shared by the plaza's swipe
+   arrows (riding mid-edge; the caret inside nudges toward the neighboring
+   panel) and the day view's back button on the letterbox. */
+.swipe-arrow,
+.scene-glass-btn {
   color: #fff;
   background: rgba(34, 32, 51, 0.32);
   border: 2px solid rgba(247, 236, 215, 0.65);
@@ -280,6 +281,18 @@
   50% {
     transform: translateX(-3px);
   }
+}
+
+/* ---- parchment panels (People / Person cards) ---------------------------- */
+
+/* The sheet's tan panel at card scale — the dialogue box's art with a lighter
+   frame than .dlg-wood, brown ink text baked in. Like the scene art it keeps
+   its fixed palette in dark mode (a warm lantern-lit card on the night UI). */
+.pixel-panel {
+  border: 14px solid transparent;
+  border-image: url("/assets/sheet/panel.png") 10 fill stretch;
+  image-rendering: pixelated;
+  color: #663931;
 }
 
 /* ---- misc ---------------------------------------------------------------- */

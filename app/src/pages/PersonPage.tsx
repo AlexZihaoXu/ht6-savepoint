@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { Button, Card, Chip } from "@heroui/react";
+import { Chip } from "@heroui/react";
 import {
   PiCaretLeft,
   PiCaretRight,
@@ -8,6 +8,7 @@ import {
   PiUserCircleDashed,
 } from "react-icons/pi";
 import { Icon } from "@/components/Icon";
+import { PixelBottomNav, PixelHeader } from "@/components/PixelChrome";
 import { ParametricSprite } from "@/lib/sprite";
 import { api, ApiError, displayName, type ApiPersonDetail } from "@/lib/api";
 import { formatClock, relativeSeen } from "@/lib/scene-utils";
@@ -22,7 +23,18 @@ function fmtDay(iso: string): string {
 
 type Status = "loading" | "ready" | "missing" | "error";
 
-/** Person info — real `/people/{id}` data: sprite, notes, tags, recent days. */
+/** Shared pixel chrome around every Person state (loading/missing/ready). */
+function PersonChrome({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex h-[100svh] flex-col overflow-hidden">
+      <PixelHeader />
+      <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+      <PixelBottomNav />
+    </div>
+  );
+}
+
+/** Person info — real `/people/{id}` data: sprite, bio, notes, recent days. */
 export function PersonPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -55,33 +67,41 @@ export function PersonPage() {
 
   if (status === "loading") {
     return (
-      <section className="flex flex-col items-center gap-3 py-10 text-center">
-        <p className="animate-pulse text-sm text-[var(--muted)]">
-          Loading your world…
-        </p>
-      </section>
+      <PersonChrome>
+        <section className="flex flex-col items-center gap-3 py-12 text-center">
+          <p className="animate-pulse text-sm text-[var(--muted)]">
+            Loading your world…
+          </p>
+        </section>
+      </PersonChrome>
     );
   }
 
   if (status === "missing" || status === "error" || !person) {
     return (
-      <section className="flex flex-col items-center gap-3 py-10 text-center">
-        <Icon
-          icon={PiUserCircleDashed}
-          className="text-5xl text-[var(--muted)]"
-        />
-        <h1 className="text-xl font-semibold">
-          {status === "error" ? "Backend asleep…" : "No one here yet"}
-        </h1>
-        <p className="text-sm text-[var(--muted)]">
-          {status === "error"
-            ? "Couldn't reach the SavePoint API — is it up?"
-            : "We haven't met this character."}
-        </p>
-        <Button variant="secondary" onPress={() => navigate("/people")}>
-          Back to People
-        </Button>
-      </section>
+      <PersonChrome>
+        <section className="flex flex-col items-center gap-3 px-4 py-12 text-center">
+          <Icon
+            icon={PiUserCircleDashed}
+            className="text-5xl text-[var(--muted)]"
+          />
+          <h1 className="font-pixel text-[13px]">
+            {status === "error" ? "Backend asleep…" : "No one here yet"}
+          </h1>
+          <p className="text-sm text-[var(--muted)]">
+            {status === "error"
+              ? "Couldn't reach the SavePoint API — is it up?"
+              : "We haven't met this character."}
+          </p>
+          <button
+            type="button"
+            className="pixel-btn touch-target mt-1 px-4 py-2"
+            onClick={() => navigate("/people")}
+          >
+            <span className="font-pixel text-[10px]">Back to People</span>
+          </button>
+        </section>
+      </PersonChrome>
     );
   }
 
@@ -102,98 +122,99 @@ export function PersonPage() {
     }, []);
 
   return (
-    <section className="flex flex-col gap-5" aria-labelledby="person-heading">
-      {/* py/-my + px/-mx grow the tap target to ≥44px without moving layout. */}
-      <Link
-        to="/people"
-        className="-mx-2 -my-3 inline-flex items-center gap-1 self-start px-2 py-3 text-sm text-[var(--muted)] hover:text-[var(--foreground)]"
+    <PersonChrome>
+      <section
+        aria-labelledby="person-heading"
+        className="flex flex-col gap-5 px-4 pt-4 pb-6"
       >
-        <Icon icon={PiCaretLeft} /> People
-      </Link>
+        <Link
+          to="/people"
+          className="pixel-btn touch-target inline-flex items-center gap-1.5 self-start px-3 py-1.5"
+        >
+          <Icon icon={PiCaretLeft} size={12} />
+          <span className="font-pixel text-[9px]">People</span>
+        </Link>
 
-      <div className="flex items-center gap-4">
-        <span className="sprite-bob">
-          <ParametricSprite params={person.avatar_params} size={84} />
-        </span>
-        <div className="min-w-0">
-          <h1
-            id="person-heading"
-            className="flex items-center gap-2 text-2xl font-semibold tracking-tight"
-          >
-            {name}
-            {person.favorite && (
-              <Icon
-                icon={PiStarFill}
-                label="favorite"
-                className="text-[var(--accent)]"
-              />
-            )}
-          </h1>
-          <p className="text-sm text-[var(--muted)]">
-            Seen {relativeSeen(person.last_seen)}
-            {person.first_seen
-              ? ` · first met ${fmtDay(person.first_seen)}`
-              : ""}
+        <div className="flex items-center gap-4">
+          <span className="sprite-bob">
+            <ParametricSprite params={person.avatar_params} size={84} />
+          </span>
+          <div className="min-w-0">
+            <h1
+              id="person-heading"
+              className="font-pixel flex flex-wrap items-center gap-2 text-[13px] leading-6 break-words"
+            >
+              {name}
+              {person.favorite && (
+                <Icon
+                  icon={PiStarFill}
+                  label="favorite"
+                  className="text-[var(--accent)]"
+                />
+              )}
+            </h1>
+            <p className="mt-1 text-sm text-[var(--muted)]">
+              Seen {relativeSeen(person.last_seen)}
+              {person.first_seen
+                ? ` · first met ${fmtDay(person.first_seen)}`
+                : ""}
+            </p>
+          </div>
+        </div>
+
+        {/* Generated character flavor — distinct from the Notes card below. */}
+        {person.bio?.trim() && (
+          <p className="border-l-2 border-[var(--accent)] pl-3 text-sm leading-relaxed text-[var(--muted)] italic">
+            {person.bio.trim()}
           </p>
-        </div>
-      </div>
+        )}
 
-      {/* Generated character flavor — distinct from the freeform Notes card below. */}
-      {person.bio?.trim() && (
-        <p className="border-l-2 border-[var(--accent)] pl-3 text-sm leading-relaxed text-[var(--muted)] italic">
-          {person.bio.trim()}
-        </p>
-      )}
+        {person.tags.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {person.tags.map((tag) => (
+              <Chip key={tag}>{tag}</Chip>
+            ))}
+          </div>
+        )}
 
-      {person.tags.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {person.tags.map((tag) => (
-            <Chip key={tag}>{tag}</Chip>
-          ))}
-        </div>
-      )}
-
-      <Card>
-        <Card.Header>
-          <Card.Title>Notes</Card.Title>
-        </Card.Header>
-        <Card.Content>
-          <p className="text-sm leading-relaxed">
+        <div className="pixel-panel">
+          <h2 className="font-pixel text-[10px]">Notes</h2>
+          <p className="mt-2 text-sm leading-relaxed">
             {person.notes?.trim() ||
               "No notes yet — your next chat will fill this in."}
           </p>
-        </Card.Content>
-      </Card>
+        </div>
 
-      <Card variant="secondary">
-        <Card.Header>
-          <Card.Title>Recent interactions</Card.Title>
-          <Card.Description>Tap a row to jump into that chat</Card.Description>
-        </Card.Header>
-        <Card.Content className="flex flex-col gap-2">
-          {recentDays.length === 0 && (
-            <p className="text-sm text-[var(--muted)]">
-              Nothing recorded together yet.
-            </p>
-          )}
-          {recentDays.map((d) => (
-            <Link
-              key={d.day}
-              // ?t= deep-links the day scene STRAIGHT to this interaction —
-              // the scrubber opens at the row's timestamp, mid-conversation,
-              // not at the start of the day.
-              to={`/scene/${d.day}?t=${encodeURIComponent(d.first)}`}
-              className="touch-target flex items-center justify-between border border-[var(--separator)] px-3 py-2 text-sm transition-colors hover:bg-[var(--surface-tertiary)]"
-            >
-              <span>
-                {fmtDay(d.day + "T00:00:00Z")} · {formatClock(d.first)} ·{" "}
-                {d.count} {d.count === 1 ? "moment" : "moments"}
-              </span>
-              <Icon icon={PiCaretRight} className="text-[var(--muted)]" />
-            </Link>
-          ))}
-        </Card.Content>
-      </Card>
-    </section>
+        <div className="pixel-panel">
+          <h2 className="font-pixel text-[10px]">Recent interactions</h2>
+          <p className="mt-1 text-xs opacity-70">
+            Tap a row to jump into that chat
+          </p>
+          <div className="mt-2 flex flex-col">
+            {recentDays.length === 0 && (
+              <p className="text-sm opacity-70">
+                Nothing recorded together yet.
+              </p>
+            )}
+            {recentDays.map((d) => (
+              <Link
+                key={d.day}
+                // ?t= deep-links the day scene STRAIGHT to this interaction —
+                // the scrubber opens at the row's timestamp, mid-conversation,
+                // not at the start of the day.
+                to={`/scene/${d.day}?t=${encodeURIComponent(d.first)}`}
+                className="touch-target flex items-center justify-between border-b-2 border-[#d9a066]/40 px-1 py-2 text-sm transition-colors last:border-b-0 hover:bg-[#eec39a]/50"
+              >
+                <span>
+                  {fmtDay(d.day + "T00:00:00Z")} · {formatClock(d.first)} ·{" "}
+                  {d.count} {d.count === 1 ? "moment" : "moments"}
+                </span>
+                <Icon icon={PiCaretRight} className="opacity-60" />
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+    </PersonChrome>
   );
 }

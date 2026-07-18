@@ -18,7 +18,13 @@ import {
   useSearchParams,
 } from "react-router-dom";
 import { useReducedMotion } from "framer-motion";
-import { PiCaretDown, PiScroll, PiUserPlus, PiX } from "react-icons/pi";
+import {
+  PiCaretDown,
+  PiCaretLeft,
+  PiScroll,
+  PiUserPlus,
+  PiX,
+} from "react-icons/pi";
 import { Icon } from "@/components/Icon";
 import { PixelHeader } from "@/components/PixelChrome";
 import { ParametricSprite } from "@/lib/sprite";
@@ -131,24 +137,49 @@ export function DayScenePage() {
     if (e) setScrubT(new Date(e.ts).getTime());
   };
 
+  // Back = wherever the user came from (person page, garden…) when there IS
+  // in-app history; a cold-opened deep link falls back to the plaza.
+  const goBack = () => {
+    const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0;
+    if (idx > 0) navigate(-1);
+    else navigate("/plaza");
+  };
+
   return (
     <div className="flex h-[100svh] flex-col overflow-hidden bg-black">
       <PixelHeader />
 
       <div className="relative flex min-h-0 flex-1 flex-col">
-        {/* chrome row floating over the top letterbox — date + transcript
-            toggle (absolute so it doesn't skew the centered film frame) */}
-        <div className="absolute inset-x-0 top-0 z-20 flex h-11 items-center justify-between pr-2 pl-3">
-          <span className="font-pixel text-[9px] text-white/50">
-            {isToday
-              ? "Today"
-              : /^\d{4}-\d{2}-\d{2}$/.test(dateLabel)
-                ? new Date(`${dateLabel}T00:00:00Z`).toLocaleDateString(
-                    "en-US",
-                    { month: "short", day: "numeric", timeZone: "UTC" },
-                  )
-                : dateLabel}
-          </span>
+        {/* chrome row floating over the top letterbox — back + date on the
+            left, transcript toggle on the right (absolute so it doesn't skew
+            the centered film frame) */}
+        <div className="absolute inset-x-0 top-0 z-20 flex h-12 items-center justify-between gap-2 px-2">
+          <div className="flex min-w-0 items-center gap-2.5">
+            {/* 44px hit area around a 36px glass square (plaza-arrow scale) */}
+            <button
+              type="button"
+              aria-label="Back"
+              className="touch-target flex flex-none cursor-pointer items-center justify-center"
+              onClick={goBack}
+            >
+              <span
+                aria-hidden
+                className="scene-glass-btn flex h-9 w-9 items-center justify-center"
+              >
+                <Icon icon={PiCaretLeft} size={18} />
+              </span>
+            </button>
+            <span className="font-pixel truncate text-[9px] text-white/50">
+              {isToday
+                ? "Today"
+                : /^\d{4}-\d{2}-\d{2}$/.test(dateLabel)
+                  ? new Date(`${dateLabel}T00:00:00Z`).toLocaleDateString(
+                      "en-US",
+                      { month: "short", day: "numeric", timeZone: "UTC" },
+                    )
+                  : dateLabel}
+            </span>
+          </div>
           <button
             type="button"
             aria-label="Transcript history"
