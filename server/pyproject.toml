@@ -41,6 +41,11 @@ packages = ["src/savepoint_server"]
 line-length = 100
 target-version = "py312"
 src = ["src", "tests"]
+# finetune/ is a Flash-CLI-scaffolded project (flash env setup), not part of the
+# FastAPI app: environment.py imports the `freesolo` SDK (not a server dependency,
+# installed via the flash CLI's own environment), and its JSON-literal training
+# data/prompts read better unwrapped than reflowed to fit line-length.
+extend-exclude = ["finetune"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "W", "C4", "SIM"]

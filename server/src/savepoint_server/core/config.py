@@ -46,9 +46,17 @@ class Settings(BaseSettings):
     gemma_model: str = "gemma"
     gemini_api_key: str | None = None
     backboard_api_key: str | None = None
+    # FreeSolo Flash fine-tuned adapter (see server/finetune/): a small model SFT-trained
+    # specifically on SavePoint's day-events -> recap task via the FreeSolo Flash
+    # platform (Hack the 6ix prize track). OpenAI-compatible; unlike Gemma it needs no
+    # chat_template_kwargs. base_url/model are tied to a specific `flash deploy` run —
+    # see server/finetune/smoke_test.py and `flash deployments --json` if redeployed.
+    freesolo_base_url: str = "https://clado-ai--freesolo-lora-serving.modal.run/v1"
+    freesolo_api_key: str | None = None
+    freesolo_model: str = "flash-1784385924-84f2f8d7"
     # Which backend get_llm_client builds for recaps/bios. "gemma" (self-hosted,
-    # default) is the only one wired today; gemini/backboard/freesolo land in
-    # SAV-51/52 and any OpenAI-compatible endpoint swaps in here.
+    # default) is the only one wired today; gemini/backboard land in SAV-51/52 and
+    # any OpenAI-compatible endpoint swaps in here.
     recap_backend: Literal["gemma", "gemini", "backboard", "freesolo"] = "gemma"
 
     # --- Speech pipeline (SAV-32) ---
