@@ -21,7 +21,7 @@ __pycache__/
 !pipeline/testcases/**
 
 # ── Models / weights ───────────────────────────────────────────────
-models/
+/models/          # root-level ML weight dir only (NOT the pydantic models/ source pkg)
 *.ckpt
 *.onnx
 
