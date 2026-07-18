@@ -33,7 +33,9 @@ export function PlazaPage() {
 
   const [people, setPeople] = useState<ApiPerson[] | null>(null);
   const [days, setDays] = useState<ApiDay[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  // Independent failures: a dead /days must not blank a working plaza.
+  const [peopleError, setPeopleError] = useState<string | null>(null);
+  const [daysError, setDaysError] = useState<string | null>(null);
   const [view, setView] = useState<0 | 1>(
     searchParams.get("view") === "garden" ? 1 : 0,
   );
@@ -42,10 +44,10 @@ export function PlazaPage() {
   useEffect(() => {
     const ac = new AbortController();
     api.people(ac.signal).then(setPeople, (e) => {
-      if (!ac.signal.aborted) setError(String(e));
+      if (!ac.signal.aborted) setPeopleError(String(e));
     });
     api.days(ac.signal).then(setDays, (e) => {
-      if (!ac.signal.aborted) setError(String(e));
+      if (!ac.signal.aborted) setDaysError(String(e));
     });
     return () => ac.abort();
   }, []);
@@ -87,8 +89,13 @@ export function PlazaPage() {
           onScroll={onScroll}
           className="no-scrollbar flex h-full snap-x snap-mandatory overflow-x-auto overflow-y-hidden"
         >
-          <PlazaPanel people={people} error={error} lined={lined} />
-          <GardenPanel days={days} />
+          <PlazaPanel
+            people={people}
+            error={peopleError}
+            lined={lined}
+            active={view === 0}
+          />
+          <GardenPanel days={days} error={daysError} active={view === 1} />
         </div>
 
         {/* floating controls (whistle + Past), per the mockup */}
@@ -151,10 +158,13 @@ function PlazaPanel({
   people,
   error,
   lined,
+  active,
 }: {
   people: ApiPerson[] | null;
   error: string | null;
   lined: boolean;
+  /** Swiped off-screen panels are inert — no tab stops, no stray taps. */
+  active: boolean;
 }) {
   const navigate = useNavigate();
   const reduce = useReducedMotion();
@@ -260,43 +270,40 @@ function PlazaPanel({
       }
     };
 
-    // Whistle: halt the wander into a tidy line (CSS-transitioned).
-    if (lined) {
-      setTransition(reduce ? "none" : ACTOR_TRANSITION);
+    const freeRoam = !lined && !reduce;
+
+    // Static layouts (whistle line / reduced-motion) place from the curated
+    // percentages, so they can be re-derived at any plot size.
+    const placeStatic = () => {
       sim.forEach((s, i) => {
-        s.x = (placed[i].lx / 100) * w;
-        s.y = (placed[i].ly / 100) * h;
+        s.x = ((lined ? placed[i].lx : placed[i].sx) / 100) * w;
+        s.y = ((lined ? placed[i].ly : placed[i].sy) / 100) * h;
         s.gaitT = 0;
         paint(s, false);
       });
-      return;
-    }
-
-    // Reduced motion: everyone stands at their scatter spot, frozen.
-    if (reduce) {
-      setTransition("none");
-      sim.forEach((s, i) => {
-        s.x = (placed[i].sx / 100) * w;
-        s.y = (placed[i].sy / 100) * h;
-        s.gaitT = 0;
-        paint(s, false);
-      });
-      return;
-    }
-
-    // Free roam: a lightweight rAF tick over ~8 characters.
-    setTransition("none");
-    let raf = 0;
-    let last = performance.now();
-    const tick = (now: number) => {
-      const dt = Math.min((now - last) / 1000, 0.05);
-      last = now;
-      stepWanderers(sim, dt, { w, h });
-      for (const s of sim) paint(s, true);
-      raf = requestAnimationFrame(tick);
     };
-    raf = requestAnimationFrame(tick);
 
+    let raf = 0;
+    if (freeRoam) {
+      // Free roam: a lightweight rAF tick over ~8 characters.
+      setTransition("none");
+      let last = performance.now();
+      const tick = (now: number) => {
+        const dt = Math.min((now - last) / 1000, 0.05);
+        last = now;
+        stepWanderers(sim, dt, { w, h });
+        for (const s of sim) paint(s, true);
+        raf = requestAnimationFrame(tick);
+      };
+      raf = requestAnimationFrame(tick);
+    } else {
+      // Whistle line (CSS-transitioned) or reduced-motion scatter (instant).
+      setTransition(lined && !reduce ? ACTOR_TRANSITION : "none");
+      placeStatic();
+    }
+
+    // Observe in EVERY mode: resize/rotate rescales the sim positions, and
+    // static layouts re-derive so they never go stale.
     const ro = new ResizeObserver(() => {
       const nw = plot.clientWidth;
       const nh = plot.clientHeight;
@@ -307,11 +314,12 @@ function PlazaPanel({
       }
       w = nw;
       h = nh;
+      if (!freeRoam) placeStatic();
     });
     ro.observe(plot);
 
     return () => {
-      cancelAnimationFrame(raf);
+      if (raf) cancelAnimationFrame(raf);
       ro.disconnect();
     };
   }, [placed, lined, reduce, selected]);
@@ -319,6 +327,7 @@ function PlazaPanel({
   return (
     <section
       aria-label="Plaza — everyone you have met"
+      inert={!active}
       className="grass-bg scene-dimmable relative isolate h-full w-full shrink-0 snap-start overflow-hidden"
       onClick={() => setSelected(null)}
     >
@@ -340,6 +349,11 @@ function PlazaPanel({
         {error && (
           <p className="pixel-name font-pixel absolute inset-x-4 top-1/3 text-center text-[10px] leading-5">
             Backend asleep… is the API up?
+          </p>
+        )}
+        {!error && !people && (
+          <p className="pixel-name font-pixel absolute inset-x-4 top-1/3 animate-pulse text-center text-[10px] leading-5">
+            Loading your world…
           </p>
         )}
         {!error && people && people.length === 0 && (
@@ -411,7 +425,16 @@ function PlazaPanel({
 
 /* ---- panel 2: calendar garden --------------------------------------------- */
 
-function GardenPanel({ days }: { days: ApiDay[] | null }) {
+function GardenPanel({
+  days,
+  error,
+  active,
+}: {
+  days: ApiDay[] | null;
+  error: string | null;
+  /** Swiped off-screen panels are inert — no tab stops, no stray taps. */
+  active: boolean;
+}) {
   const navigate = useNavigate();
   const [cursor, setCursor] = useState(() => ({
     year: Number(TODAY_ISO.slice(0, 4)),
@@ -445,6 +468,7 @@ function GardenPanel({ days }: { days: ApiDay[] | null }) {
   return (
     <section
       aria-label="Garden — your days as plants"
+      inert={!active}
       className="grass-bg scene-dimmable relative isolate h-full w-full shrink-0 snap-start overflow-hidden"
       onClick={() => setSelected(null)}
     >
@@ -500,6 +524,16 @@ function GardenPanel({ days }: { days: ApiDay[] | null }) {
 
         {/* the plot grid */}
         <div className="relative min-h-0 flex-1 px-1 pb-1">
+          {error && (
+            <p className="pixel-name font-pixel absolute inset-x-4 top-1/3 z-10 text-center text-[10px] leading-5">
+              Backend asleep… is the API up?
+            </p>
+          )}
+          {!error && !days && (
+            <p className="pixel-name font-pixel absolute inset-x-4 top-1/3 z-10 animate-pulse text-center text-[10px] leading-5">
+              Loading your world…
+            </p>
+          )}
           <div
             className="grid h-full grid-cols-7"
             style={{ gridTemplateRows: `repeat(${weeks.length}, 1fr)` }}

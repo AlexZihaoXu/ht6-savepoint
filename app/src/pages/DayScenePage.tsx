@@ -137,6 +137,11 @@ export function DayScenePage() {
                 Backend asleep… is the API up?
               </p>
             )}
+            {!error && !view && (
+              <p className="pixel-name font-pixel absolute inset-x-4 top-1/3 animate-pulse text-center text-[10px] leading-5">
+                Loading your world…
+              </p>
+            )}
             {!error && view && events.length === 0 && (
               <p className="pixel-name font-pixel absolute inset-x-4 top-1/4 text-center text-[10px] leading-5">
                 Nothing recorded this day.
