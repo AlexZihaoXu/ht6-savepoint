@@ -40,3 +40,7 @@ class Person(MongoModel):
     first_seen: datetime | None = None
     last_seen: datetime | None = None
     notes: str | None = None
+    # A short, cozy Stardew-toned character bio written by the LLM from this
+    # person's events (SAV-36). Generated on demand via POST /people/{id}/bio and
+    # served by the read API; ``None`` until first generated.
+    bio: str | None = None
