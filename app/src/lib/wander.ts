@@ -112,7 +112,7 @@ const BUMP_GRACE = 1.1;
 const SEPARATE_SPEED = 70;
 
 /** Chance a bump becomes a conversation instead of a shove. */
-const TALK_CHANCE = 0.2;
+const TALK_CHANCE = 0.5;
 /** Conversation length: TALK_MIN..TALK_MIN+TALK_VAR seconds (~2–5 s). */
 const TALK_MIN = 2;
 const TALK_VAR = 3;
