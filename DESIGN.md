@@ -2,7 +2,7 @@
 
 > *"Your life autosaves."*
 >
-> A QNX-powered wearable turns the people you talk to into pixel characters, and a
+> A Raspberry Pi 5 wearable turns the people you talk to into pixel characters, and a
 > companion app is a cozy, Stardew-Valley-style journal of your day. **Game first**;
 > memory-aid is an honest secondary benefit, not a medical claim.
 
@@ -18,9 +18,11 @@ world. Each person you talk to becomes a **pixel character**; each day becomes a
 **plant in a garden**; each conversation becomes a set of **video-game dialogue
 boxes** you can revisit.
 
-The intelligence that matters — detecting faces and separating who-said-what — runs
-**on the embedded device (QNX on a Raspberry Pi 5), not in the cloud**. That's both
-the privacy story and the technical centerpiece.
+The intelligence that matters — detecting faces and separating who-said-what — turns
+raw capture into **derived data** (sprite parameters, transcript text), never stored
+photos. It runs **server-side today** and can *optionally* move on-device on the Pi 5.
+Either way, raw faces don't need to leave your control — that's both the privacy story
+and the technical centerpiece.
 
 ---
 
@@ -43,12 +45,13 @@ secondary: people who find real-time social reality noisy or hard to retain.
 
 ## 3. The demo moment (build backward from this)
 
-> A judge walks up and talks to the wearer. Within ~3s they appear on screen as a
-> **Stardew character** (attributes read from their face **on the Pi**). Their words
-> attach to **their** character (matched by enrolled voice). It lands in **"Today"**
-> with an **Undertale-style** dialogue recap and a one-line Gemini summary. Toggle the
-> **hardware mute** and recording visibly stops. **The vision runs on the Pi.** If live
-> binding wobbles on stage, **tap-to-assign** keeps the demo clean.
+> A judge walks up and talks to the wearer. The Pi's frame + audio hit **`POST /ingest`**
+> and within a few seconds they appear on screen as a **Stardew / Mii-style character**
+> (a deterministic sprite from their face attributes). Their words attach to **their**
+> character (diarized who-said-what). It lands in **"Today"** with an **Undertale-style**
+> dialogue recap and a one-line LLM summary. *Optional flourish:* toggle the **hardware
+> mute** and capture visibly stops. If live binding wobbles on stage, **tap-to-assign**
+> keeps the demo clean.
 
 **Numbers to hit:** face-in-frame → sprite ≤ 3s; audio/video clock skew < ~150ms (only
 relevant if audio stays off-device — see §6).
@@ -57,17 +60,17 @@ relevant if audio stays off-device — see §6).
 
 ## 4. System architecture
 
-Two clean tiers. The **edge tier** is real-time, on-device, and "cannot-fail"; the
-**app/cloud tier** is non-real-time storytelling.
+Two clean tiers. The **edge tier** (Pi 5) captures IO and can *optionally* run inference
+on-device; the **app/cloud tier** does the binding, storage, and non-real-time storytelling.
 
 ```mermaid
 flowchart TB
-    subgraph PI["QNX · Raspberry Pi 5 — on-device (the QNX prize)"]
-        CAM[Camera] --> FACE["Face + attribute detection<br/>(oss.qnx.com AI module: ONNX/OpenCV)"]
+    subgraph PI["Raspberry Pi 5 (regular Linux) — capture + optional on-device"]
+        CAM[Camera] --> FACE["Face + attribute detection<br/>(OpenCV / ONNX — server today, optional on-Pi)"]
         MIC[USB mic] --> VAD["VAD + utterance segmentation"]
         FACE --> SPR["Parametric sprite params"]
-        VAD --> EMB["Speaker embedding (ECAPA)"]
-        MUTE["HW mute switch (GPIO) + LED"] --> GUARD{{"RTOS-enforced<br/>capture kill"}}
+        VAD --> EMB["Speaker embedding / diarization"]
+        MUTE["HW mute switch (GPIO) + LED"] --> GUARD{{"Hardware-enforced<br/>capture kill"}}
         GUARD -. blocks .- CAM
         GUARD -. blocks .- MIC
     end
@@ -97,12 +100,12 @@ flowchart TB
 ```
 
 **Key boundaries**
-- **Raw face video never leaves the Pi.** It ships only *derived* data: sprite
-  parameters, speaker embeddings, timestamps, transcript text.
-- On-device inference = the QNX "runs on the hardware, not cloud" proof **and** the
-  privacy guarantee, in one design choice.
-- The **hardware mute** physically cuts camera + mic, enforced by the RTOS — it can
-  never record when muted. This is the "cannot-fail / real-time" story.
+- **Only derived data leaves the device:** sprite parameters, speaker embeddings,
+  timestamps, transcript text — not raw photos or video.
+- Inference (face detect + diarization) runs **server-side today**; it can *optionally*
+  move on-device on the Pi for a stronger privacy + hardware story.
+- The **hardware mute** physically cuts camera + mic — it can never record when muted,
+  and a visible LED shows recording state. Consent-friendly and demoable.
 
 ---
 
@@ -110,12 +113,12 @@ flowchart TB
 
 | Part | Choice | Notes |
 |---|---|---|
-| Compute | **Raspberry Pi 5** | Runs **QNX SDP 8.0** (QSTI image); official BCM2712 BSP. |
-| OS | **QNX Neutrino RTOS** | Free non-commercial license (qnx.com/getqnx). |
+| Compute | **Raspberry Pi 5** | Runs a **regular Raspberry Pi OS (Linux)** image; official BCM2712 support. |
+| OS | **Raspberry Pi OS (Linux)** | Regular image — **no QNX / RTOS.** |
 | Camera | Pi Camera Module 3 (22-pin) | Same connector as Pi Zero 2 W. |
 | Mic | **USB mic / ReSpeaker** on the Pi | *Recommended* — co-locates audio+video on one clock (see §6). |
-| Privacy | **GPIO push-button + LED** | Hardware mute; RTOS cuts capture, LED shows recording state. |
-| AI runtime | ONNX Runtime / OpenCV DNN from **oss.qnx.com** | Satisfies the "include an oss.qnx.com AI module" rule. |
+| Privacy | **GPIO push-button + LED** | Hardware mute cuts capture; LED shows recording state. |
+| AI runtime *(optional)* | ONNX Runtime / OpenCV on the Pi | Only for the optional on-device inference path; not required for the core loop. |
 
 ---
 
@@ -158,7 +161,8 @@ color** — and compose a Stardew-style sprite from a layered kit.
 
 - **Deterministic:** the same person always maps to the same sprite (essential for
   "recognize your recurring townsfolk").
-- **Fast + offline:** no diffusion, no network, runs on-device.
+- **Fast + offline:** no diffusion, no network — runs server-side today, and can run
+  on-device on the Pi.
 - Story: *"we read your face, we don't paint it."*
 
 LLMs (Gemini/Backboard) may write a character's **bio/flavor text**, never render pixels.
@@ -171,7 +175,7 @@ LLMs (Gemini/Backboard) may write a character's **bio/flavor text**, never rende
   only derived data (sprite params, embeddings, transcript text) leaves.
 - **Sprites, not photos.** People are stored as abstract avatars. An optional "IRL photo"
   is **opt-in and on-device only** — do not sync raw faces to the server (this keeps the
-  privacy + QNX story intact).
+  privacy story intact).
 - **Hardware mute.** A physical switch guarantees no capture when muted; a visible LED
   shows recording state. Consent-friendly and demoable.
 - For any live demo: only record consenting teammates; frame it as a prototype.
@@ -241,23 +245,31 @@ Empty days show a graceful "quiet day" state.
 ---
 
 ## 11. Recaps & summaries
+Recaps and character bios go through one LLM interface; the backend is being chosen now
+(`recap.py` is still a placeholder). Candidates:
+- **FreeSolo** — recap + bio generation via their **Flash fine-tuning** (OpenAI-compatible).
+  Being spiked (SAV-51).
 - **Gemini** — natural-language daily recap and "who did I meet / what did we talk
   about?" Q&A over the day's events.
 - **Backboard** — multi-model orchestration for character bios + day/month recaps.
+- **gemma** (self-hosted) — a local fallback for recaps/bios.
+- **ElevenLabs** — voice the Undertale-style dialogue playback and/or narrate the daily recap.
 - Month/year rollups: garden summaries (mock for the demo).
 
 ---
 
 ## 12. Prize strategy
 
-| Track | How we hit it | Priority |
-|---|---|---|
-| **QNX ($1000)** | On-device face+attribute inference via an oss.qnx.com module; **hardware mute** = cannot-fail/real-time; runs on the Pi, not cloud. | **Primary — protect it** |
-| **Presage** | Contactless emotion of your conversation partner (phone cam) → sprite mood. | Optional / last |
-| **Gemini** | Daily recap + conversational Q&A over the day. | Secondary |
-| **Backboard** | Multi-model orchestration for bios + recaps. | Secondary |
-| **MongoDB** | Character roster, event log, day/month aggregates. | Secondary |
-| **Best Hardware** | The physical device itself. | Pick one of HW/Env/Beginner |
+**No single "primary" anymore — weight by demo impact.**
+
+| Track | How we hit it |
+|---|---|
+| **FreeSolo** | Recap + character-bio generation via their **Flash fine-tuning** (OpenAI-compatible). Being spiked — SAV-51. |
+| **Backboard** | Multi-model orchestration for character bios + day/month recaps. |
+| **ElevenLabs** | Voice the Undertale-style dialogue playback and/or narrate the daily recap. |
+| **MongoDB** | Character roster, event log, day/month aggregates — already the backbone. |
+| **Gemini** | Daily recap + conversational Q&A over the day. |
+| **Best Hardware** | The Pi 5 device: camera/mic capture, optional on-device inference, hardware mute + LED. |
 
 Submit to every track legitimately satisfied — each is judged independently.
 
@@ -265,37 +277,41 @@ Submit to every track legitimately satisfied — each is judged independently.
 
 ## 13. Tech stack
 
-- **Edge:** Pi 5 + QNX SDP 8.0; ONNX Runtime / OpenCV (oss.qnx.com); SCRFD/BlazeFace +
-  MobileFaceNet (face); GPIO mute + LED; USB mic.
-- **Speech:** faster-whisper (base) + SpeechBrain ECAPA enrollment (built).
-- **Backend:** FastAPI + MongoDB Atlas; MQTT/WebSocket event stream Pi→server; Gemini +
-  Backboard for recaps.
-- **App:** single-page PWA, cozy pixel, Undertale dialogue; parametric sprite kit.
+- **Edge:** Pi 5 on a **regular Raspberry Pi OS (Linux)** image; camera + USB mic;
+  *optional* on-device OpenCV / ONNX face detect + GPIO mute + LED. **No QNX.**
+- **Speech:** vendored diarization → transcription pipeline (`Speaker N: text`), behind a
+  `Transcriber` protocol (stub for CI, real pipeline via subprocess).
+- **Backend:** **FastAPI + uv** + **MongoDB**; frame+audio ingest Pi→server; recaps via
+  the chosen LLM backend (**FreeSolo / Gemini / Backboard**, optional ElevenLabs narration).
+- **App:** React 19 + HeroUI v3 + Tailwind v4 + framer-motion **PWA**, cozy pixel,
+  Undertale dialogue; parametric sprite kit.
 
 ---
 
 ## 14. MVP & cut-lines
 
-**Hero flow (never cut):** on-device face detect → sprite → enrolled who-said-what →
-lands in "Today" → hardware mute stops capture.
+**Hero flow (never cut):** frame + audio → `POST /ingest` → deterministic character sprite
+→ diarized who-said-what → lands in "Today" with a narrated recap.
 
 **Cut in this order if time runs short:**
-1. Presage emotion (first to go).
+1. On-device inference / hardware mute → keep capture on the Pi, inference on the server.
 2. Month/year garden rollups → static mock.
 3. Live audio auto-binding → "person in frame = speaker" / tap-to-assign.
 4. Cross-day face re-ID → session-scoped.
 
-**Never cut:** on-device face detect + the hardware mute (that pair *is* the QNX prize).
+**Never cut:** the core game loop — person → character → who-said-what → lands in "Today"
+(live today, M1).
 
 ---
 
 ## 15. Open decisions
-1. **USB mic on the Pi vs. phone audio** (recommend Pi mic — dissolves cross-device sync).
-2. **Presage: in or out?** (secondary prize vs. risk to the privacy narrative).
+1. **Recap/bio LLM backend:** FreeSolo (SAV-51 spike) vs. gemma vs. Gemini vs. Backboard —
+   `recap.py` stays a placeholder until this lands.
+2. **USB mic on the Pi vs. phone audio** (recommend Pi mic — dissolves cross-device sync).
 3. **Auto-binding vs. tap-to-assign** as the demo's primary who-said-what.
-4. Confirm workstream owners (Edge/QNX · Speech · App · Backend).
+4. Confirm workstream owners (Edge/IO · Speech · App · Backend).
 5. Which 2 screens are the hero screens (proposed: Character scene + Day view).
-6. Map the build phases onto the real HT6 clock.
+6. **How far to push the optional on-device / Pi hardware polish** given remaining time.
 
 ---
 
@@ -303,11 +319,10 @@ lands in "Today" → hardware mute stops capture.
 
 ```
 savepoint/
-  edge/            # QNX Pi: capture, face-detect, mute, event emitter
-  server/          # FastAPI + Mongo + recap (Gemini/Backboard); binding
+  edge/            # Pi (Raspberry Pi OS): capture, optional on-device inference, mute, event emitter
+  server/          # FastAPI + uv + Mongo + recap (FreeSolo/Gemini/Backboard); binding
   app/             # SavePoint PWA (character scene, garden, day view)
-  pipeline/        # speech: VAD + whisper + ECAPA enrollment (from the demo)
-  tools/label/     # ground-truth labeling + validation tool
+  pipeline/        # speech: vendored diarization → transcription
   DESIGN.md
   README.md
 ```
