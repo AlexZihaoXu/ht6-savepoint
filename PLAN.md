@@ -1,25 +1,47 @@
 # SavePoint — Execution Plan
 
-> *"Your life autosaves."* · draft v1 — **review & edit before we start**
+> *"Your life autosaves."* · **v6** · 2026-07-18
 
-A QNX-on-Pi device turns the people you talk to into pixel characters; a companion app
-is a cozy, Stardew-style journal of your day. This plan maps workstreams, owners, a
-phased timeline, risks, the demo we protect, and prize alignment. **Everything here is a
-proposal to argue with.**
+A Raspberry Pi 5 wearable turns the people you talk to into pixel characters; a companion
+app is a cozy, Stardew-style journal of your day. This plan maps workstreams, owners, a
+milestone roadmap, risks, the demo we protect, and prize alignment.
+
+### What changed in v6
+
+- **QNX is dropped.** The Pi 5 stays as the camera/mic **IO source**, but on a **regular
+  Linux image (Raspberry Pi OS) — no QNX RTOS.** The old "edge-migration → QNX prize"
+  framing is gone; any optional on-device inference and the hardware mute now just run on
+  plain Pi OS. Still a nice hardware story, no longer an RTOS-prize story.
+- **Prizes realigned.** No single "primary" anymore — weight work by demo impact across
+  **FreeSolo · Backboard · ElevenLabs · MongoDB · Gemini** (all confirmed HT6 2026
+  sponsors), plus **Best Hardware** for the device.
+- **M0 + M1 shipped.** The monorepo scaffold (M0) and the full backend e2e (M1) are
+  **merged to `main`** (PRs #1–#5). The backend runs live + tunneled, so the frontend now
+  builds against real endpoints (`/docs`, `/openapi.json`).
 
 ---
 
-## ✅ Already in hand (reuse it)
+## ✅ Shipped so far
 
-Built during prep — this de-risks a lot of Day 1:
+**Merged to `main` — PRs #1–#5:**
 
-- A working **speech-separation demo** (mic → VAD → Whisper → ECAPA speaker
-  **enrollment**) with a live **calibration slider**.
-- A **`/label` validation tool** (upload video → predicted vs. hand-labeled accuracy,
-  JSON export).
-- A **clickable SavePoint UI mock** (character scene, garden calendar, people log, person
-  info, day-view timeline playback — now **Undertale-style** dialogue).
-- The **repo** (initial commit staged) + confirmed **QNX Pi 5 flashing** path.
+- **M0 · Monorepo scaffold — DONE.** React 19 + HeroUI v3 + Tailwind v4 + framer-motion
+  PWA (`app/`), FastAPI + uv server (`server/`), the vendored speech pipeline
+  (`pipeline/`), and **CI required on `main`** (format + lint + type-check + test + build).
+- **M1 · Backend e2e, no hardware — DONE.** `POST /ingest` takes a frame + audio and
+  produces a **deterministic Mii-style Person + sprite** (OpenCV Haar face detect), a
+  **diarized-transcript set of Events**, and a **Day** — all persisted in **MongoDB**.
+  Endpoints `/health`, `/vision/analyze`, `/speech/transcribe`, and `/ingest` are live in
+  Swagger `/docs`. Speech runs behind a `Transcriber` protocol: a stub for CI, the real
+  vendored pipeline behind a subprocess. The backend runs **live + tunneled**, so the team
+  builds the frontend straight against `/docs` + `/openapi.json` (and is free to redesign
+  the UI itself).
+
+**Reused from prep:**
+
+- The vendored **speech pipeline** (diarization → transcription → merged `Speaker N: text`).
+- A **clickable SavePoint UI mock** (character scene, garden, people log, person info,
+  day-view) that informs the app's design language.
 
 ---
 
@@ -27,44 +49,47 @@ Built during prep — this de-risks a lot of Day 1:
 
 | Stream | Scope | Suggested lead | Key deliverable |
 |---|---|---|---|
-| **A. Edge / QNX** | Flash QNX on Pi 5, camera capture, on-device face-detect + attributes (oss.qnx.com AI module), **hardware mute switch** (GPIO), emit event JSON. *This is the $1000 prize.* | **alexxbot** (hardware) | A Pi that detects a face on-device & streams events, with a cannot-fail mute |
-| **B. Speech / AI** | Speaker enrollment + who-said-what binding, transcript, feed into the day log. Mostly **done** (demo) — integrate + tune. | **zangjiucheng** | "Person X said ___" events with stable identities |
-| **C. App / UX** | SavePoint front-end: character scene, garden, people log, person info, day-view playback (Undertale dialogue). Mock exists → wire to real data. | **waterprism** + **diamondpixals** | Polished, clickable app on real (or seeded) data |
-| **D. Backend / Integrate** | Server binds Pi events + audio → characters + day log; MongoDB store; Gemini/Backboard recaps; the API the app reads. | **zangjiucheng** / shared | One pipeline: capture → store → app |
+| **A. Edge / IO (Pi 5)** | Camera + USB-mic capture on a **regular Raspberry Pi OS** image; stream frame+audio to the server. *Optional:* on-device face detect + a **hardware GPIO mute switch + LED** (a nice hardware story, not required for the core loop). | **alexxbot** (hardware) | A Pi that captures and streams IO the server can ingest; optional mute demo |
+| **B. Speech / AI** | Diarized who-said-what → transcript → events, plus the recap/bio LLM backend. Pipeline is **vendored** and wired into `/speech/transcribe`. | **zangjiucheng** | Stable `Speaker N: text` events + a chosen recap backend |
+| **C. App / UX** | SavePoint front-end: character scene, garden, people log, person info, day-view playback (Undertale dialogue). Wire to the **live backend** (`/openapi.json`). | **waterprism** + **diamondpixals** | Polished, clickable app on real backend data |
+| **D. Backend / Integrate** | Server binds frame+audio → Person + sprite + events + day; MongoDB store; Gemini / Backboard / FreeSolo recaps; the API the app reads. **Core path (M1) is done** — now recaps + hardening. | **zangjiucheng** / shared | One pipeline: capture → store → app (**live**) |
 
-*Owners are a starting guess from who's been asking what — reassign freely. With 4 people,
-A and C run in parallel; B is largely built; D is the glue one person owns end-to-end.*
+*With 4 people, A and C run in parallel; B owns speech + the recap backend; D owns the
+glue and is already live end-to-end. Reassign freely.*
 
 ---
 
-## 2. Phased timeline (map onto the real HT6 clock)
+## 2. Milestones & status
 
-| Phase | What happens |
-|---|---|
-| **Pre-event** (now → start) | **De-risk QNX now:** flash the Pi 5, run *one* test inference (ONNX/OpenCV face detect) on QNX → confirm the AI-module path works. Get: USB mic + camera + jumpers/button for the mute switch. Create accounts/keys: Gemini, Backboard, MongoDB Atlas, Presage. Enroll 3–4 teammates' voices. Lock the stack. Seed the repo. |
-| **Day 1 AM** | **QNX go/no-go checkpoint** (camera frame + AI module running on QNX). If *no-go by lunch* → Linux-on-Pi fallback **decided now**, not at hour 20. In parallel: app shell from the mock (C), backend + Mongo skeleton (D). |
-| **Day 1 PM** | Edge: face → parametric sprite params on-device; wire the **hardware mute + LED**. Backend: event ingest + upsert people. App: character scene renders from *real* events. **Milestone: meet someone → they appear as a character.** |
-| **Day 2 AM** | Integrate speech (B): enrolled who-said-what → day log; build the **Day-view timeline** with dialogue playback; Gemini/Backboard daily recap. App: people log + person info. |
-| **Day 2 PM** | Presage on the *phone* (emotion → sprite mood), *if* pursuing it. Polish: Undertale dialogue, garden calendar, empty state, transitions. Seed fallback data so the demo never depends on live capture. |
-| **Final** (last 3–4h) | **Freeze features.** Rehearse the 2-min demo 3×. Record a backup video. Write & submit the Devpost to every track you legitimately hit. |
+| Milestone | Scope | Status |
+|---|---|---|
+| **M0 — Scaffold** | Monorepo: PWA (`app/`) + FastAPI server (`server/`) + vendored `pipeline/`; CI required on `main`. | ✅ **Done** (PRs #1–#5) |
+| **M1 — Backend e2e** | `POST /ingest` → Person + sprite + diarized events + Day in MongoDB; `/health`, `/vision/analyze`, `/speech/transcribe`, `/ingest` in `/docs`; backend **live + tunneled**. | ✅ **Done** (PRs #1–#5) |
+| **M2 — App on real data** | Frontend wired to the live API: character scene + day-view render real people/events; garden calendar. | ⏳ In progress |
+| **M3 — Speech + recaps** | Real pipeline behind `/speech/transcribe` tuned; daily recap/bio via the chosen LLM backend (see §5); optional ElevenLabs-voiced dialogue. | ◻ Next |
+| **M4 — Demo hardening** | Seed a canned "today", rehearse the hero flow 3×, record a backup video, submit Devpost to every track we hit. | ◻ Before freeze |
+| **M5 — Optional on-device / Pi polish** | *(formerly the QNX edge migration — no longer the anchor)* Move face detect / hardware mute onto the Pi for the hardware story, time permitting. | ◻ Optional |
 
 ---
 
 ## 3. The demo we protect (MVP hero-flow) + cut-lines
 
-**Hero flow (build backward from this):** a judge walks up and talks to the wearer →
-within ~3s they appear on the Pi as a **Stardew character** (attributes read on-device) →
-their words attach to *their* character (enrolled voice) → it lands in **"Today"** with an
-Undertale-style recap and a one-line Gemini summary → toggle the **hardware mute** and
-recording visibly stops. **The vision runs on the Pi.**
+**Hero flow (build backward from this):** a judge walks up and talks to the wearer → the
+Pi's frame + audio hit **`POST /ingest`** → within a few seconds they appear as a
+**Stardew / Mii-style character** (a deterministic sprite from face attributes) → their
+words attach to *their* character (diarized who-said-what) → it lands in **"Today"** with
+an Undertale-style dialogue recap and a one-line LLM summary. *Optional flourish:* toggle
+the **hardware mute** and capture visibly stops.
 
 **Cut-lines, in the order you sacrifice them if time runs short:**
-1. Presage emotion → first to go.
+
+1. On-device inference / hardware mute → keep capture on the Pi, inference on the server.
 2. Month/year garden rollups → static mock.
 3. Live audio auto-binding → fall back to "person in frame = speaker" or tap-to-assign.
 4. Cross-day face re-ID → session-scoped.
 
-**Never cut:** the on-device face detect + the hardware mute (that pair *is* the QNX prize).
+**Never cut:** the core game loop — **person → character → who-said-what → lands in
+"Today."** That loop is live today (M1) and is the whole product.
 
 ---
 
@@ -72,10 +97,9 @@ recording visibly stops. **The vision runs on the Pi.**
 
 | Risk | Severity | Mitigation | Owner |
 |---|---|---|---|
-| **QNX viability is binary** | 🔴 Critical | De-risk *before* the event (flash + 1 test inference). Day-1 go/no-go. Linux fallback saves the *demo* but forfeits the $1000 — so make QNX work early. Confirm with a mentor that "our model on their runtime" satisfies the oss.qnx.com rule. | A |
-| **Cross-device audio↔video sync** | 🔴 Critical | Put a **USB mic on the Pi** (one clock) instead of phone audio — dissolves the sync problem. If you keep phone audio, make **tap-to-assign** the real demo and treat auto-binding as a stretch. | A+B |
-| **Presage vs. privacy spine** | 🟠 High | "Raw faces never leave the Pi" carries your privacy *and* QNX story; Presage needs face frames + can't run on QNX. Run it on the phone only, or **drop it** rather than undermine the core. | B/C |
-| **Thin-AI perception** | 🟠 High | Face-attribute detection alone reads as pedestrian. Lean the "creative AI" story on real-time + privacy-by-locality + the enrolled who-said-what. | A+B |
+| **Cross-device audio↔video sync** | 🟠 High | Put a **USB mic on the Pi** (one clock) instead of phone audio — dissolves the sync problem. If you keep phone audio, make **tap-to-assign** the real demo and treat auto-binding as a stretch. | A+B |
+| **Recap/bio LLM backend unpicked** | 🟠 High | `recap.py` is still a placeholder. Spike **FreeSolo** (SAV-51) against gemma / Gemini / Backboard and lock one by M3; keep the call behind one interface so swapping is cheap. | B/D |
+| **Thin-AI perception** | 🟠 High | Face-attribute detection alone reads as pedestrian. Lean the "creative AI" story on the deterministic-sprite identity + diarized who-said-what + the narrated recap. | B |
 | **Scope creep** | 🟠 High | 6+ screens is too much. Build the 2 hero screens (character scene + day-view), mock the rest. Honor the cut-lines. | All |
 | **Demo depends on live capture** | 🟡 Med | Seed a canned "today" so the app demos even if capture wobbles on stage. Record a backup video. | C+D |
 
@@ -83,47 +107,51 @@ recording visibly stops. **The vision runs on the Pi.**
 
 ## 5. Prize-alignment checklist
 
+**No single "primary" anymore — weight by demo impact.** Submit to every track we
+legitimately satisfy; each is judged independently.
+
 | Track | What it needs / how we hit it | Owner |
 |---|---|---|
-| **QNX ($1000)** | On-device face + attribute inference via an oss.qnx.com module; **hardware mute** = cannot-fail/real-time; runs on the Pi, not cloud. *Primary — protect it.* | A |
-| **Presage** | Contactless emotion of your conversation partner (phone) → sprite mood. Optional/last. | B/C |
-| **Gemini** | Natural-language daily recap + "who did I meet / what did we talk about" Q&A. | D |
-| **Backboard** | Multi-model orchestration for character bios + recaps. | D |
-| **MongoDB** | Store the character roster, event log, day/month aggregates. | D |
-
-*Only one of Best Hardware / Environmental / Beginner — this is a clear **Best Hardware**
-candidate too. Submit to every track you legitimately satisfy; each is judged
-independently.*
+| **FreeSolo** | Recap + character-bio generation via their **Flash fine-tuning** (OpenAI-compatible). Being spiked now — SAV-51. | B/D |
+| **Backboard** | Multi-model orchestration for character bios + day/month recaps. | D |
+| **ElevenLabs** | Voice the **Undertale-style dialogue playback** and/or narrate the daily recap. | C/D |
+| **MongoDB** | The people · events · days · recaps store — already the backbone (shipped in M1). | D |
+| **Gemini** | Natural-language daily recap + "who did I meet / what did we talk about" Q&A over the day. | D |
+| **Best Hardware** | The Pi 5 device: camera/mic capture, optional on-device inference, hardware mute + LED. | A |
 
 ---
 
-## 6. Proposed stack (lock this in review)
+## 6. Proposed stack
 
-- **Edge:** Pi 5 + QNX SDP 8.0 (QSTI image); ONNX Runtime / OpenCV from oss.qnx.com;
-  SCRFD/BlazeFace + MobileFaceNet (face); GPIO mute switch + LED; USB mic (recommended).
-- **Speech:** faster-whisper (base) + ECAPA enrollment (already built).
-- **Backend:** FastAPI + MongoDB Atlas; MQTT/WebSocket event stream Pi→server; Gemini +
-  Backboard for recaps.
-- **App:** the SavePoint front-end (single-page, cozy pixel, Undertale dialogue) as a PWA
-  (web + phone, one codebase).
+- **Edge:** Pi 5 on a **regular Raspberry Pi OS** image; Pi Camera + USB mic; *optional*
+  on-device OpenCV / ONNX face detect and a GPIO mute switch + LED. **No QNX / RTOS.**
+- **Speech:** the vendored **diarization → transcription** pipeline (merged
+  `Speaker N: text`), behind a `Transcriber` protocol (stub for CI, real pipeline via a
+  subprocess).
+- **Backend:** **FastAPI + uv**, **MongoDB** (people / events / days / recaps); recaps via
+  the chosen LLM backend — **FreeSolo (spiking, SAV-51) / Gemini / Backboard**, optional
+  **ElevenLabs** narration. Runs **live + tunneled**.
+- **App:** React 19 + HeroUI v3 + Tailwind v4 + framer-motion **PWA** (cozy pixel,
+  Undertale dialogue).
 - **Sprites:** parametric assembly from attributes (deterministic — same person, same
   sprite), *not* gen-art.
 
 ---
 
-## 7. Open decisions to settle in review
+## 7. Open decisions to settle
 
-1. **USB mic on the Pi, or keep audio on the phone?** (Biggest architecture fork — I
-   recommend the Pi mic.)
-2. **Presage: in or out?** (Secondary prize vs. risk to the privacy narrative.)
+1. **Recap/bio LLM backend:** FreeSolo (SAV-51 spike) vs. gemma vs. Gemini vs. Backboard —
+   `recap.py` stays a placeholder until this lands.
+2. **USB mic on the Pi, or keep audio on the phone?** (Recommend the Pi mic — dissolves
+   cross-device sync.)
 3. **Auto-binding vs. tap-to-assign** as the primary who-said-what for the demo.
-4. **Confirm owners** for A/B/C/D and who owns the end-to-end integration (D).
-5. **Which 2 screens are the hero screens** (proposed: character scene + day-view).
-6. **Map the phases** onto the actual HT6 start time / hack-window length.
+4. **Which 2 screens are the hero screens** (proposed: character scene + day-view).
+5. **How far to push M5** (on-device / Pi hardware polish) given remaining time.
 
 ---
 
-> **The one thing that decides this project:** get *a* model doing inference on QNX early
-> (Day-1 morning, ideally before the event). Everything else — app, speech, recaps —
-> you've largely got. The prize and the story both hinge on "it runs on the Pi," so
-> front-load that and protect the on-device-face + hardware-mute pair above all else.
+> **The one thing that decides this project:** the core loop — **person → character →
+> who-said-what → lands in "Today"** — is already live end-to-end (M1, merged to `main`).
+> From here, every hour goes to what a judge actually sees: the app on real data, a
+> narrated recap, and a clean hero-flow rehearsal. The Pi hardware and on-device inference
+> are a bonus story now, not the anchor — weight everything by demo impact.
