@@ -26,3 +26,9 @@ class Event(MongoModel):
     place: str | None = None
     # Owning day bucket, e.g. "2026-07-18".
     day_id: str
+    # Speech-segment timing (SAV-32): populated for SPOKE events sourced from the
+    # speech pipeline — offsets in seconds from the start of the recording.
+    # ``None`` for non-speech events (e.g. SEEN). ``overlap`` marks cross-talk.
+    start: float | None = None
+    end: float | None = None
+    overlap: bool = False

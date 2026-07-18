@@ -8,6 +8,7 @@ from savepoint_server.models.event import Event, EventType
 from savepoint_server.models.person import AvatarParams, Person
 from savepoint_server.models.recap import Recap, RecapScope
 from savepoint_server.models.sprite import FaceAnalysis, SpriteParams
+from savepoint_server.models.transcript import Transcript, TranscriptSegment
 
 __all__ = [
     "AvatarParams",
@@ -20,4 +21,6 @@ __all__ = [
     "Recap",
     "RecapScope",
     "SpriteParams",
+    "Transcript",
+    "TranscriptSegment",
 ]
