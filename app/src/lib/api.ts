@@ -74,6 +74,24 @@ export interface ApiPersonDetail extends ApiPerson {
   events: ApiEvent[];
 }
 
+/** One podium row of `GET /month/{YYYY-MM}/summary`. */
+export interface ApiMonthTopPerson {
+  person: ApiPerson;
+  interactions: number;
+}
+
+/** GET /month/{YYYY-MM}/summary — the Past view's month-in-review. */
+export interface ApiMonthSummary {
+  month: string;
+  days_journaled: number;
+  total_events: number;
+  people_count: number;
+  /** Up to 5, most interactions first. */
+  top_people: ApiMonthTopPerson[];
+  /** Null for a month with no recorded moments. */
+  busiest_day: { date: string; events: number } | null;
+}
+
 /** Error that keeps the HTTP status, so 404s can render as "not found". */
 export class ApiError extends Error {
   status: number;
@@ -172,6 +190,11 @@ export const api = {
   day: (date: string, signal?: AbortSignal) =>
     getJSON<ApiDayView>(`/day/${date}`, signal),
   today: (signal?: AbortSignal) => getJSON<ApiDayView>("/today", signal),
+  monthSummary: (month: string, signal?: AbortSignal) =>
+    getJSON<ApiMonthSummary>(
+      `/month/${encodeURIComponent(month)}/summary`,
+      signal,
+    ),
 };
 
 /** A friendly display name: the stored name, else a stable label from the id. */

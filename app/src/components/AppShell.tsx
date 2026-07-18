@@ -21,6 +21,9 @@ const PlazaPage = lazy(() =>
 const DayScenePage = lazy(() =>
   import("@/pages/DayScenePage").then((m) => ({ default: m.DayScenePage })),
 );
+const PastMonthPage = lazy(() =>
+  import("@/pages/PastMonthPage").then((m) => ({ default: m.PastMonthPage })),
+);
 
 /**
  * Animated, suspense-wrapped route element. The Suspense boundary sits INSIDE
@@ -54,7 +57,8 @@ export function AppShell() {
   const immersive =
     location.pathname.startsWith("/plaza") ||
     location.pathname.startsWith("/scene") ||
-    location.pathname.startsWith("/people");
+    location.pathname.startsWith("/people") ||
+    location.pathname.startsWith("/past");
 
   // New screen → start reading from the top (the window is the scroller).
   useEffect(() => {
@@ -83,6 +87,7 @@ export function AppShell() {
             <Route path="/scene/:date" element={page(DayScenePage, true)} />
             <Route path="/people" element={page(PeoplePage, true)} />
             <Route path="/people/:id" element={page(PersonPage, true)} />
+            <Route path="/past/:month" element={page(PastMonthPage, true)} />
             <Route path="*" element={<Navigate to="/plaza" replace />} />
           </Routes>
         </AnimatePresence>
