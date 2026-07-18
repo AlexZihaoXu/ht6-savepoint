@@ -20,7 +20,7 @@ execution plan.
 | Path         | What lives here                                                                   |
 | ------------ | --------------------------------------------------------------------------------- |
 | `app/`       | SavePoint PWA — React + TypeScript + HeroUI v3 + Tailwind v4 (Vite), cozy-pixel UI |
-| `server/`    | FastAPI backend — event ingest, MongoDB store, Gemini/Backboard recaps, app API   |
+| `server/`    | FastAPI backend — frame+audio ingest, MongoDB store, read API + daily recap (gemma) |
 | `pipeline/`  | Speech pipeline — diarization → overlap-split → transcription → `Speaker N: text`  |
 | `edge/`      | Pi 5 IO-source capture (Raspberry Pi OS, face detect, GPIO mute + LED)            |
 | `design/`    | Shared design assets (HeroUI theme baseline, tokens)                              |

@@ -6,12 +6,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 SavePoint ("your life autosaves") — a Hack the 6ix 2026 project. A Raspberry Pi 5 wearable turns
 people you talk to into pixel characters; a companion PWA replays the day back as a cozy,
-Stardew-style game world. **Game-first, privacy-first**: face detection and who-said-what run
-on-device; raw faces never leave the wearable.
+Stardew-style game world. **Game-first, privacy-first**: only **derived data** (sprite params,
+embeddings, transcript text) leaves the device — never raw faces. Face detection + who-said-what
+run **server-side today**, and can *optionally* move on-device on the Pi.
 
 Read `DESIGN.md` (architecture §4, speech pipeline §6, data model §9, UI §10) and `PLAN.md`
-(workstreams, milestones — see its "v6" changelog) for intent. **QNX is dropped** — `edge/`
-runs on regular Raspberry Pi OS, no RTOS (PLAN.md v6, DESIGN.md §5). `docs/DEV.md` is the
+(workstreams, milestones — see its "v7" changelog) for intent. **QNX is dropped** — `edge/`
+runs on regular Raspberry Pi OS, no RTOS (PLAN.md, DESIGN.md §5). `docs/DEV.md` is the
 runbook.
 
 ## Monorepo layout — four independent workstreams
@@ -22,8 +23,8 @@ the subproject first.
 
 | Path        | Stack                                              | Status                          |
 | ----------- | -------------------------------------------------- | ------------------------------- |
-| `app/`      | React 19 + TS + HeroUI v3 + Tailwind v4 (Vite), pnpm | M0 scaffold (Calendar garden, code-split); on seed data |
-| `server/`   | FastAPI + MongoDB (Motor), Python 3.12, uv         | **M1 done** — `/ingest` + read API + vision + speech |
+| `app/`      | React 19 + TS + HeroUI v3 + Tailwind v4 (Vite), pnpm | M0 scaffold on seed data; **UI redesign in progress** (character plaza / garden / cinematic day view — DESIGN §10) |
+| `server/`   | FastAPI + MongoDB (Motor), Python 3.12, uv         | **M1–M3 done** — `/ingest` + read API + vision + speech + **daily recap** (gemma) |
 | `pipeline/` | Speech: pyannote → SepFormer → faster-whisper, uv  | Working, validated offline      |
 | `edge/`     | Pi 5 capture, Raspberry Pi OS + Python, uv         | Sim mode working; hardware backend unverified |
 
@@ -52,8 +53,9 @@ uv run ruff format --check .   # format gate (use `ruff format .` to fix)
 uv run ruff check .            # lint
 uv run mypy src                # strict type-check
 ```
-⚠️ The root `README.md` and `docs/DEV.md` say `uvicorn app.main:app` — that module path is **wrong**.
-The package is `savepoint_server`; use `savepoint_server.main:app` (server/README.md is correct).
+The ASGI app is `savepoint_server.main:app` (README/DEV/server-README all agree). Live
+endpoints: `/health`, `/vision/analyze`, `/speech/transcribe`, `/ingest` (write) and
+`/today`, `/day/{date}`, `/day/{date}/recap`, `/people`, `/people/{id}`, `/days` (read).
 
 ### pipeline/ (uv, Python 3.12) — heavy ML, mostly run by hand
 ```bash
