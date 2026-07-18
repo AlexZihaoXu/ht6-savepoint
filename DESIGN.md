@@ -124,32 +124,33 @@ flowchart TB
 
 ## 6. Speech / AI pipeline (who-said-what)
 
-Already prototyped and working (see the demo app). Pipeline per utterance:
+**Locked decision:** the project uses **jiucheng's diarization pipeline** (vendored in
+`pipeline/`, validated on real 2-speaker audio + ground-truth `tc1–tc5`). It is a
+*blind-diarization* pipeline — it separates who-said-what without prior enrollment:
 
-1. **VAD** (webrtcvad) segments the audio into utterances (flush after ~0.7s trailing
-   silence, or 8s max; min ~1s for a reliable embedding).
-2. **STT**: `faster-whisper` (base, int8, CPU) → transcript text.
-3. **Speaker embedding**: **SpeechBrain ECAPA-TDNN** (`spkrec-ecapa-voxceleb`, 192-d).
-4. **Assignment (hybrid):**
-   - If speakers are **enrolled**, match the utterance to the nearest enrolled voice by
-     cosine similarity (tunable threshold, default ~0.35); below threshold → "Unknown".
-   - If nobody is enrolled, fall back to capped **online clustering** (Person A/B…).
-5. **Binding to a face:** for the demo, **the person in the camera frame = the speaker**
-   (active-speaker assumption). *Stretch:* timestamp-aligned lip/voice-activity binding.
-   *Fallback:* **tap-to-assign**.
+1. **Diarization**: **pyannote Community-1** segments the audio into speaker turns
+   (~95% accuracy on `tc1`).
+2. **Overlap split**: **SepFormer** separates overlapping speech so crosstalk is
+   attributed correctly.
+3. **STT**: **faster-whisper** transcribes each segment.
+4. **Merge** → a clean `Speaker N: text` transcript, one entry per utterance.
 
-**Enrollment UX:** "Add me" → record ~5s → store the voiceprint under a name. Then the
-timeline shows real names. A live **calibration slider** re-runs assignment over
-recorded messages at a new threshold (with a confirm modal).
+The server stores each utterance as a **SPOKE `Event`** with a `Speaker N` label
+(`personId`). Speech runs behind a **`Transcriber` protocol**: `StubTranscriber` (a `tc1`
+fixture — the CI default, no torch) and `RealTranscriber` (the vendored pipeline via a
+subprocess, needs `HF_TOKEN`; `SAVEPOINT_TRANSCRIBER=real`).
 
-> Design note: real-time *blind* diarization is inherently unstable (it over-split 2
-> speakers into "Person E" in testing). Enrollment + a stable threshold is the robust
-> path and matches the product (characters = enrolled people).
+> **Identity binding is a separate seam.** Blind diarization gives *anonymous* `Speaker N`
+> labels; tying a speaker to the *right* Person sprite (so a line attaches to the correct
+> character) is still an open mechanic — options: active-speaker (person in frame = current
+> speaker), voice-embedding match to a known Person, or tap-to-assign. Tracked as an open
+> decision (§15). The old ECAPA voice-enrollment + `/label` prototype is **shelved** — this
+> diarization pipeline replaced it.
 
-### Validation tooling
-A **`/label` tool**: upload a video → the pipeline runs offline → you hand-label
-who-speaks-when → it scores predicted-vs-ground-truth (Hungarian-mapped speaker
-attribution accuracy) and exports JSON fixtures.
+### Accuracy tooling
+`pipeline/score.py` (a stdlib-only, CI-safe scorer — SAV-38): scores predicted segments
+vs a ground-truth testcase → **speaker-attribution accuracy + WER + speaker-count**. No
+torch, so it runs in CI; feed it the real pipeline's output to regression-test changes.
 
 ---
 
@@ -165,7 +166,14 @@ color** — and compose a Stardew-style sprite from a layered kit.
   on-device on the Pi.
 - Story: *"we read your face, we don't paint it."*
 
-LLMs (Gemini/Backboard) may write a character's **bio/flavor text**, never render pixels.
+The backend already emits the **6 avatar axes** per Person (`avatarParams`): `skinTone`,
+`hairColor`, `hairStyle`, `glasses`, `hat`, `shirtColor`. The **app-side sprite kit**
+(still to build) composes these into a character by stacking **palette-swappable layered
+parts** (one body + hair shapes + shirt + accessories, each palette-swapped across the
+axis values) — the Mii trick that turns thousands of combinations into a small art set.
+Design of the part atlases is being settled with waterprism.
+
+LLMs (gemma/Gemini/Backboard) may write a character's **bio/flavor text**, never render pixels.
 
 ---
 
@@ -188,34 +196,53 @@ LLMs (Gemini/Backboard) may write a character's **bio/flavor text**, never rende
 people   { _id, localId, name?, avatarParams, voiceEmbedding?, tags[], favorite,
            firstSeen, lastSeen, notes }
 events   { _id, ts, personId, type: "seen" | "spoke", text?, emotion?, place?, dayId }
-days     { _id, date, moodColor?, journalNotes?, plantStage }
+days     { _id, date, moodColor?, journalNotes?, plantStage, plantType? }
 recaps   { _id, date, scope: "day" | "month" | "year", narrative, highlights[] }
 ```
 
 **Flow:** Pi emits an event → server upserts `people` (match by nearest face/voice
-embedding, else new `localId`) → append `events` → at day-end, Gemini/Backboard writes
-a `recap`. Store derived data only; keep embeddings on-device where feasible.
+embedding, else new `localId`) → append `events` → the day's **recap** is generated on
+demand (`POST /day/{date}/recap`, live on gemma). Store derived data only; keep embeddings
+on-device where feasible.
+
+**Notes (current implementation):**
+- `events.personId` currently holds the diarized **`Speaker N`** label, not yet a resolved
+  Person `localId` — see the identity-binding seam in §6.
+- `plantStage` is computed from a day's activity (SAV-54) and now seeds an **auto-suggested
+  plant**; the garden plant is ultimately **user-chosen** (`plantType`, per the frontend
+  redesign) with that suggestion as the default.
+- `recaps` are read via `GET /day/{date}` (composed) and (re)generated via
+  `POST /day/{date}/recap`.
 
 ---
 
 ## 10. Application (SavePoint app) — UI/UX
 
 A **portrait mobile app** (built as a **PWA** so web + phone share one codebase), cozy
-pixel / Stardew aesthetic. A clickable mock already exists.
+pixel / Stardew aesthetic.
 
-### 10.1 Main page — two swipeable pages
-- **Character scene.** The people you interacted with today appear as sprites with a
-  simple **idle bob** (no movement AI). A subtle **💬 badge** marks characters with an
-  **unheard line**. Tapping a character opens the dialogue (below); tapping an
-  away-person shows a *"you haven't talked to them in a while 👋"* status.
+> **Redesign in progress (waterprism, 2026-07-18).** The app is moving to a fuller
+> game-world feel — a living **character plaza**, a **garden calendar**, and a
+> **cinematic Day view**. The layout below reflects that direction; it maps ~1:1 onto the
+> read API and is still being iterated (assets/fonts/colors not final).
+
+### 10.1 Main page — one continuous world, swipe left/right
+The two pages sit in **one horizontally-pannable space** (swipe between them, not tabs):
+- **Character plaza.** Everyone you've met appears as a pixel character that **idle-wanders
+  and does light activities / interacts** with others — a living town, not a static row. A
+  **whistle** control calls them into a tidy line vs. free roam. **Tapping a character**
+  surfaces contextual **notifications** for that person: *"haven't seen them in a while
+  👋"* (from `lastSeen`), a **resurfaced memorable line** from a past chat (from event
+  `text`), or a mini-cutscene — and opens their profile.
   - **Empty / day-one state:** a lovely little companion sprite + *"go say hi to someone 🌱"*.
-- **Calendar (garden).** A grid of **plant tiles, one per day** (today highlighted).
-  Tap a plant → **Day view**. A **"Past months ▾"** popup lists months with summaries.
-  Show the **current month** on this page; history lives in the popup.
+- **Calendar (garden).** A grid of **plant tiles, one per day** (today highlighted). The
+  plant is **user-chosen** to represent the day, with an **auto-suggested** default derived
+  from that day's activity (`plantStage`). Tap a plant → **Day view**; months of history
+  scroll/pan.
 
 **Top nav:** app logo/name + settings. **Bottom nav:** left = **People log**, big center =
-**Today recap** (→ Day view, the daily core loop), right = **Journal/edit** (notes + a
-mood picker that recolors today's plant).
+**Today** (→ Day view, the daily core loop), right = **Journal/edit** (notes + a mood
+picker). A floating **whistle** button drives the plaza's line/roam toggle.
 
 ### 10.2 Dialogue — Undertale style (shared component)
 Used by both the character-tap and the Day-view playback:
@@ -234,26 +261,32 @@ All / Recents / Frequent / Favorites (and tags). Tap a person → Person info.
 Large avatar (tap to **flip** to an optional on-device photo placeholder), summary/notes,
 and a **recent-interactions log** — each row taps through to the Day view.
 
-### 10.5 Day view (one reusable component)
-Reachable from the center nav, any calendar plant, and person-info rows. A **top nav bar**
-+ a **bottom timeline strip with flags** at approximate event times. Tapping a flag — or
-the ◀/▶ buttons — steps through the **dialogue playback** and highlights the active flag.
-Empty days show a graceful "quiet day" state.
-
-*Suggested addition:* a **"read as a list"** toggle so the day is skimmable, not tap-only.
+### 10.5 Day view (one reusable component) — cinematic replay
+Reachable from the center nav, any calendar plant, and person-info rows. Plays the day
+back as a **cutscene**: a **cinematic letterbox** (the black bars) frames the scene, and
+the user's character can **walk into different backdrops / "rooms"** to change scenes. The
+people present that day stand in the scene; a Stardew **dialogue box** shows each utterance
+(`text` + speaker portrait). A **bottom timeline scrubber** (e.g. 8:00AM → 10:30PM, a stone
+slider) scrubs through the day — the present characters + active dialogue line update to
+that moment (backed by event `ts`). A **top-right icon toggles the transcript history**
+(the raw diarized event list). Empty days show a graceful "quiet day" state.
 
 ---
 
 ## 11. Recaps & summaries
-Recaps and character bios go through one LLM interface; the backend is being chosen now
-(`recap.py` is still a placeholder). Candidates:
-- **FreeSolo** — recap + bio generation via their **Flash fine-tuning** (OpenAI-compatible).
-  Being spiked (SAV-51).
-- **Gemini** — natural-language daily recap and "who did I meet / what did we talk
-  about?" Q&A over the day's events.
+Recaps and character bios go through **one pluggable LLM interface** (`LLMClient` in
+`services/llm.py`; `get_llm_client` picks the backend from the `recap_backend` config).
+**Shipped and live on gemma** (M3): `POST /day/{date}/recap` turns a day's events into a
+cozy Stardew-toned `narrative` + 2–4 `highlights`, stored on the Day. Swapping backends is
+one config value:
+- **gemma** (self-hosted, **current default** — verified end-to-end).
+- **Gemini** — natural-language daily recap + "who did I meet / what did we talk about?" Q&A.
 - **Backboard** — multi-model orchestration for character bios + day/month recaps.
-- **gemma** (self-hosted) — a local fallback for recaps/bios.
-- **ElevenLabs** — voice the Undertale-style dialogue playback and/or narrate the daily recap.
+- **FreeSolo** — a **fine-tuned** cozy-recap LoRA via their Flash service. Spike (SAV-51)
+  found Flash is fine-tuning-only (no drop-in base-model API); jiucheng is training an
+  adapter → integrate when deployed (SAV-52). Needs its own client variant (trained
+  adapters reject the `enable_thinking` kwarg gemma requires).
+- **ElevenLabs** — voice the dialogue playback and/or narrate the daily recap.
 - Month/year rollups: garden summaries (mock for the demo).
 
 ---
@@ -264,7 +297,7 @@ Recaps and character bios go through one LLM interface; the backend is being cho
 
 | Track | How we hit it |
 |---|---|
-| **FreeSolo** | Recap + character-bio generation via their **Flash fine-tuning** (OpenAI-compatible). Being spiked — SAV-51. |
+| **FreeSolo** | A **fine-tuned** cozy-recap LoRA via their **Flash** service (spike SAV-51: fine-tuning-only, not a drop-in API). Adapter training underway → integrate on deploy (SAV-52). |
 | **Backboard** | Multi-model orchestration for character bios + day/month recaps. |
 | **ElevenLabs** | Voice the Undertale-style dialogue playback and/or narrate the daily recap. |
 | **MongoDB** | Character roster, event log, day/month aggregates — already the backbone. |
@@ -305,12 +338,14 @@ Submit to every track legitimately satisfied — each is judged independently.
 ---
 
 ## 15. Open decisions
-1. **Recap/bio LLM backend:** FreeSolo (SAV-51 spike) vs. gemma vs. Gemini vs. Backboard —
-   `recap.py` stays a placeholder until this lands.
-2. **USB mic on the Pi vs. phone audio** (recommend Pi mic — dissolves cross-device sync).
-3. **Auto-binding vs. tap-to-assign** as the demo's primary who-said-what.
-4. Confirm workstream owners (Edge/IO · Speech · App · Backend).
-5. Which 2 screens are the hero screens (proposed: Character scene + Day view).
+1. **Recap/bio LLM backend — settled on gemma for now** (implemented, live). Sub-question:
+   invest in the **FreeSolo prize** (adapter training underway) or stay on gemma?
+2. **Speaker → Person binding** (§6): active-speaker (in-frame), voice-embedding match, or
+   tap-to-assign — how a diarized `Speaker N` line attaches to the right character sprite.
+3. **Who builds the redesigned frontend:** waterprism owns design; the dev-agent wires
+   `app/` to the live API (a prototype is being stood up) — confirm ownership split.
+4. **USB mic on the Pi vs. phone audio** (recommend Pi mic — dissolves cross-device sync).
+5. Which screens are the hero screens (proposed: Character plaza + Day view).
 6. **How far to push the optional on-device / Pi hardware polish** given remaining time.
 
 ---
