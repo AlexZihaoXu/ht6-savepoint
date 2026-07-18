@@ -150,6 +150,17 @@ def test_decode_rgba_image_rejects_malformed() -> None:
         raise AssertionError(f"expected PixelLabError for {bad!r}")
 
 
+def test_decode_rgba_image_typed_error_on_bad_fields() -> None:
+    # A non-int width and an undecodable base64 (5 valid chars -> bad length) both surface as
+    # a typed PixelLabError, never a bare ValueError / binascii.Error leaking to the caller.
+    for bad in ({"width": "NaN", "base64": "AAAA"}, {"width": 4, "base64": "AAAAA"}):
+        try:
+            _decode_rgba_image(bad)
+        except PixelLabError:
+            continue
+        raise AssertionError(f"expected PixelLabError for {bad!r}")
+
+
 # --------------------------------------------------------------------------- #
 # generate -> save -> manifest
 # --------------------------------------------------------------------------- #
@@ -178,6 +189,34 @@ async def test_generate_person_sprite_writes_files_and_manifest(tmp_path: Path) 
     # The prompt was built from the avatar and the walk animated the base character.
     assert backend.create_calls == [build_character_description(_AVATAR)]
     assert backend.animate_calls == [("char-1", "east")]
+
+
+# --------------------------------------------------------------------------- #
+# Path-traversal safety: an untrusted local_id must never escape sprites_dir
+# --------------------------------------------------------------------------- #
+
+
+async def test_generate_person_sprite_rejects_traversal_local_id(tmp_path: Path) -> None:
+    backend = FakeBackend()
+    # local_id comes from untrusted ingest payloads (EdgeEvent.local_id / person_key); a value
+    # that contains a separator, is a parent ref, or is absolute must be rejected outright.
+    for bad in ("..", "../evil", "../../etc/passwd", "/abs/evil", "a/b", "foo\x00bar", "."):
+        try:
+            await generate_person_sprite(bad, _AVATAR, client=backend, sprites_dir=tmp_path)
+        except PixelLabError:
+            continue
+        raise AssertionError(f"expected PixelLabError for local_id={bad!r}")
+
+    # Rejected BEFORE any (paid) PixelLab call, and nothing was written anywhere under/around it.
+    assert backend.create_calls == []
+    assert backend.animate_calls == []
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_safe_person_dir_accepts_valid_and_confines(tmp_path: Path) -> None:
+    person_dir = pixellab._safe_person_dir(tmp_path, "demo-alex_1.v2")
+    assert person_dir.parent == tmp_path.resolve()
+    assert person_dir.name == "demo-alex_1.v2"
 
 
 # --------------------------------------------------------------------------- #

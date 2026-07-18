@@ -29,7 +29,9 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import binascii
 import logging
+import re
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -143,8 +145,11 @@ def _decode_rgba_image(item: Any) -> Image.Image:
     """
     if not isinstance(item, dict) or "width" not in item or "base64" not in item:
         raise PixelLabError(f"Malformed PixelLab image payload: {type(item).__name__}")
-    width = int(item["width"])
-    raw = base64.b64decode(item["base64"])
+    try:
+        width = int(item["width"])
+        raw = base64.b64decode(item["base64"])
+    except (ValueError, TypeError, binascii.Error) as exc:
+        raise PixelLabError("PixelLab image payload could not be decoded") from exc
     if width <= 0 or len(raw) % (width * 4) != 0:
         raise PixelLabError("PixelLab image bytes are not a whole RGBA rectangle")
     height = len(raw) // (width * 4)
@@ -285,6 +290,31 @@ class PixelLabClient:
 # Full generate -> save -> manifest flow
 # --------------------------------------------------------------------------- #
 
+# A ``local_id`` safe to use as a single on-disk directory name: no path separators,
+# no ``..``. ``local_id`` originates from untrusted ingest payloads (EdgeEvent.local_id
+# on the public POST /ingest/video, or the /ingest ``person_key``), so it must never be
+# joined into a filesystem path unchecked.
+_SAFE_LOCAL_ID = re.compile(r"[A-Za-z0-9._-]{1,128}")
+
+
+def _safe_person_dir(sprites_dir: str | Path, local_id: str) -> Path:
+    """Return the confined per-person sprite dir, or raise :class:`PixelLabError`.
+
+    Guards against path traversal / arbitrary file writes: a ``local_id`` like ``..`` or
+    ``../../etc`` (or an absolute path, which ``Path.__truediv__`` would let replace the
+    base entirely) must not escape ``sprites_dir``. The charset check rejects separators,
+    the explicit ``..``/`.` check rejects the lone parent/self refs the charset allows, and
+    the resolved-containment check is a final backstop. Raising here is safe: the only
+    callers are the ingest hook (which swallows all exceptions) and the manual CLI.
+    """
+    if not _SAFE_LOCAL_ID.fullmatch(local_id) or local_id in {".", ".."}:
+        raise PixelLabError(f"unsafe local_id for sprite path: {local_id!r}")
+    sprites_root = Path(sprites_dir).resolve()
+    person_dir = (sprites_root / local_id).resolve()
+    if not person_dir.is_relative_to(sprites_root):
+        raise PixelLabError(f"local_id escapes sprites_dir: {local_id!r}")
+    return person_dir
+
 
 async def generate_person_sprite(
     local_id: str,
@@ -300,12 +330,17 @@ async def generate_person_sprite(
     ``{sprites_dir}/{local_id}/`` (``south.png``, ``east.png``, ``west.png``,
     ``north.png``, ``walk_east_0.png`` ...), and returns a :class:`SpriteManifest`
     of relative filenames + the canonical tile size.
+
+    Rejects an unsafe ``local_id`` (path traversal) **before** spending any PixelLab
+    generations, so a malicious id never burns credits.
     """
+    # Validate the destination first — fail fast before any (paid) API call.
+    person_dir = _safe_person_dir(sprites_dir, local_id)
+
     description = build_character_description(avatar_params)
     character = await client.create_character_4dir(description)
     frames = await client.animate_walk(character["character_id"], direction="east")
 
-    person_dir = Path(sprites_dir) / local_id
     person_dir.mkdir(parents=True, exist_ok=True)
 
     images = character["images"]
@@ -338,6 +373,12 @@ async def generate_person_sprite(
 # task mid-run (a documented asyncio footgun). Cleared by each task's done-callback.
 _BACKGROUND_TASKS: set[asyncio.Task[None]] = set()
 
+# Cap concurrent sprite generations: one POST /ingest/video batch of N brand-new people
+# schedules N fire-and-forget jobs at once, and each job is ~3 generations of the small
+# trial budget + a slow (~40-90s) PixelLab call. Draining a couple at a time keeps the
+# event loop and the credit spend sane without blocking ingest.
+_SPRITE_SEMAPHORE = asyncio.Semaphore(2)
+
 
 async def _generate_and_store_sprite(
     person: Person,
@@ -350,18 +391,20 @@ async def _generate_and_store_sprite(
 
     Best-effort and **never raises** — any PixelLab / IO / DB failure is logged and
     swallowed so a background sprite job can never disturb the ingest that spawned
-    it. The Person is re-fetched before the write so a concurrent ``last_seen``
-    refresh isn't clobbered, and a person deleted meanwhile is simply skipped.
+    it. Concurrency is bounded by :data:`_SPRITE_SEMAPHORE`. The Person is re-fetched
+    before the write so a concurrent ``last_seen`` refresh isn't clobbered, and a
+    person deleted meanwhile is simply skipped.
     """
     try:
-        manifest = await generate_person_sprite(
-            person.local_id, person.avatar_params, client=client, sprites_dir=sprites_dir
-        )
-        current = await repos.people.get_by_local_id(person.local_id)
-        if current is None:
-            return
-        await repos.people.upsert(current.model_copy(update={"sprite": manifest}))
-        logger.info("Generated PixelLab sprite for person %s", person.local_id)
+        async with _SPRITE_SEMAPHORE:
+            manifest = await generate_person_sprite(
+                person.local_id, person.avatar_params, client=client, sprites_dir=sprites_dir
+            )
+            current = await repos.people.get_by_local_id(person.local_id)
+            if current is None:
+                return
+            await repos.people.upsert(current.model_copy(update={"sprite": manifest}))
+            logger.info("Generated PixelLab sprite for person %s", person.local_id)
     except Exception:
         logger.exception(
             "PixelLab sprite generation failed for person %s (ignored)", person.local_id
