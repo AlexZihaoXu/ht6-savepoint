@@ -20,6 +20,8 @@ export default defineConfig({
   server: {
     host: "0.0.0.0",
     port: 5173,
+    // Allow cloudflared quick-tunnel hosts so the dev server is shareable for live previews.
+    allowedHosts: [".trycloudflare.com"],
   },
   preview: {
     host: "0.0.0.0",
