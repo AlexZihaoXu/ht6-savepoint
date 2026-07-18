@@ -102,17 +102,67 @@ The Community-1 diarization scores **~95% speaker-attribution accuracy** across 
 clips. Regenerate them with `make_testcases.sh` (needs the 127 MB `test.mp3`, which is
 **not** committed — ask jiucheng).
 
+## Scoring accuracy (`score.py`)
+
+`score.py` scores a **predicted** transcript against a ground-truth `testcases/tc*.json`
+and reports the three metrics we care about. It is **pure standard library** (no torch /
+numpy / jiwer) so CI can run it, and it accepts the same `{audio, turns:[...]}` document
+`align.py` writes (a bare `[...]` turn list works too):
+
+- **`speaker_attribution_accuracy`** — predicted and truth turns are aligned by time
+  overlap; predicted speaker labels are matched to truth labels under the best one-to-one
+  mapping (label names like `"Speaker 1"` are arbitrary, so we permute to find the best
+  fit); the metric is the fraction of *truth speech time* whose truth speaker's mapped
+  predicted speaker is actually active. `speaker_mapping` shows the chosen truth→pred map.
+- **`wer`** — word error rate over the time-ordered concatenated transcripts, from a
+  word-level Levenshtein distance implemented in-repo (with `substitutions` / `deletions` /
+  `insertions` / `word_distance` / `ref_words` / `hyp_words`). Text is lowercased and
+  tokenised (hyphens split, apostrophes kept). WER can exceed 1.0 when the prediction
+  inserts many spurious words.
+- **`pred_speaker_count`** vs **`true_speaker_count`** (+ `speaker_count_correct` /
+  `speaker_count_diff`).
+
+### Full manual accuracy workflow
+
+Produce a prediction with the heavy pipeline, then score it against the matching
+ground-truth fixture (steps 1–2 need `HF_TOKEN` + model downloads and are **not** run in
+CI — run them by hand; step 3 is the CI-safe scorer):
+
+```bash
+# 1) diarize the clip  ->  diar.json
+HF_TOKEN=$HF_TOKEN python diarize.py testcases/tc1_02min.wav -o diar.json   # --device cpu on Linux
+
+# 2) overlap-split + transcribe  ->  pred.json  ({audio, turns:[...]})
+HF_TOKEN=$HF_TOKEN python align.py testcases/tc1_02min.wav --diar diar.json --out pred.json
+
+# 3) score the prediction against ground truth  (pure stdlib — no HF_TOKEN, no models)
+python score.py --pred pred.json --truth testcases/tc1_02min.json
+```
+
+Step 3 prints the metrics dict as JSON. Community-1 diarization already validated at
+**~95% speaker-attribution accuracy** on `tc1` (see above); `score.py` is how you measure
+that number for any prediction. Self-scoring a fixture against itself
+(`--pred tc1_02min.json --truth tc1_02min.json`) is the sanity check: it yields
+`speaker_attribution_accuracy == 1.0` and `wer == 0.0`.
+
 ## CI
 
-`tests/test_testcases.py` is a **cheap, ML-free** check: it loads every
-`testcases/*.json` fixture and asserts the turn schema (`start` / `end` / `speaker` /
-`text`). It imports no torch/pyannote/whisper and needs no `HF_TOKEN` or model
-downloads, so it runs in milliseconds.
+`tests/` holds **cheap, ML-free** checks that import no torch/pyannote/whisper and need no
+`HF_TOKEN` or model downloads, so they run in milliseconds:
+
+- `test_testcases.py` — loads every `testcases/*.json` fixture and asserts the turn schema
+  (`start` / `end` / `speaker` / `text`).
+- `test_score.py` — exercises `score.py` on small canned transcripts (and a real fixture):
+  a perfect prediction is 100% speaker accuracy + 0 WER, a wrong one scores strictly worse,
+  and the speaker-count metric is correct.
 
 ```bash
 uv run pytest        # or: pytest
 uv run ruff check .
 ```
+
+> `ci-pipeline.yml` installs **only ruff + pytest** (no torch/numpy) — keep `score.py` and
+> its test pure standard library so they run there.
 
 ## Files
 
@@ -120,9 +170,10 @@ uv run ruff check .
 |------|------|
 | `diarize.py` | Community-1 diarization → `{start,end,speaker}` segments JSON |
 | `align.py` | overlap-split (SepFormer) + per-speaker faster-whisper → merged turns |
+| `score.py` | pure-stdlib accuracy scorer (speaker attribution + WER + speaker count) |
 | `transcribe.sh` | Mac convenience wrapper (`--device mps`) — **not for Linux/CI** |
 | `make_testcases.sh` | regenerate `testcases/` from `test.mp3` |
 | `requirements.txt` | upstream `.venv` (Community-1) requirement, for reference |
 | `README-upstream.md` | jiucheng's original notes (bilingual) |
 | `testcases/` | ground-truth clips + transcripts + text dumps |
-| `tests/` | cheap CI schema check |
+| `tests/` | cheap CI schema check + `score.py` unit tests |
