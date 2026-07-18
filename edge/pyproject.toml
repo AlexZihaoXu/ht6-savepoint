@@ -11,6 +11,12 @@ dependencies = [
     # picamera2/gpiozero (see README's "Setup on the Pi" section), it needs
     # no apt/system-site-packages workaround.
     "onnxruntime>=1.18",
+    # Used directly by linux_face_detector.py (face alignment/crop) and
+    # scripts/debug_stream.py (JPEG encode). Works today on the Pi purely
+    # because apt's python3-picamera2 happens to pull it in transitively —
+    # declare it explicitly so a clean `uv sync` elsewhere doesn't silently
+    # depend on that coincidence.
+    "pillow>=10.0",
 ]
 
 [project.scripts]

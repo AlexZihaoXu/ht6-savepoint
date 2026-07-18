@@ -9,14 +9,27 @@ from __future__ import annotations
 from savepoint_edge.types import FACE_EMBEDDING_DIM, DetectedFace, Frame
 
 
-def _make_mock_face(fill_value: float, confidence: float) -> DetectedFace:
+def _make_mock_face(x: float, seed: float, confidence: float) -> DetectedFace:
+    # A uniform fill (e.g. [0.11] * N) is a pure scalar multiple of every
+    # other uniform fill, so any two "different" mock people would be
+    # perfectly collinear — and therefore identical under the real
+    # pipeline's cosine-similarity identity matching (identity_gallery.py).
+    # Vary the *pattern* per seed, not just the magnitude, so the synthetic
+    # people stay distinguishable end to end.
+    embedding = [((seed + i * 0.37) % 1.0) - 0.5 for i in range(FACE_EMBEDDING_DIM)]
+    # Position also varies per mock person and is non-overlapping between
+    # them (see the three x slots below) — IdentityGallery resolves by
+    # spatial continuity before embedding similarity (identity_gallery.py),
+    # so mock people sharing one hardcoded bbox would all get merged into a
+    # single tracked identity regardless of how different their embeddings
+    # are.
     return DetectedFace(
-        x=0.3,
+        x=x,
         y=0.2,
-        w=0.4,
-        h=0.5,
+        w=0.2,
+        h=0.4,
         confidence=confidence,
-        embedding=[fill_value] * FACE_EMBEDDING_DIM,
+        embedding=embedding,
     )
 
 
@@ -30,7 +43,10 @@ class SimFaceDetector:
         cycle = self._call_index % 3
         self._call_index += 1
         if cycle == 0:
-            return [_make_mock_face(0.11, 0.94)]
+            return [_make_mock_face(0.05, 0.11, 0.94)]
         if cycle == 1:
-            return [_make_mock_face(0.42, 0.88), _make_mock_face(0.77, 0.81)]
+            return [
+                _make_mock_face(0.4, 0.42, 0.88),
+                _make_mock_face(0.75, 0.77, 0.81),
+            ]
         return []
