@@ -7,10 +7,10 @@ config switch (``SAVEPOINT_TRANSCRIBER=real``); the endpoint code is identical.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Form, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
 from savepoint_server.db import Repositories, get_repositories
@@ -23,6 +23,16 @@ router = APIRouter(prefix="/speech", tags=["speech"])
 def get_repos() -> Repositories:
     """Provide the repository bundle (overridable in tests via dependency_overrides)."""
     return get_repositories()
+
+
+def _parse_iso_date(value: str) -> date:
+    """Parse an ``YYYY-MM-DD`` ``day_id``, 400ing on anything malformed."""
+    try:
+        return date.fromisoformat(value)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400, detail=f"Invalid day_id '{value}'; expected ISO YYYY-MM-DD."
+        ) from exc
 
 
 class TranscribeResponse(BaseModel):
@@ -43,8 +53,9 @@ async def transcribe(
     day_id: Annotated[str | None, Form(description="ISO day bucket; defaults to today.")] = None,
 ) -> TranscribeResponse:
     """Transcribe an uploaded recording and persist each segment as an Event."""
-    audio = await file.read()
     resolved_day = day_id or datetime.now(UTC).date().isoformat()
+    _parse_iso_date(resolved_day)  # validate so a bad day_id is a 400, not a 500
+    audio = await file.read()
     events = await transcribe_and_store(audio, day_id=resolved_day, repos=repos)
     return TranscribeResponse(
         day_id=resolved_day,

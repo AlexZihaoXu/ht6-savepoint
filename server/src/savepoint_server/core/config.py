@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     # --- LLM recap/bio backends (DESIGN §11) ---
     # Self-hosted Gemma OpenAI-compatible endpoint (Alex's box). When calling it,
     # pass chat_template_kwargs {"enable_thinking": false} or content comes back empty.
+    # NOTE: this default is a placeholder — point SAVEPOINT_GEMMA_BASE_URL at a REAL LLM
+    # host (the default :8000 collides with the API's own port and won't serve chats). If
+    # it's unreachable the recap endpoint degrades gracefully to a canned recap, not a 500.
     gemma_base_url: str = "http://127.0.0.1:8000/v1"
     # Bearer token for the Gemma endpoint (env SAVEPOINT_GEMMA_API_KEY); None = no auth.
     gemma_api_key: str | None = None
