@@ -37,9 +37,7 @@ class FaceAnalysis(BaseModel):
     face_box: tuple[int, int, int, int] = Field(
         description="Face bounding box (x, y, w, h); whole image on fallback."
     )
-    skin_rgb: tuple[int, int, int] = Field(
-        description="Median RGB of the central face region."
-    )
+    skin_rgb: tuple[int, int, int] = Field(description="Median RGB of the central face region.")
     hair_rgb: tuple[int, int, int] = Field(
         description="Median RGB of the top hair strip of the box."
     )

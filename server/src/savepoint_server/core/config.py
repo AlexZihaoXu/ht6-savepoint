@@ -8,6 +8,7 @@ them in the environment.
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -39,6 +40,20 @@ class Settings(BaseSettings):
     gemma_base_url: str = "http://127.0.0.1:8000/v1"
     gemini_api_key: str | None = None
     backboard_api_key: str | None = None
+
+    # --- Speech pipeline (SAV-32) ---
+    # Which transcriber the speech service uses. "stub" (default) is CI-safe and
+    # needs no torch; "real" shells out to jiucheng's vendored pipeline.
+    transcriber: Literal["stub", "real"] = "stub"
+    # RealTranscriber only — where the heavy pipeline + its two venvs live
+    # (OUTSIDE the repo). Never touched by the default stub or in CI.
+    speech_pipeline_dir: str = "/home/agent/two-speaker-demo"
+    # Interpreters for each stage; default to the venvs under speech_pipeline_dir.
+    speech_diarize_python: str | None = None  # default: <dir>/.venv/bin/python
+    speech_align_python: str | None = None  # default: <dir>/.venv-stream/bin/python
+    speech_whisper_model: str = "small.en"
+    # Hugging Face token for the gated pyannote models (RealTranscriber only).
+    hf_token: str | None = None
 
 
 @lru_cache(maxsize=1)
