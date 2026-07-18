@@ -39,28 +39,16 @@
   image-rendering: pixelated;
 }
 
+/* One continuous ground across a horizontally swiped world (plaza↔garden):
+   the pattern rides the scroll CONTENT (`local`), so it covers the whole
+   scrollable strip and never restarts at the panel seam. */
+.grass-scroll {
+  background-attachment: local;
+}
+
 /* Night mode: dim the pixel scene instead of recoloring the art. */
 .dark .scene-dimmable {
   filter: brightness(0.78) saturate(0.9);
-}
-
-/* Subtle cinematic vignette on the day-scene stage: darkens the corners of
-   the scene art only (above the backdrop props, below the z-10 status text —
-   and the dialogue box / scrubber / transcript live outside this container
-   entirely). A fixed dark glaze reads fine on both themes; dark mode's
-   scene dim simply stacks beneath it. */
-.scene-vignette::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 5;
-  pointer-events: none;
-  background: radial-gradient(
-    ellipse at center,
-    transparent 55%,
-    rgba(0, 0, 0, 0.14) 78%,
-    rgba(0, 0, 0, 0.38) 100%
-  );
 }
 
 /* ---- chrome -------------------------------------------------------------- */
@@ -253,6 +241,44 @@
   }
   50% {
     transform: translateY(-3px);
+  }
+}
+
+/* ---- swipe affordance ---------------------------------------------------- */
+
+/* Subtle tap-target for users who don't realize the plaza↔garden world
+   swipes: an ink-glass square with a cream pixel border, riding mid-edge.
+   The caret inside nudges toward the neighboring panel. */
+.swipe-arrow {
+  color: #fff;
+  background: rgba(34, 32, 51, 0.32);
+  border: 2px solid rgba(247, 236, 215, 0.65);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.28);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .swipe-nudge-r {
+    animation: swipe-nudge-r 2.2s ease-in-out infinite;
+  }
+  .swipe-nudge-l {
+    animation: swipe-nudge-l 2.2s ease-in-out infinite;
+  }
+}
+@keyframes swipe-nudge-r {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(3px);
+  }
+}
+@keyframes swipe-nudge-l {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(-3px);
   }
 }
 

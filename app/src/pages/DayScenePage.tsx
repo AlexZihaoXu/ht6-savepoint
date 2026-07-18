@@ -136,9 +136,10 @@ export function DayScenePage() {
       <PixelHeader />
 
       <div className="relative flex min-h-0 flex-1 flex-col">
-        {/* top letterbox bar */}
-        <div className="relative h-14 flex-none">
-          <span className="font-pixel absolute top-3 left-3 text-[9px] text-white/50">
+        {/* chrome row floating over the top letterbox — date + transcript
+            toggle (absolute so it doesn't skew the centered film frame) */}
+        <div className="absolute inset-x-0 top-0 z-20 flex h-11 items-center justify-between pr-2 pl-3">
+          <span className="font-pixel text-[9px] text-white/50">
             {isToday
               ? "Today"
               : /^\d{4}-\d{2}-\d{2}$/.test(dateLabel)
@@ -152,20 +153,24 @@ export function DayScenePage() {
             type="button"
             aria-label="Transcript history"
             aria-expanded={showTranscript}
-            className="touch-target absolute top-1.5 right-2 flex items-center justify-center text-white/90"
+            className="touch-target flex items-center justify-center text-white/90"
             onClick={() => setShowTranscript((v) => !v)}
           >
             <Icon icon={PiScroll} size={24} />
           </button>
         </div>
 
-        {/* the scene */}
-        <div className="grass-bg scene-dimmable scene-vignette relative isolate [height:36%] flex-none overflow-hidden">
+        {/* top letterbox bar — pairs with the bottom one so the stage +
+            dialogue band sits vertically centered, like a film frame */}
+        <div className="min-h-0 flex-1" />
+
+        {/* the scene — a tight cinematic band rather than a tall window */}
+        <div className="grass-bg scene-dimmable relative isolate h-[clamp(170px,29svh,250px)] flex-none overflow-hidden">
           <FenceRow className="absolute top-1 left-0 w-full" />
           <Tree className="absolute -top-1 -left-2 h-16 w-auto" />
           <Tree className="absolute -top-2 right-0 h-16 w-auto" />
 
-          <div className="dirt-plot absolute inset-x-[5%] top-[18%] bottom-[6%]">
+          <div className="dirt-plot absolute inset-x-[5%] top-[18%] bottom-[8%]">
             {error && (
               <p className="pixel-name font-pixel absolute inset-x-4 top-1/3 z-10 text-center text-[10px] leading-5">
                 Backend asleep… is the API up?
@@ -238,7 +243,7 @@ export function DayScenePage() {
           )}
         </div>
 
-        {/* bottom letterbox */}
+        {/* bottom letterbox bar */}
         <div className="min-h-0 flex-1" />
 
         {/* timeline scrubber */}

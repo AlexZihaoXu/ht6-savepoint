@@ -25,18 +25,23 @@ export function PixelHeader() {
       <Link
         to="/plaza"
         aria-label="Savepoint — plaza"
-        className="relative px-2 py-1"
+        className="relative flex items-center justify-center px-2.5 py-2"
       >
-        {/* corner brackets, per the mockup logotype */}
+        {/* corner brackets, per the mockup logotype — pinned to the box
+            corners so the logotype sits dead-center between them */}
         <span
           aria-hidden
-          className="absolute -top-0.5 left-0 h-2.5 w-2.5 border-t-2 border-l-2 border-[#f7ecd7]"
+          className="absolute top-0 left-0 h-2.5 w-2.5 border-t-2 border-l-2 border-[#f7ecd7]"
         />
         <span
           aria-hidden
-          className="absolute right-0 -bottom-0.5 h-2.5 w-2.5 border-r-2 border-b-2 border-[#f7ecd7]"
+          className="absolute right-0 bottom-0 h-2.5 w-2.5 border-r-2 border-b-2 border-[#f7ecd7]"
         />
-        <span className="font-pixel text-[15px] leading-none">Savepoint</span>
+        {/* 1px optical lift — Press Start 2P carries its descender space
+            below the baseline, which reads as sitting low in the frame */}
+        <span className="font-pixel -translate-y-[1px] text-[15px] leading-none">
+          Savepoint
+        </span>
       </Link>
 
       <button

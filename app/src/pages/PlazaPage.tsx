@@ -94,10 +94,13 @@ export function PlazaPage() {
       <PixelHeader />
 
       <div className="relative min-h-0 flex-1">
+        {/* the ground lives on the SCROLLER (background-attachment: local via
+            .grass-scroll), so plaza + garden share one continuous grass
+            surface — the tile pattern never restarts at the swipe seam */}
         <div
           ref={scrollerRef}
           onScroll={onScroll}
-          className="no-scrollbar flex h-full snap-x snap-mandatory overflow-x-auto overflow-y-hidden"
+          className="grass-bg grass-scroll scene-dimmable no-scrollbar flex h-full snap-x snap-mandatory overflow-x-auto overflow-y-hidden"
         >
           <PlazaPanel
             people={people}
@@ -134,6 +137,33 @@ export function PlazaPage() {
             </span>
           </button>
         </div>
+
+        {/* swipe affordance — tap-to-move for anyone who doesn't realize the
+            world swipes (the arrow points at the neighboring panel; swiping
+            is untouched) */}
+        {view === 0 ? (
+          <button
+            type="button"
+            aria-label="Go to the garden"
+            className="swipe-arrow absolute top-1/2 right-1 z-20 flex h-12 w-9 -translate-y-1/2 cursor-pointer items-center justify-center"
+            onClick={() => gotoPanel(1)}
+          >
+            <span className="swipe-nudge-r flex">
+              <Icon icon={PiCaretRight} size={24} />
+            </span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            aria-label="Back to the plaza"
+            className="swipe-arrow absolute top-1/2 left-1 z-20 flex h-12 w-9 -translate-y-1/2 cursor-pointer items-center justify-center"
+            onClick={() => gotoPanel(0)}
+          >
+            <span className="swipe-nudge-l flex">
+              <Icon icon={PiCaretLeft} size={24} />
+            </span>
+          </button>
+        )}
 
         {/* swipe indicator */}
         <div
@@ -340,7 +370,7 @@ function PlazaPanel({
     <section
       aria-label="Plaza — everyone you have met"
       inert={!active}
-      className="grass-bg scene-dimmable relative isolate h-full w-full shrink-0 snap-start overflow-hidden"
+      className="relative isolate h-full w-full shrink-0 snap-start overflow-hidden"
       onClick={() => setSelected(null)}
     >
       {/* scenery ring around the plot */}
@@ -349,9 +379,11 @@ function PlazaPanel({
       <Tree className="absolute -top-2 right-4 h-24 w-auto" />
       <Pine className="absolute right-[-14px] bottom-[10%] h-24 w-auto" />
       <Tree className="absolute bottom-[2%] left-2 h-20 w-auto" />
-      <Rock className="absolute top-[42%] right-1 h-8 w-auto" />
+      <Rock className="absolute top-[42%] right-2 h-8 w-auto" />
       <Rock small className="absolute right-[30%] bottom-[7%] h-7 w-auto" />
-      <FenceRow className="absolute bottom-[3%] left-0 w-[55%]" />
+      {/* 8 whole 24px fence tiles + 18px so the run ENDS on a post — a
+          percent width cut the last tile mid-rail */}
+      <FenceRow className="absolute bottom-[3%] left-0 w-[210px]" />
       <Lamp className="absolute bottom-[2.5%] left-[58%] h-20 w-auto" />
       <Log className="absolute top-[6%] left-[44%] h-[22px] w-auto" />
       <GroundFlower
@@ -495,7 +527,7 @@ function GardenPanel({
     <section
       aria-label="Garden — your days as plants"
       inert={!active}
-      className="grass-bg scene-dimmable relative isolate h-full w-full shrink-0 snap-start overflow-hidden"
+      className="relative isolate h-full w-full shrink-0 snap-start overflow-hidden"
       onClick={() => setSelected(null)}
     >
       <FenceRow className="absolute top-2 left-0 w-full" />
