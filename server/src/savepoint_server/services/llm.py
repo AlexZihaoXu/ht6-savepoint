@@ -91,7 +91,11 @@ def get_llm_client(settings: Settings | None = None) -> LLMClient:
     settings = settings or get_settings()
     backend = settings.recap_backend
     if backend == "gemma":
-        return GemmaClient(base_url=settings.gemma_base_url, api_key=settings.gemma_api_key)
+        return GemmaClient(
+            base_url=settings.gemma_base_url,
+            api_key=settings.gemma_api_key,
+            model=settings.gemma_model,
+        )
     raise NotImplementedError(
         f"recap_backend={backend!r} is not wired yet — only 'gemma' is implemented. "
         "Gemini / Backboard / FreeSolo land in SAV-51/52; they are OpenAI-compatible, "
