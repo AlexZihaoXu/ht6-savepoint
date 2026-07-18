@@ -25,7 +25,14 @@ from datetime import UTC, date, datetime
 from pydantic import BaseModel, ConfigDict
 
 from savepoint_server.db.repositories import Repositories
-from savepoint_server.models import Day, DaySummary, Event, Person, SpriteParams
+from savepoint_server.models import (
+    Day,
+    DaySummary,
+    Event,
+    Person,
+    SpriteParams,
+    compute_plant_stage,
+)
 from savepoint_server.models.person import AvatarParams
 from savepoint_server.services.speech import AudioInput, Transcriber, transcribe_and_store
 from savepoint_server.services.vision import frame_to_sprite_params
@@ -148,16 +155,18 @@ async def ingest_day(
         audio, day_id=resolved_day, repos=repos, transcriber=transcriber
     )
 
-    # 3. Day: upsert (by date) with a small tally of the day's people/events.
+    # 3. Day: upsert (by date) with a small tally of the day's people/events and the
+    #    garden-plant growth stage derived from that activity.
     day_events = await repos.events.list_for_day(resolved_day)
     people_ids = {e.person_id for e in day_events} | {person.local_id}
     summary = DaySummary(people=len(people_ids), events=len(day_events))
+    plant_stage = compute_plant_stage(events=summary.events, people=summary.people)
 
     existing_day = await repos.days.get_by_date(day_date)
     if existing_day is not None:
-        day_doc = existing_day.model_copy(update={"summary": summary})
+        day_doc = existing_day.model_copy(update={"summary": summary, "plant_stage": plant_stage})
     else:
-        day_doc = Day(date=day_date, summary=summary)
+        day_doc = Day(date=day_date, summary=summary, plant_stage=plant_stage)
     day = await repos.days.upsert(day_doc)
 
     return IngestResult(person=person, sprite=sprite, events=events, day=day)

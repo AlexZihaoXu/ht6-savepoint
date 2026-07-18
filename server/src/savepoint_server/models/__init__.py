@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from savepoint_server.models.base import MongoModel
-from savepoint_server.models.day import Day, DaySummary
+from savepoint_server.models.day import MAX_PLANT_STAGE, Day, DaySummary, compute_plant_stage
 from savepoint_server.models.event import Event, EventType
 from savepoint_server.models.person import AvatarParams, Person
 from savepoint_server.models.recap import Recap, RecapScope
@@ -12,6 +12,7 @@ from savepoint_server.models.transcript import Transcript, TranscriptSegment
 from savepoint_server.models.views import DayView, PersonDetail
 
 __all__ = [
+    "MAX_PLANT_STAGE",
     "AvatarParams",
     "Day",
     "DaySummary",
@@ -20,6 +21,7 @@ __all__ = [
     "EventType",
     "FaceAnalysis",
     "MongoModel",
+    "compute_plant_stage",
     "Person",
     "PersonDetail",
     "Recap",
