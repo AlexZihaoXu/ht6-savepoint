@@ -9,16 +9,19 @@ from savepoint_server.models.person import AvatarParams, Person
 from savepoint_server.models.recap import Recap, RecapScope
 from savepoint_server.models.sprite import FaceAnalysis, SpriteParams
 from savepoint_server.models.transcript import Transcript, TranscriptSegment
+from savepoint_server.models.views import DayView, PersonDetail
 
 __all__ = [
     "AvatarParams",
     "Day",
     "DaySummary",
+    "DayView",
     "Event",
     "EventType",
     "FaceAnalysis",
     "MongoModel",
     "Person",
+    "PersonDetail",
     "Recap",
     "RecapScope",
     "SpriteParams",
