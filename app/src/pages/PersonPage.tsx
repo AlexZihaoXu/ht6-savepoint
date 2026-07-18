@@ -9,7 +9,7 @@ import {
 } from "react-icons/pi";
 import { Icon } from "@/components/Icon";
 import { PixelBottomNav, PixelHeader } from "@/components/PixelChrome";
-import { ParametricSprite } from "@/lib/sprite";
+import { PixelSprite } from "@/lib/pixel-sprite";
 import { api, ApiError, displayName, type ApiPersonDetail } from "@/lib/api";
 import { formatClock, relativeSeen } from "@/lib/scene-utils";
 
@@ -137,7 +137,12 @@ export function PersonPage() {
 
         <div className="flex items-center gap-4">
           <span className="sprite-bob">
-            <ParametricSprite params={person.avatar_params} size={84} />
+            <PixelSprite
+              localId={person.local_id}
+              sprite={person.sprite}
+              params={person.avatar_params}
+              size={84}
+            />
           </span>
           <div className="min-w-0">
             <h1

@@ -25,6 +25,7 @@ function person(over: Partial<ApiPerson> & { local_id: string }): ApiPerson {
     last_seen: null,
     notes: null,
     bio: null,
+    sprite: null,
     ...over,
   };
 }

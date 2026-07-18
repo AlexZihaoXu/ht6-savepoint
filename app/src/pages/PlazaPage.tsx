@@ -14,7 +14,7 @@ import { PiCaretLeft, PiCaretRight } from "react-icons/pi";
 import { Icon } from "@/components/Icon";
 import { MicCapture } from "@/components/MicCapture";
 import { PixelBottomNav, PixelHeader } from "@/components/PixelChrome";
-import { ParametricSprite } from "@/lib/sprite";
+import { PixelSprite } from "@/lib/pixel-sprite";
 import { api, displayName, type ApiDay, type ApiPerson } from "@/lib/api";
 import {
   addMonth,
@@ -220,6 +220,20 @@ function seededRng(seed: string): Rng {
 const ACTOR_TRANSITION =
   "left 0.9s cubic-bezier(0.4, 0, 0.2, 1), top 0.9s cubic-bezier(0.4, 0, 0.2, 1)";
 
+/**
+ * The sprite-facing animation inputs the wander sim feeds PixelSprite.
+ * Position/gait stay imperative (per-frame style writes); facing + walking
+ * flip rarely, so THOSE go through React state — the walk-frame cycling
+ * then lives inside PixelSprite.
+ */
+interface ActorAnim {
+  facing: 1 | -1;
+  moving: boolean;
+}
+
+/** Below this speed (px/s) a wanderer reads as standing (→ south idle). */
+const WALK_EPS = 1;
+
 function PlazaPanel({
   people,
   error,
@@ -242,6 +256,9 @@ function PlazaPanel({
   const actorEls = useRef(new Map<string, HTMLDivElement>());
   const spriteEls = useRef(new Map<string, HTMLSpanElement>());
   const simRef = useRef<Wanderer[]>([]);
+  // facing/walking per actor — only transitions re-render (see ActorAnim).
+  const [anim, setAnim] = useState<Record<string, ActorAnim>>({});
+  const animRef = useRef<Record<string, ActorAnim>>({});
 
   const placed = useMemo(() => {
     // Curated scatter spots (plot %), so any crowd up to 12 reads evenly
@@ -321,11 +338,39 @@ function PlazaPanel({
       const sp = spriteEls.current.get(s.id);
       if (sp) {
         if (moving) {
+          // Facing-flips live inside PixelSprite (React-driven) — the
+          // per-frame write handles only the hop, so they never fight.
           const { dy, tilt } = gaitOffset(s);
-          sp.style.transform = `translateY(${dy}px) rotate(${tilt}deg) scaleX(${s.facing})`;
+          sp.style.transform = `translateY(${dy}px) rotate(${tilt}deg)`;
         } else {
           sp.style.transform = "";
         }
+      }
+    };
+
+    // Publish facing/walking to React only when someone's state actually
+    // flips — PixelSprite swaps south↔walk frames and mirrors from these.
+    const syncAnim = (freeRoam: boolean) => {
+      const prev = animRef.current;
+      let dirty = Object.keys(prev).length !== sim.length;
+      const next: Record<string, ActorAnim> = {};
+      for (const s of sim) {
+        const moving =
+          freeRoam && !s.frozen && s.idleFor <= 0 && s.speed > WALK_EPS;
+        // Static layouts (whistle line / reduced-motion) face everyone
+        // forward, matching the old un-flipped standing pose.
+        const facing = freeRoam ? s.facing : 1;
+        const cur = prev[s.id];
+        if (cur && cur.facing === facing && cur.moving === moving) {
+          next[s.id] = cur;
+        } else {
+          next[s.id] = { facing, moving };
+          dirty = true;
+        }
+      }
+      if (dirty) {
+        animRef.current = next;
+        setAnim(next);
       }
     };
 
@@ -359,6 +404,7 @@ function PlazaPanel({
         last = now;
         stepWanderers(sim, dt, { w, h });
         for (const s of sim) paint(s, true);
+        syncAnim(true);
         raf = requestAnimationFrame(tick);
       };
       raf = requestAnimationFrame(tick);
@@ -366,6 +412,7 @@ function PlazaPanel({
       // Whistle line (CSS-transitioned) or reduced-motion scatter (instant).
       setTransition(lined && !reduce ? ACTOR_TRANSITION : "none");
       placeStatic();
+      syncAnim(false);
     }
 
     // Observe in EVERY mode: resize/rotate rescales the sim positions, and
@@ -487,7 +534,14 @@ function PlazaPanel({
                   }}
                   className="sp-flip block"
                 >
-                  <ParametricSprite params={p.avatar_params} size={60} />
+                  <PixelSprite
+                    localId={p.local_id}
+                    sprite={p.sprite}
+                    params={p.avatar_params}
+                    size={60}
+                    facing={anim[p.local_id]?.facing ?? 1}
+                    moving={anim[p.local_id]?.moving ?? false}
+                  />
                 </span>
               </button>
               {isSel && selected && (

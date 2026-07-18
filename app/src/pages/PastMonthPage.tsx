@@ -16,7 +16,7 @@ import {
 } from "react-icons/pi";
 import { Icon } from "@/components/Icon";
 import { PixelBottomNav, PixelHeader } from "@/components/PixelChrome";
-import { ParametricSprite } from "@/lib/sprite";
+import { PixelSprite } from "@/lib/pixel-sprite";
 import {
   api,
   ApiError,
@@ -243,7 +243,9 @@ function PodiumSpot({
           className="mb-0.5 text-xl text-[#d8b757] drop-shadow-[0_1px_0_rgba(0,0,0,0.35)]"
         />
       )}
-      <ParametricSprite
+      <PixelSprite
+        localId={entry.person.local_id}
+        sprite={entry.person.sprite}
         params={entry.person.avatar_params}
         size={first ? 72 : 52}
       />
@@ -303,7 +305,9 @@ function Podium({ top }: { top: ApiMonthTopPerson[] }) {
                 } together`}
                 className="flex w-16 flex-col items-center"
               >
-                <ParametricSprite
+                <PixelSprite
+                  localId={entry.person.local_id}
+                  sprite={entry.person.sprite}
                   params={entry.person.avatar_params}
                   size={40}
                 />

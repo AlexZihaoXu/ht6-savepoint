@@ -23,6 +23,18 @@ export interface AvatarParams {
   shirt_color: string;
 }
 
+/**
+ * A person's generated PixelLab sprite sheet (SAV-61). Filenames are relative
+ * to `/sprites/{local_id}/` — resolve them with `spriteUrl`. Tiles are square
+ * transparent pixel-art PNGs (92×92 today); `walk.east` is the side-facing
+ * walk cycle (left = the same frames mirrored).
+ */
+export interface SpriteManifest {
+  tile: { w: number; h: number };
+  static: { south: string; east: string; west: string; north: string };
+  walk: { east: string[] };
+}
+
 export interface ApiPerson {
   local_id: string;
   name: string | null;
@@ -34,6 +46,13 @@ export interface ApiPerson {
   notes: string | null;
   /** Warm 1–2 sentence generated character bio (null until the backend writes one). */
   bio: string | null;
+  /** PixelLab sheet manifest — null until this person's sprites generate. */
+  sprite: SpriteManifest | null;
+}
+
+/** Absolute URL of one sprite-sheet file named by a `SpriteManifest`. */
+export function spriteUrl(localId: string, filename: string): string {
+  return `${API_BASE}/sprites/${encodeURIComponent(localId)}/${encodeURIComponent(filename)}`;
 }
 
 export interface ApiEvent {

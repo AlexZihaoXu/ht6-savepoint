@@ -9,7 +9,7 @@ import {
 } from "react-icons/pi";
 import { Icon } from "@/components/Icon";
 import { PixelBottomNav, PixelHeader } from "@/components/PixelChrome";
-import { ParametricSprite } from "@/lib/sprite";
+import { PixelSprite } from "@/lib/pixel-sprite";
 import { api, displayName, type ApiPerson } from "@/lib/api";
 import {
   filterPeople,
@@ -181,7 +181,12 @@ function ContactRow({ person: p }: { person: ApiPerson }) {
         aria-label={`Open ${displayName(p)}`}
         className="flex items-center gap-3 px-4 py-2 transition-colors active:bg-[var(--surface-tertiary)]"
       >
-        <ParametricSprite params={p.avatar_params} size={40} />
+        <PixelSprite
+          localId={p.local_id}
+          sprite={p.sprite}
+          params={p.avatar_params}
+          size={40}
+        />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             <span className="truncate font-medium">{displayName(p)}</span>
