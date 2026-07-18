@@ -1,0 +1,89 @@
+{
+  "audio": "testcases/tc2_10min.wav",
+  "turns": [
+    {
+      "start": 0.0,
+      "end": 4.16,
+      "speaker": "Speaker 1",
+      "text": "There was probably a five-year phase where we didn't do that very much.",
+      "overlap": false
+    },
+    {
+      "start": 4.05,
+      "end": 5.05,
+      "speaker": "Speaker 2",
+      "text": "But-",
+      "overlap": true
+    },
+    {
+      "start": 5.46,
+      "end": 8.0,
+      "speaker": "Speaker 1",
+      "text": "Uh, funnily enough, even when we first got married,",
+      "overlap": false
+    },
+    {
+      "start": 9.18,
+      "end": 14.66,
+      "speaker": "Speaker 1",
+      "text": "we... And you're into this too, I don't know where she got this. Maybe it's infectious.",
+      "overlap": false
+    },
+    {
+      "start": 15.0,
+      "end": 16.4,
+      "speaker": "Speaker 2",
+      "text": "We caught tadpoles as kids.",
+      "overlap": false
+    },
+    {
+      "start": 16.32,
+      "end": 29.04,
+      "speaker": "Speaker 1",
+      "text": "So we would catch tadpoles as a married couple. We'd go down to the pond and scoop in and get some mucky-gucky tadpoles and watch them change into frogs. It's the miracle of life.",
+      "overlap": true
+    },
+    {
+      "start": 18.75,
+      "end": 19.57,
+      "speaker": "Speaker 2",
+      "text": "As just a-",
+      "overlap": true
+    },
+    {
+      "start": 21.07,
+      "end": 21.45,
+      "speaker": "Speaker 2",
+      "text": "Yeah.",
+      "overlap": true
+    },
+    {
+      "start": 29.12,
+      "end": 31.94,
+      "speaker": "Speaker 2",
+      "text": "You know what? I have a distinct memory on our honeymoon.",
+      "overlap": false
+    },
+    {
+      "start": 33.62,
+      "end": 59.08,
+      "speaker": "Speaker 2",
+      "text": "We were taking a hike and you saw this. I think this was the first time I'd ever caught critters with you because I don't know, maybe when we were- She didn't- Maybe when we were dating, we just weren't in those situations. But I remember we were on a hike and you were like in a stream picking up rocks and you were so excited because this is a good salamander spot. There might be salamanders. And then you found one and I was so impressed.",
+      "overlap": true
+    },
+    {
+      "start": 40.09,
+      "end": 40.45,
+      "speaker": "Speaker 1",
+      "text": "Oh,",
+      "overlap": false
+    },
+    {
+      "start": 42.46,
+      "end": 43.92,
+      "speaker": "Speaker 1",
+      "text": "I didn't know what she was signing up for.",
+      "overlap": true
+    }
+  ]
+}

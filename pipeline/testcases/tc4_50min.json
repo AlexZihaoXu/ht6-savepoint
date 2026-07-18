@@ -1,0 +1,68 @@
+{
+  "audio": "testcases/tc4_50min.wav",
+  "turns": [
+    {
+      "start": 0.0,
+      "end": 8.66,
+      "speaker": "Speaker 1",
+      "text": "Brad's my brother-in-law he said do you think Vanessa would ever do this with you and I was like hmm I don't think I can't imagine you wanting to do that",
+      "overlap": true
+    },
+    {
+      "start": 9.42,
+      "end": 31.52,
+      "speaker": "Speaker 2",
+      "text": "Heights like that and I feel like I Can't just do something like that like you I would need to go to the climbing gym and feel Comfortable with it because at least for me that takes a lot of upper body strength like your abs your arms your fingers and I think",
+      "overlap": true
+    },
+    {
+      "start": 21.32,
+      "end": 21.72,
+      "speaker": "Speaker 1",
+      "text": "train",
+      "overlap": false
+    },
+    {
+      "start": 32.68,
+      "end": 41.96,
+      "speaker": "Speaker 2",
+      "text": "Maybe for you like you were able to make it to the top of the easier one and halfway up or a third of the way up the other ones because",
+      "overlap": true
+    },
+    {
+      "start": 40.21,
+      "end": 42.49,
+      "speaker": "Speaker 1",
+      "text": "net yes",
+      "overlap": true
+    },
+    {
+      "start": 43.08,
+      "end": 57.6,
+      "speaker": "Speaker 2",
+      "text": "like You're not afraid of heights and your strength is distributed differently than mine But I think for something like that. I would need to Massively feel more comfortable with heights and like go to the gym in advance",
+      "overlap": true
+    },
+    {
+      "start": 49.34,
+      "end": 50.0,
+      "speaker": "Speaker 1",
+      "text": "a",
+      "overlap": false
+    },
+    {
+      "start": 57.26,
+      "end": 59.22,
+      "speaker": "Speaker 1",
+      "text": "girl who is with us was the best one there",
+      "overlap": true
+    },
+    {
+      "start": 59.3,
+      "end": 59.86,
+      "speaker": "Speaker 2",
+      "text": "Yeah",
+      "overlap": false
+    }
+  ]
+}

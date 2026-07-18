@@ -1,0 +1,96 @@
+{
+  "audio": "testcases/tc5_80min.wav",
+  "turns": [
+    {
+      "start": 0.0,
+      "end": 6.68,
+      "speaker": "Speaker 1",
+      "text": "go back in time or would she come to current time in this hypothetical universe so",
+      "overlap": false
+    },
+    {
+      "start": 3.28,
+      "end": 3.7,
+      "speaker": "Speaker 2",
+      "text": "um",
+      "overlap": false
+    },
+    {
+      "start": 5.56,
+      "end": 8.84,
+      "speaker": "Speaker 2",
+      "text": "she would come to current times",
+      "overlap": false
+    },
+    {
+      "start": 9.14,
+      "end": 11.58,
+      "speaker": "Speaker 1",
+      "text": "you want to show her the future okay",
+      "overlap": false
+    },
+    {
+      "start": 10.32,
+      "end": 29.72,
+      "speaker": "Speaker 2",
+      "text": "i wouldn't show her anything i would just be eating dinner with her and she would have her entire life experience so i don't want her to be like 90 years old when she can't remember things but i want her to be 30 years old and she hasn't had a lot of experiences yet so this is a magical question but i mean i don't know we",
+      "overlap": true
+    },
+    {
+      "start": 16.26,
+      "end": 17.56,
+      "speaker": "Speaker 1",
+      "text": "so maybe it",
+      "overlap": true
+    },
+    {
+      "start": 20.98,
+      "end": 22.3,
+      "speaker": "Speaker 1",
+      "text": "doesn't so",
+      "overlap": true
+    },
+    {
+      "start": 26.49,
+      "end": 29.59,
+      "speaker": "Speaker 1",
+      "text": "60 that's pretty fun how long does she live",
+      "overlap": true
+    },
+    {
+      "start": 31.09,
+      "end": 59.97,
+      "speaker": "Speaker 2",
+      "text": "met her i'm there's a picture of me on her lap as a baby so she lived at least till like 1987 1988 i don't know how old she was but i'm sure she was sure you had a lot of life experiences and i'm always curious about what life was like back then and i think it would be kind of a personal touch this was someone who is part of me and some kind of roots that's my answer so i'm curious for you if you had a",
+      "overlap": true
+    },
+    {
+      "start": 31.77,
+      "end": 32.91,
+      "speaker": "Speaker 1",
+      "text": "when I'm",
+      "overlap": true
+    },
+    {
+      "start": 35.5,
+      "end": 37.0,
+      "speaker": "Speaker 1",
+      "text": "probably",
+      "overlap": false
+    },
+    {
+      "start": 43.69,
+      "end": 44.35,
+      "speaker": "Speaker 1",
+      "text": "pretty old",
+      "overlap": true
+    },
+    {
+      "start": 51.32,
+      "end": 52.02,
+      "speaker": "Speaker 1",
+      "text": "anyway",
+      "overlap": true
+    }
+  ]
+}
