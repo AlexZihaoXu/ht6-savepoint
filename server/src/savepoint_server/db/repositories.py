@@ -12,6 +12,7 @@ Each repository returns Pydantic models (never raw Mongo documents) and keeps
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import date
 from typing import Any, Generic, TypeVar
@@ -111,6 +112,19 @@ class EventsRepository(BaseRepository[Event]):
 
     async def list_for_day(self, day_id: str, *, limit: int = 500) -> list[Event]:
         return await self.list({"day_id": day_id}, sort=[("ts", ASCENDING)], limit=limit)
+
+    async def list_for_month(self, month: str, *, limit: int = 5000) -> list[Event]:
+        """List every event whose ``day_id`` falls in ``month`` (``"YYYY-MM"``).
+
+        ``day_id`` is an ISO ``"YYYY-MM-DD"`` string, so a month is an anchored
+        ``"YYYY-MM-"`` prefix (the trailing dash keeps e.g. ``2026-01`` from also
+        matching ``2026-10``). Ascending ``ts`` for a stable, chronological scan.
+        """
+        return await self.list(
+            {"day_id": {"$regex": f"^{re.escape(month)}-"}},
+            sort=[("ts", ASCENDING)],
+            limit=limit,
+        )
 
     async def list_for_person(self, person_id: str, *, limit: int = 500) -> list[Event]:
         return await self.list({"person_id": person_id}, sort=[("ts", DESCENDING)], limit=limit)

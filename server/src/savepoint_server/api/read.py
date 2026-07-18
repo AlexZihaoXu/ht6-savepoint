@@ -9,6 +9,7 @@ elsewhere and never expose a raw Mongo document.
 from __future__ import annotations
 
 import re
+from collections import Counter
 from datetime import UTC, date, datetime
 from typing import Annotated, Any
 
@@ -16,8 +17,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pymongo import DESCENDING
 
 from savepoint_server.db import Repositories, get_repositories
-from savepoint_server.models import Day, DayView, Person, PersonDetail
+from savepoint_server.models import Day, DayView, MonthSummary, Person, PersonDetail
+from savepoint_server.models.month import BusiestDay, TopPerson
 from savepoint_server.models.recap import RecapScope
+
+_MONTH_RE = re.compile(r"^\d{4}-\d{2}$")
 
 router = APIRouter(tags=["read"])
 
@@ -35,6 +39,70 @@ def _parse_iso_date(value: str) -> date:
         raise HTTPException(
             status_code=400, detail=f"Invalid date '{value}'; expected ISO YYYY-MM-DD."
         ) from exc
+
+
+def _parse_month(value: str) -> str:
+    """Validate a ``YYYY-MM`` path segment, 400ing on anything malformed.
+
+    Requires a zero-padded 4-digit year and 2-digit month (so ``"2026-7"`` is
+    rejected) and a real calendar month 01-12 (so ``"2026-13"`` is rejected).
+    """
+    if not _MONTH_RE.match(value):
+        raise HTTPException(status_code=400, detail=f"Invalid month '{value}'; expected YYYY-MM.")
+    try:
+        # Reuse ISO parsing to reject an out-of-range month (e.g. 2026-13).
+        date.fromisoformat(f"{value}-01")
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400, detail=f"Invalid month '{value}'; expected YYYY-MM."
+        ) from exc
+    return value
+
+
+async def _build_month_summary(month: str, repos: Repositories) -> MonthSummary:
+    """Aggregate a calendar month's events into a :class:`MonthSummary` (empty-safe).
+
+    One events query for the month, then rolled up in Python (fine at demo scale):
+    distinct days journaled, total events, and per-person / per-day tallies. Only
+    ``person_id``s that resolve to a real :class:`Person` count toward
+    ``people_count`` and ``top_people`` — unbound ``"Speaker N"`` diarization
+    labels are skipped there (but still counted in ``total_events``).
+    """
+    events = await repos.events.list_for_month(month)
+    if not events:
+        return MonthSummary(month=month)
+
+    day_counts: Counter[str] = Counter(event.day_id for event in events)
+    person_counts: Counter[str] = Counter(event.person_id for event in events)
+
+    # Resolve each distinct person_id once; keep only the real People.
+    resolved: dict[str, Person] = {}
+    for person_id in person_counts:
+        person = await repos.people.get_by_local_id(person_id)
+        if person is not None:
+            resolved[person_id] = person
+
+    # top_people: real people by event count desc, stable tie-break on name then id.
+    ranked = sorted(
+        resolved.items(),
+        key=lambda item: (-person_counts[item[0]], (item[1].name or item[1].local_id), item[0]),
+    )
+    top_people = [
+        TopPerson(person=person, interactions=person_counts[person_id])
+        for person_id, person in ranked[:5]
+    ]
+
+    # busiest_day: most events, earliest date breaking ties.
+    busiest_id, busiest_events = min(day_counts.items(), key=lambda item: (-item[1], item[0]))
+
+    return MonthSummary(
+        month=month,
+        days_journaled=len(day_counts),
+        total_events=len(events),
+        people_count=len(resolved),
+        top_people=top_people,
+        busiest_day=BusiestDay(date=busiest_id, events=busiest_events),
+    )
 
 
 async def _build_day_view(day_date: date, repos: Repositories) -> DayView:
@@ -128,3 +196,18 @@ async def get_today(
 ) -> DayView:
     """Convenience alias for the current UTC date's day view."""
     return await _build_day_view(datetime.now(UTC).date(), repos)
+
+
+@router.get("/month/{month}/summary", response_model=MonthSummary, tags=["read"])
+async def get_month_summary(
+    month: str,
+    repos: Annotated[Repositories, Depends(get_repos)],
+) -> MonthSummary:
+    """Roll a calendar month (``YYYY-MM``) up for the Past view (SAV-60).
+
+    Aggregates every event that month into counts of days journaled, total
+    events, distinct real people, the top few people by interaction, and the
+    busiest day. Empty months return a valid zeroed summary; a malformed
+    ``month`` 400s.
+    """
+    return await _build_month_summary(_parse_month(month), repos)
