@@ -156,6 +156,27 @@ def _decode_rgba_image(item: Any) -> Image.Image:
     return Image.frombytes("RGBA", (width, height), raw)
 
 
+def _extract_frames(last: dict[str, Any], direction: str) -> list[Any]:
+    """Pull the ordered frame list out of a completed animate-character job.
+
+    The job's ``last_response.images`` is either a flat list of frame dicts (single
+    direction), or a dict keyed by direction whose value is that direction's frame
+    list. Handle both so a schema tweak on PixelLab's side can't silently drop the walk.
+    """
+    imgs = last.get("images")
+    if isinstance(imgs, list):
+        return imgs
+    if isinstance(imgs, dict):
+        value = imgs.get(direction)
+        if value is None and imgs:
+            value = next(iter(imgs.values()))
+        if isinstance(value, list):
+            return value
+        if isinstance(value, dict):
+            return [value]
+    return []
+
+
 # --------------------------------------------------------------------------- #
 # HTTP client
 # --------------------------------------------------------------------------- #
@@ -247,14 +268,19 @@ class PixelLabClient:
         return {"character_id": character_id, "images": images}
 
     async def animate_walk(self, character_id: str, direction: str = "east") -> list[Image.Image]:
-        """Animate a walk cycle for one ``direction`` (2 generations); decode frames."""
+        """Animate a walk cycle for one ``direction`` (~2 generations); decode frames.
+
+        Uses v3 custom mode (auto-detected when no ``template_animation_id`` is given).
+        The direction is selected via the ``directions`` LIST (custom mode defaults to
+        south only, so an explicit ``["east"]`` is required for a side-facing walk).
+        """
         async with httpx.AsyncClient(timeout=self._timeout) as client:
             resp = await client.post(
                 f"{self._base_url}/v2/animate-character",
                 json={
                     "character_id": character_id,
                     "action_description": "walking",
-                    "direction": direction,
+                    "directions": [direction],
                 },
                 headers=self._headers,
             )
@@ -267,9 +293,9 @@ class PixelLabClient:
                 raise PixelLabError("animate-character returned no background_job_ids")
             last = await self._poll_job(client, str(job_ids[0]))
 
-        frames_raw = last.get("images")
-        if not isinstance(frames_raw, list) or not frames_raw:
-            raise PixelLabError("animate-character job returned no frame list")
+        frames_raw = _extract_frames(last, direction)
+        if not frames_raw:
+            raise PixelLabError("animate-character job returned no frames")
         return [_decode_rgba_image(frame) for frame in frames_raw]
 
     async def get_balance(self) -> float:
