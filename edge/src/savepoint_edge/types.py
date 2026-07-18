@@ -9,10 +9,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 # Dimensionality of the face-attribute embedding produced by whatever model
-# ends up wired into a FaceDetector (DESIGN.md §13 names MobileFaceNet;
-# common variants export 128-d or 192-d). Adjust to match the real model
-# once one is chosen — nothing else here assumes a specific value.
-FACE_EMBEDDING_DIM = 128
+# ends up wired into a FaceDetector (DESIGN.md §13 names MobileFaceNet).
+# 512 matches w600k_mbf.onnx (LinuxFaceDetector's real embedding model,
+# confirmed via its ONNX graph's output shape) — adjust if that model
+# changes; nothing else here assumes a specific value.
+FACE_EMBEDDING_DIM = 512
 
 
 @dataclass
