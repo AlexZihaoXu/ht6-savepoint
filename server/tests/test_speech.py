@@ -135,3 +135,22 @@ async def test_transcribe_endpoint_defaults_day_id_to_today(repos: Repositories)
     assert resp.status_code == 200
     assert resp.json()["day_id"] == today
     assert await repos.events.count({"day_id": today}) == 3
+
+
+async def test_transcribe_endpoint_rejects_bad_day_id_with_400(repos: Repositories) -> None:
+    """A malformed day_id is validated up front -> clean 400, not a 500."""
+    app.dependency_overrides[get_repos] = lambda: repos
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+            for bad in ("today", "2026-13-40", "18/07/2026"):
+                resp = await client.post(
+                    "/speech/transcribe",
+                    files={"file": ("clip.wav", b"fake audio bytes", "audio/wav")},
+                    data={"day_id": bad},
+                )
+                assert resp.status_code == 400, bad
+    finally:
+        app.dependency_overrides.pop(get_repos, None)
+    # A bad day_id never wrote anything.
+    assert await repos.events.count({}) == 0

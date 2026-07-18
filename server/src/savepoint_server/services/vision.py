@@ -24,7 +24,7 @@ from typing import Any
 
 import cv2
 import numpy as np
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 
 from savepoint_server.models.sprite import (
     ACCESSORIES,
@@ -39,6 +39,14 @@ from savepoint_server.models.sprite import (
 _CASCADE_PATH = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
 
 
+class ImageDecodeError(ValueError):
+    """Raised when frame bytes can't be decoded into an image (bad/empty/truncated).
+
+    A dedicated type so API routes can translate it into a clean ``400`` instead of
+    letting Pillow's :class:`PIL.UnidentifiedImageError` bubble up as a ``500``.
+    """
+
+
 @lru_cache(maxsize=1)
 def _cascade() -> Any:
     """Return the process-wide (cached) frontal-face Haar cascade classifier."""
@@ -46,10 +54,17 @@ def _cascade() -> Any:
 
 
 def _load_rgb(image_bytes: bytes) -> np.ndarray:
-    """Decode raw image bytes into an ``(H, W, 3)`` uint8 RGB array."""
-    with Image.open(BytesIO(image_bytes)) as img:
-        rgb = img.convert("RGB")
-        return np.asarray(rgb, dtype=np.uint8)
+    """Decode raw image bytes into an ``(H, W, 3)`` uint8 RGB array.
+
+    Raises :class:`ImageDecodeError` (a ``ValueError``) when the bytes are not a
+    decodable image, so callers can surface a clean 400 rather than a 500.
+    """
+    try:
+        with Image.open(BytesIO(image_bytes)) as img:
+            rgb = img.convert("RGB")
+            return np.asarray(rgb, dtype=np.uint8)
+    except (UnidentifiedImageError, OSError, ValueError) as exc:
+        raise ImageDecodeError("frame is not a decodable image") from exc
 
 
 def _detect_largest_face(gray: np.ndarray) -> tuple[int, int, int, int] | None:

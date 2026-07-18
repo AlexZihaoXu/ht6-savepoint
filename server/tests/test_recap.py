@@ -14,6 +14,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, date, datetime
 
+import httpx
 from httpx import ASGITransport, AsyncClient
 
 from savepoint_server.api.recap import get_llm_client, get_repos
@@ -55,6 +56,16 @@ class FakeLLMClient:
     @property
     def called(self) -> bool:
         return bool(self.calls)
+
+
+class UnreachableLLMClient:
+    """An :class:`LLMClient` that models an unreachable backend by raising httpx errors."""
+
+    def __init__(self, exc: httpx.HTTPError | None = None) -> None:
+        self._exc = exc or httpx.ConnectError("connection refused")
+
+    async def complete(self, system: str, user: str, max_tokens: int, temperature: float) -> str:
+        raise self._exc
 
 
 def _event(person_id: str, ts: datetime, text: str, **extra: object) -> Event:
@@ -238,3 +249,34 @@ async def test_post_day_recap_bad_date_400(repos: Repositories) -> None:
     async with _client(repos, FakeLLMClient(GOOD_JSON)) as client:
         resp = await client.post("/day/not-a-date/recap")
     assert resp.status_code == 400
+
+
+# --------------------------------------------------------------------------- #
+# LLM backend unreachable: graceful fallback, never a 500
+# --------------------------------------------------------------------------- #
+
+
+async def test_generate_recap_llm_unreachable_falls_back_gracefully() -> None:
+    """A backend that raises httpx.ConnectError yields a canned Recap, not an exception."""
+    recap = await generate_recap([_event("Alex", BASE, "hi")], DAY, client=UnreachableLLMClient())
+    assert isinstance(recap, Recap)
+    assert recap.date == DAY
+    assert recap.narrative  # a gentle, non-empty placeholder line
+    assert recap.highlights == []
+
+
+async def test_post_day_recap_llm_unreachable_returns_200(repos: Repositories) -> None:
+    """POST /day/{date}/recap degrades to a canned recap (200) when the LLM is down."""
+    await repos.events.insert(_event("Alex", BASE, "good morning"))
+
+    async with _client(repos, UnreachableLLMClient()) as client:
+        resp = await client.post(f"/day/{DAY_ID}/recap")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["narrative"]
+    assert body["highlights"] == []
+    # The graceful recap was still persisted so the read API can serve it.
+    from_db = await repos.recaps.get_by_date_scope(DAY, RecapScope.DAY)
+    assert from_db is not None
+    assert from_db.narrative == body["narrative"]

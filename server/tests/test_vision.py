@@ -121,3 +121,22 @@ def test_analyze_endpoint_is_deterministic() -> None:
     first = client.post("/vision/analyze", files=files).json()
     second = client.post("/vision/analyze", files=files).json()
     assert first == second
+
+
+def test_analyze_endpoint_rejects_non_image_with_400() -> None:
+    """A text upload is not a decodable image -> clean 400, not a 500."""
+    resp = client.post(
+        "/vision/analyze",
+        files={"file": ("notes.txt", b"this is not an image", "text/plain")},
+    )
+    assert resp.status_code == 400
+    assert "decodable image" in resp.json()["detail"]
+
+
+def test_analyze_endpoint_rejects_empty_upload_with_400() -> None:
+    """An empty upload can't be decoded -> clean 400, not a 500."""
+    resp = client.post(
+        "/vision/analyze",
+        files={"file": ("empty.png", b"", "image/png")},
+    )
+    assert resp.status_code == 400

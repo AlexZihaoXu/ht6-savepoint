@@ -17,6 +17,8 @@ import json
 from datetime import date
 from typing import Any
 
+import httpx
+
 from savepoint_server.db.repositories import Repositories
 from savepoint_server.models import Event, EventType, Recap, RecapScope
 from savepoint_server.services.llm import LLMClient
@@ -35,6 +37,11 @@ _SYSTEM_PROMPT = (
 _EMPTY_NARRATIVE = (
     "A quiet day in the valley. No new faces crossed your path today, but the garden "
     "kept growing all the same — patient and green. Rest up; tomorrow is a fresh page."
+)
+
+_UNAVAILABLE_NARRATIVE = (
+    "The valley's journal narrator is resting right now, so today's story isn't written "
+    "yet — but every moment is safely saved. Check back soon and the recap will be here."
 )
 
 
@@ -142,12 +149,18 @@ async def generate_recap(
     if not events:
         return _canned_recap(day_date, scope)
 
-    raw = await client.complete(
-        system=_SYSTEM_PROMPT,
-        user=_build_user_prompt(events, day_date),
-        max_tokens=512,
-        temperature=0.7,
-    )
+    try:
+        raw = await client.complete(
+            system=_SYSTEM_PROMPT,
+            user=_build_user_prompt(events, day_date),
+            max_tokens=512,
+            temperature=0.7,
+        )
+    except httpx.HTTPError:
+        # LLM backend unreachable or erroring (connect/timeout/bad status): never let a
+        # flaky recap host 500 the demo — fall back to a gentle placeholder recap so the
+        # day still shows *something*. Re-running the endpoint regenerates once it's back.
+        return Recap(date=day_date, scope=scope, narrative=_UNAVAILABLE_NARRATIVE, highlights=[])
     narrative, highlights = _parse_recap_fields(raw)
     return Recap(date=day_date, scope=scope, narrative=narrative, highlights=highlights)
 

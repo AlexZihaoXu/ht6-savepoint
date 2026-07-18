@@ -41,7 +41,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
-        allow_credentials=True,
+        # The API uses no cookies/credentials, and `allow_credentials=True` is an invalid
+        # (and browser-rejected) combination with the wildcard `allow_origins=["*"]` the
+        # demo needs, so keep credentials off and origins open.
+        allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],
     )
