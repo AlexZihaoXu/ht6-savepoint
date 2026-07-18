@@ -1,0 +1,180 @@
+/*
+ * SavePoint — global stylesheet.
+ *
+ * Import order matters:
+ *   1. tailwindcss           (must be first — generates utilities + preflight)
+ *   2. @heroui/styles        (HeroUI v3 base + default theme tokens)
+ *   3. ./theme.css           (our cozy-pixel theme — overrides HeroUI tokens)
+ * DM Sans font-face files are imported in JS (main.tsx) so this file keeps a
+ * clean, valid @import block at the top (@import rules must precede all others).
+ */
+@import "tailwindcss";
+@import "@heroui/styles";
+@import "./theme.css";
+
+/* ---- Fonts -------------------------------------------------------------- */
+/* theme.css sets `--font-sans: var(--font-dm-sans)`; define the family here.
+   The actual @fontsource woff2 files are loaded from main.tsx (self-hosted,
+   never hotlinked from Google). */
+:root {
+  --font-dm-sans:
+    "DM Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    sans-serif;
+}
+
+/* Expose our tokens to Tailwind v4's utility engine so `font-sans` etc. map to
+   the theme. Tailwind v4 is CSS-first — no tailwind.config.js needed. */
+@theme inline {
+  --font-sans: var(--font-dm-sans);
+}
+
+/* ---- Base --------------------------------------------------------------- */
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    /* iOS: kill the tap-highlight flash on our custom touch targets */
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100svh;
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    /* Cozy field texture: a couple of very soft radial glows behind content. */
+    background-image:
+      radial-gradient(
+        60rem 60rem at 15% -10%,
+        color-mix(in oklch, var(--accent) 8%, transparent),
+        transparent 60%
+      ),
+      radial-gradient(
+        50rem 50rem at 110% 10%,
+        color-mix(in oklch, var(--accent) 6%, transparent),
+        transparent 55%
+      );
+    background-attachment: fixed;
+  }
+
+  /* Pixel-art assets (sprites) should never blur when scaled up. */
+  .pixelated {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+  }
+
+  /* Keyboard focus: a high-visibility accent outline on plain interactive
+     elements, in both themes. HeroUI components paint their own focus ring
+     (React Aria marks them with [data-focus-visible]) — excluded here so
+     rings never double up. */
+  :where(a, button, input, select, textarea, summary):focus-visible:not(
+      [data-focus-visible]
+    ) {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  /* The skip-link target is focused programmatically — no ring needed. */
+  .app-main:focus {
+    outline: none;
+  }
+
+  /* Themed scrollbars using the theme's --scrollbar token. */
+  * {
+    scrollbar-color: var(--scrollbar) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: var(--scrollbar);
+    border-radius: 0; /* pixel/sharp — matches --radius: 0 */
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+/* ---- App layout helpers ------------------------------------------------- */
+@layer components {
+  /* Full-height flex column: sticky top bar, scrollable middle, bottom nav. */
+  .app-shell {
+    display: flex;
+    flex-direction: column;
+    min-height: 100svh;
+  }
+
+  /* Mobile-first centered reading column. Comfortable on a 360px phone,
+     capped so it stays a tidy column on desktop. */
+  .app-column {
+    width: 100%;
+    max-width: 30rem; /* ~480px */
+    margin-inline: auto;
+    padding-inline: 1rem;
+  }
+
+  /* Main scroll region. Bottom padding clears the fixed bottom nav + the
+     device home-indicator safe area. */
+  .app-main {
+    flex: 1 1 auto;
+    padding-top: 1rem;
+    padding-bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Touch-friendly hit target (Apple/Material ~44px minimum). */
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Skip-to-content link: parked off-screen until keyboard-focused, then
+     drops in over the top bar in accent colours. */
+  .skip-link {
+    position: fixed;
+    top: 0.75rem;
+    left: 0.75rem;
+    z-index: 60;
+    transform: translateY(-250%);
+    background: var(--accent);
+    color: var(--accent-foreground);
+    padding: 0.5rem 0.875rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+  .skip-link:focus-visible {
+    transform: none;
+  }
+
+  /* Cozy idle bob for scene sprites (no movement AI, just charm).
+     Disabled for reduced-motion users by the media query below. */
+  .sprite-bob {
+    animation: bob 2.4s ease-in-out infinite;
+  }
+}
+
+@keyframes bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+/* ---- Motion ------------------------------------------------------------- */
+/* Framer Motion transitions are gated on useReducedMotion() in JS, but also
+   defensively disable CSS animations/transitions for reduced-motion users. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

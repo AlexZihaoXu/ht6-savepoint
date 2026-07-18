@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=5.0"
+    />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="apple-touch-icon" href="/icon.svg" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+
+    <title>SavePoint — your life autosaves</title>
+    <meta
+      name="description"
+      content="A cozy, Stardew-style journal of your day. The people you meet become pixel characters; your days become a garden."
+    />
+
+    <!-- Apply the saved / system light|dark preference before first paint so
+         dark-theme users never see a light flash. Mirrors src/lib/theme.ts
+         (which stays the runtime source of truth for toggling). -->
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("savepoint-theme");
+          if (t !== "light" && t !== "dark") {
+            t = window.matchMedia("(prefers-color-scheme: dark)").matches
+              ? "dark"
+              : "light";
+          }
+          var root = document.documentElement;
+          root.dataset.theme = t;
+          root.classList.toggle("dark", t === "dark");
+          root.style.colorScheme = t;
+        } catch (e) {
+          /* default to the stylesheet's light theme */
+        }
+      })();
+    </script>
+
+    <!-- PWA / mobile web app -->
+    <meta name="color-scheme" content="light dark" />
+    <!-- Media-scoped theme-color first: browsers pick the first matching tag,
+         and the bare one below is the catch-all fallback. -->
+    <meta
+      name="theme-color"
+      media="(prefers-color-scheme: dark)"
+      content="#0a0f0a"
+    />
+    <meta name="theme-color" content="#7cc46b" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
+    <meta name="apple-mobile-web-app-title" content="SavePoint" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
