@@ -9,9 +9,6 @@ on:
       - 'app/**'
       - '.github/workflows/ci-frontend.yml'
   pull_request:
-    paths:
-      - 'app/**'
-      - '.github/workflows/ci-frontend.yml'
 
 # Only the newest run per ref matters — cancel superseded ones.
 concurrency:

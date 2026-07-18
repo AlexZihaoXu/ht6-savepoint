@@ -9,9 +9,6 @@ on:
       - 'server/**'
       - '.github/workflows/ci-backend.yml'
   pull_request:
-    paths:
-      - 'server/**'
-      - '.github/workflows/ci-backend.yml'
 
 concurrency:
   group: ci-backend-${{ github.ref }}
