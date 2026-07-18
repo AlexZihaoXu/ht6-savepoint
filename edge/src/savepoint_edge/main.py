@@ -101,7 +101,8 @@ def _build_sink_from_env() -> EventSink:
     """SAVEPOINT_EDGE_SINK selects where events go:
     (unset) / "stdout"   -> one JSON line per event on stdout (default)
     "file:<path>"        -> append newline-delimited JSON to <path>
-    "http://host:port/…" -> POST each event's JSON as the request body
+    "http://.../ingest/video" -> POST each event as a one-element JSON array
+                            to the server's list[EdgeEvent] endpoint
     """
     spec = os.environ.get("SAVEPOINT_EDGE_SINK", "stdout")
 
