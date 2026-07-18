@@ -16,9 +16,6 @@ on:
       - 'pipeline/**'
       - '.github/workflows/ci-pipeline.yml'
   pull_request:
-    paths:
-      - 'pipeline/**'
-      - '.github/workflows/ci-pipeline.yml'
 
 concurrency:
   group: ci-pipeline-${{ github.ref }}

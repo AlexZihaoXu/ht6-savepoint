@@ -9,9 +9,6 @@ on:
       - 'server/**'
       - '.github/workflows/ci-backend.yml'
   pull_request:
-    paths:
-      - 'server/**'
-      - '.github/workflows/ci-backend.yml'
 
 concurrency:
   group: ci-backend-${{ github.ref }}
@@ -27,6 +24,16 @@ jobs:
     defaults:
       run:
         working-directory: server
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ ping: 1 })'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -50,4 +57,7 @@ jobs:
         run: uv run mypy src
 
       - name: Tests (pytest)
+        env:
+          # Round-trip repository tests hit the mongo:7 service (test DB is dropped per test).
+          SAVEPOINT_MONGO_URI: mongodb://127.0.0.1:27017
         run: uv run pytest
