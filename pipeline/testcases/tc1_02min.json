@@ -1,0 +1,26 @@
+{
+  "audio": "testcases/tc1_02min.wav",
+  "turns": [
+    {
+      "start": 0.0,
+      "end": 15.84,
+      "speaker": "Speaker 1",
+      "text": "records but on my dad's side on the other hand I have a well I had a particularly detail oriented grandmother yes I would remember everything about her childhood and she went back and looked at",
+      "overlap": true
+    },
+    {
+      "start": 9.58,
+      "end": 10.82,
+      "speaker": "Speaker 2",
+      "text": "even",
+      "overlap": true
+    },
+    {
+      "start": 16.07,
+      "end": 59.97,
+      "speaker": "Speaker 2",
+      "text": "know how she found documents about where they came from so her family was in Germany near I can't remember I think it's Hamburg Hamburg and grandpa was also from somewhere in Germany and both of them just happened to move to eastern Kansas which is if you've ever been to Kansas it's just cornfields and that's it's not a not a very beautiful place but somehow they ended up in Kansas and my grandma would always give lots of details about growing up there on the farm and how they didn't have electricity and you know she would go on about you know these stories about this is how",
+      "overlap": true
+    }
+  ]
+}

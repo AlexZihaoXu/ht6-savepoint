@@ -1,0 +1,66 @@
+[project]
+name = "savepoint-pipeline"
+version = "0.1.0"
+description = "SavePoint speech pipeline: pyannote Community-1 diarization -> SepFormer overlap-split -> faster-whisper -> merged 'Speaker N: text'."
+requires-python = ">=3.12,<3.13"
+
+# ---------------------------------------------------------------------------
+# Pinned runtime deps.
+#
+# NOTE (torch CPU): the default PyPI `torch`/`torchaudio` wheels on Linux pull
+# the full CUDA/nvidia stack (~2GB). We pin CPU-only builds via the dedicated
+# PyTorch CPU index configured under [tool.uv.sources] / [[tool.uv.index]]
+# below. If you resolve without uv, install torch first from that index:
+#   pip install torch==2.2.2 torchaudio==2.2.2 \
+#       --index-url https://download.pytorch.org/whl/cpu
+#
+# NOTE (upstream two-venv reality): jiucheng's original pipeline uses TWO
+# isolated venvs because Community-1 needs pyannote.audio 4.x while the
+# separation/transcription step (align.py) was validated against pyannote 3.4
+# + huggingface_hub 0.25.2 (see README-upstream.md). This single pyproject
+# targets the 4.x line (Community-1 is the locked, headline decision). If a
+# single-env resolve conflicts, fall back to the two-venv layout the upstream
+# README documents (.venv for diarize.py, .venv-stream for align.py).
+# ---------------------------------------------------------------------------
+dependencies = [
+    "torch==2.2.2",
+    "torchaudio==2.2.2",
+    "numpy==1.26.4",
+    "scipy==1.11.4",
+    "faster-whisper==1.0.3",
+    "speechbrain==1.0.2",
+    "pyannote.audio>=4.0,<5",
+    "soundfile==0.12.1",
+]
+
+[dependency-groups]
+dev = [
+    "ruff==0.6.9",
+    "pytest==8.3.3",
+]
+
+[tool.uv]
+# Flat scripts (diarize.py / align.py), not an importable package — don't build
+# the project root, just resolve the environment.
+package = false
+
+# CPU-only torch: pull torch + torchaudio from PyTorch's CPU wheel index so the
+# CUDA/nvidia packages are never downloaded.
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu" }]
+torchaudio = [{ index = "pytorch-cpu" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

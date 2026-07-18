@@ -1,0 +1,110 @@
+{
+  "audio": "testcases/tc3_30min.wav",
+  "turns": [
+    {
+      "start": 0.0,
+      "end": 1.76,
+      "speaker": "Speaker 1",
+      "text": "the waitress but",
+      "overlap": true
+    },
+    {
+      "start": 0.56,
+      "end": 4.0,
+      "speaker": "Speaker 2",
+      "text": "If you're Korean and watching this, you're like, what's the big deal about that?",
+      "overlap": true
+    },
+    {
+      "start": 4.35,
+      "end": 5.75,
+      "speaker": "Speaker 1",
+      "text": "for us it",
+      "overlap": true
+    },
+    {
+      "start": 5.04,
+      "end": 7.6,
+      "speaker": "Speaker 2",
+      "text": "For us, it's just so, this is so funny and cute.",
+      "overlap": true
+    },
+    {
+      "start": 7.35,
+      "end": 16.49,
+      "speaker": "Speaker 1",
+      "text": "was so great and yeah we love that kind of experience. Mine is very similar in fact yeah. Was it?",
+      "overlap": true
+    },
+    {
+      "start": 10.88,
+      "end": 10.92,
+      "speaker": "Speaker 2",
+      "text": "Yes.",
+      "overlap": false
+    },
+    {
+      "start": 12.2,
+      "end": 12.8,
+      "speaker": "Speaker 2",
+      "text": "How about you? Yes.",
+      "overlap": false
+    },
+    {
+      "start": 16.4,
+      "end": 17.36,
+      "speaker": "Speaker 2",
+      "text": "The same meal.",
+      "overlap": true
+    },
+    {
+      "start": 17.69,
+      "end": 34.99,
+      "speaker": "Speaker 1",
+      "text": "No I thought about saying not specifically some gypsal but just eating outside like it's basically on a sidewalk there's little plastic tables and you're cooking this type of thing that Dan's talking about but this the one that I thought about was also in Korea because there's a lot of nostalgia.",
+      "overlap": true
+    },
+    {
+      "start": 35.35,
+      "end": 36.07,
+      "speaker": "Speaker 2",
+      "text": "Is it Baekbun?",
+      "overlap": false
+    },
+    {
+      "start": 37.07,
+      "end": 40.93,
+      "speaker": "Speaker 1",
+      "text": "I almost said Baekbun. I thought that. I almost said Baekbun but",
+      "overlap": true
+    },
+    {
+      "start": 38.48,
+      "end": 38.92,
+      "speaker": "Speaker 2",
+      "text": "That too.",
+      "overlap": true
+    },
+    {
+      "start": 40.06,
+      "end": 43.22,
+      "speaker": "Speaker 2",
+      "text": "It's not always the best food, but the environment. It was perfect.",
+      "overlap": true
+    },
+    {
+      "start": 43.4,
+      "end": 59.98,
+      "speaker": "Speaker 1",
+      "text": "what I said also because I like the food so much is a meal called Dakgalbi and there was a restaurant specifically the restaurant that we went to often in Ansan which was the city we lived in for the first two years in Korea and our first week living there it",
+      "overlap": true
+    },
+    {
+      "start": 48.22,
+      "end": 48.48,
+      "speaker": "Speaker 2",
+      "text": "Oh.",
+      "overlap": false
+    }
+  ]
+}

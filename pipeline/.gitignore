@@ -1,0 +1,23 @@
+# Python / uv envs
+.venv*/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Models & checkpoints (downloaded on first run, never committed)
+models/
+*.ckpt
+_sepformer/
+
+# Media (test.mp3 is 127MB upstream; keep only the small testcase .wav clips)
+*.mp3
+
+# transient run artifacts
+_transcribe_input.16k.wav
+_transcribe_diar.json
+testcases/*.diar.json
+
+# macOS
+.DS_Store
