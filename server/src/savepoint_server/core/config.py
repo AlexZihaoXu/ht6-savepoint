@@ -8,10 +8,22 @@ them in the environment.
 from __future__ import annotations
 
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def _default_sprites_dir() -> str:
+    """Return the default persistent sprite-cache dir: ``<repo>/server/.sprites``.
+
+    This file lives at ``server/src/savepoint_server/core/config.py``, so the
+    ``server/`` root is four parents up. Kept as a factory (not a literal) so the
+    path resolves correctly regardless of the process CWD, and stays overridable via
+    ``SAVEPOINT_SPRITES_DIR``.
+    """
+    return str(Path(__file__).resolve().parents[3] / ".sprites")
 
 
 class Settings(BaseSettings):
@@ -78,6 +90,19 @@ class Settings(BaseSettings):
     #   "gemma"  -> Gemma only (needs a real gemma_base_url, i.e. moved off the
     #               placeholder default). No quota, so no Gemini key required.
     transcript_refine: Literal["none", "gemini", "gemma"] = "none"
+
+    # --- PixelLab AI sprite generation (SAV-61) ---
+    # An external AI pixel-art service (https://api.pixellab.ai) that turns a
+    # person's avatar_params into a per-person sprite sheet (4 directions + an east
+    # walk animation), cached under ``sprites_dir`` and served from ``/sprites``.
+    # DEFAULT OFF: with no key and ``pixellab_enabled=False`` the ingest paths never
+    # construct a client and behavior is byte-identical to today. Real generation
+    # costs credits and is run by hand (scripts/gen_sprites.py), never in CI/tests.
+    pixellab_api_key: str | None = None
+    pixellab_enabled: bool = False
+    # Persistent, gitignored dir (server/.sprites) where generated PNGs live and are
+    # mounted at ``/sprites/{local_id}/{file}``. Override with SAVEPOINT_SPRITES_DIR.
+    sprites_dir: str = Field(default_factory=_default_sprites_dir)
 
     # --- Speech pipeline (SAV-32) ---
     # Which transcriber the speech service uses. "stub" (default) is CI-safe and

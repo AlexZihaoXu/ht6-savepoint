@@ -23,6 +23,7 @@ Everything is deterministic and torch-free on the default path, so the full
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import UTC, date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -41,6 +42,13 @@ from savepoint_server.models.person import AvatarParams
 from savepoint_server.services.speech import AudioInput, Transcriber, transcribe_and_store
 from savepoint_server.services.transcript_refine import TranscriptRefineClient, refine_segments
 from savepoint_server.services.vision import frame_to_sprite_params
+
+# A synchronous "a brand-new Person was just created" callback the ingest paths
+# invoke exactly once per newly-met person (never for a re-seen one). It must
+# return immediately — the PixelLab wiring (services/pixellab.build_sprite_hook)
+# uses it to schedule a fire-and-forget sprite job. ``None`` (the default) makes
+# ingest behave exactly as before: this module knows nothing about PixelLab.
+NewPersonHook = Callable[[Person], None]
 
 # --------------------------------------------------------------------------- #
 # Sprite params -> human-readable avatar kit selectors
@@ -112,12 +120,14 @@ async def _upsert_person(
     *,
     person_key: str | None,
     seen_at: datetime,
+    sprite_hook: NewPersonHook | None = None,
 ) -> Person:
     """Upsert the deterministic Person for ``sprite`` (same face -> same document).
 
     A re-seen person keeps their name/tags/first_seen and only refreshes the sprite
     avatar + ``last_seen``; a newly met face is created with
-    ``first_seen == last_seen == seen_at``.
+    ``first_seen == last_seen == seen_at``. When a NEW person is created and
+    ``sprite_hook`` is supplied, it is fired once (fire-and-forget sprite generation).
     """
     local_id = derive_person_id(sprite, person_key)
     avatar = avatar_from_sprite(sprite)
@@ -133,9 +143,12 @@ async def _upsert_person(
                 }
             )
         )
-    return await repos.people.upsert(
+    created = await repos.people.upsert(
         Person(local_id=local_id, avatar_params=avatar, first_seen=seen_at, last_seen=seen_at)
     )
+    if sprite_hook is not None:
+        sprite_hook(created)
+    return created
 
 
 async def refresh_day(
@@ -191,20 +204,24 @@ async def ingest_day(
     repos: Repositories,
     person_key: str | None = None,
     transcriber: Transcriber | None = None,
+    sprite_hook: NewPersonHook | None = None,
 ) -> IngestResult:
     """Ingest one frame + audio clip into Mongo, tying vision + speech + day.
 
     Runs the vision service on ``frame_bytes`` to derive sprite params and upsert
     a :class:`Person`, transcribes ``audio`` into SPOKE :class:`Event` documents
     under ``day_id`` (today when omitted), and upserts the :class:`Day` with a
-    small :class:`DaySummary`. Returns everything that was stored.
+    small :class:`DaySummary`. Returns everything that was stored. ``sprite_hook``
+    (default ``None``) fires only when a brand-new Person is created.
     """
     resolved_day = day_id or datetime.now(UTC).date().isoformat()
     now = datetime.now(UTC)
 
     # 1. Vision: frame -> deterministic sprite params -> upsert Person.
     sprite = frame_to_sprite_params(frame_bytes)
-    person = await _upsert_person(sprite, repos, person_key=person_key, seen_at=now)
+    person = await _upsert_person(
+        sprite, repos, person_key=person_key, seen_at=now, sprite_hook=sprite_hook
+    )
 
     # 2. Speech: audio -> diarized transcript -> SPOKE events under the day.
     events = await transcribe_and_store(
@@ -332,13 +349,15 @@ async def _upsert_seen_person(
     *,
     face_embedding: list[float] | None,
     seen_at: datetime,
+    sprite_hook: NewPersonHook | None = None,
 ) -> Person:
     """Upsert the Person for an edge detection, keyed by ``local_id``.
 
     A re-seen person keeps their name/tags/first_seen and refreshes the avatar +
     ``last_seen``; a new face is created with ``first_seen == last_seen == seen_at``.
     ``face_embedding`` is stored when present but never overwritten with ``None`` (so
-    an event that omits it doesn't wipe a previously stored embedding).
+    an event that omits it doesn't wipe a previously stored embedding). When a NEW
+    person is created and ``sprite_hook`` is supplied, it fires once (fire-and-forget).
     """
     existing = await repos.people.get_by_local_id(local_id)
     if existing is not None:
@@ -350,7 +369,7 @@ async def _upsert_seen_person(
         if face_embedding is not None:
             update["face_embedding"] = face_embedding
         return await repos.people.upsert(existing.model_copy(update=update))
-    return await repos.people.upsert(
+    created = await repos.people.upsert(
         Person(
             local_id=local_id,
             avatar_params=avatar,
@@ -359,10 +378,16 @@ async def _upsert_seen_person(
             last_seen=seen_at,
         )
     )
+    if sprite_hook is not None:
+        sprite_hook(created)
+    return created
 
 
 async def ingest_video_detections(
-    edge_events: list[EdgeEvent], *, repos: Repositories
+    edge_events: list[EdgeEvent],
+    *,
+    repos: Repositories,
+    sprite_hook: NewPersonHook | None = None,
 ) -> VideoIngestResult:
     """Land the Pi's edge detections: upsert People + record SEEN events by ts.
 
@@ -372,6 +397,7 @@ async def ingest_video_detections(
     converted up front, so a bad ``ts_unix_ms`` fails the whole batch with a clean
     400 before anything is written; detections are processed in timestamp order so
     ``last_seen`` stays chronological, and each day the batch touches is re-rolled up.
+    ``sprite_hook`` (default ``None``) fires once per brand-new Person.
     """
     parsed = sorted(
         ((_datetime_from_unix_ms(e.ts_unix_ms), e) for e in edge_events),
@@ -390,6 +416,7 @@ async def ingest_video_detections(
             repos,
             face_embedding=edge.face_embedding,
             seen_at=ts,
+            sprite_hook=sprite_hook,
         )
         people[person.local_id] = person
         events.append(
