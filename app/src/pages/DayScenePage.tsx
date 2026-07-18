@@ -141,49 +141,44 @@ export function DayScenePage() {
                 Nothing recorded this day.
               </p>
             )}
-
-            {/* only the two of you on the empty garden: [you] LEFT … */}
-            {!error && view && events.length > 0 && (
-              <SceneActor name="You" x={24} y={82} lit={youSpeaking}>
-                <ParametricSprite params={YOU_AVATAR} size={56} />
-              </SceneActor>
-            )}
-
-            {/* … and the current conversation partner RIGHT (keyed so a
-                partner change pops the newcomer in) */}
-            {!error && view && events.length > 0 && partnerId && (
-              <SceneActor
-                key={partnerId}
-                name={nameFor(partnerId, peopleById, displayName)}
-                x={76}
-                y={82}
-                lit={!youSpeaking}
-                enter
-              >
-                <ParametricSprite
-                  params={
-                    peopleById.get(partnerId)?.avatar_params ??
-                    fallbackAvatar(partnerId)
-                  }
-                  size={56}
-                />
-              </SceneActor>
-            )}
           </div>
         </div>
 
-        {/* dialogue box */}
+        {/* dialogue box — the two big characters stand right on top of it,
+            [you] LEFT / partner RIGHT, their lower third hidden by the box */}
         <div className="flex-none px-2 pt-4">
           {active && (
-            <DialogueBox
-              event={active}
-              name={speakerName}
-              side={youSpeaking ? "left" : "right"}
-              hasNext={activeIdx < events.length - 1}
-              onAdvance={() =>
-                jumpTo(Math.min(activeIdx + 1, events.length - 1))
-              }
-            />
+            <div className="relative">
+              <StageActor side="left" name="You" lit={youSpeaking}>
+                <ParametricSprite params={YOU_AVATAR} size={STAGE_SIZE} />
+              </StageActor>
+              {partnerId && (
+                <StageActor
+                  key={partnerId}
+                  side="right"
+                  name={nameFor(partnerId, peopleById, displayName)}
+                  lit={!youSpeaking}
+                  enter
+                >
+                  <ParametricSprite
+                    params={
+                      peopleById.get(partnerId)?.avatar_params ??
+                      fallbackAvatar(partnerId)
+                    }
+                    size={STAGE_SIZE}
+                  />
+                </StageActor>
+              )}
+              <DialogueBox
+                event={active}
+                name={speakerName}
+                side={youSpeaking ? "left" : "right"}
+                hasNext={activeIdx < events.length - 1}
+                onAdvance={() =>
+                  jumpTo(Math.min(activeIdx + 1, events.length - 1))
+                }
+              />
+            </div>
           )}
           {!active && view && events.length === 0 && (
             <p className="px-4 py-6 text-center text-sm text-white/60">
@@ -232,24 +227,28 @@ export function DayScenePage() {
   );
 }
 
-/* ---- scene actor ---------------------------------------------------------- */
+/* ---- stage characters ------------------------------------------------------ */
+
+/** Visual-novel scale — the pair towers over the dialogue box. */
+const STAGE_SIZE = 176;
+/** Bottom ~third of each character hides behind the box. */
+const STAGE_CLIP = Math.round(STAGE_SIZE * 0.34);
 
 /**
- * One of the two conversation characters. The speaker (`lit`) stands at full
- * opacity, gently bobbing and slightly raised; the listener waits dimmed,
- * desaturated and set a step back (ref: speaker lit, non-speaker faded).
+ * One of the two conversation characters, anchored to the dialogue box: it
+ * stands right on the box's top edge with its lower third behind the box
+ * (the box paints above at z-10). The speaker (`lit`) is full opacity and
+ * gently bobbing; the listener waits dimmed + desaturated.
  */
-function SceneActor({
+function StageActor({
+  side,
   name,
-  x,
-  y,
   lit,
   enter,
   children,
 }: {
+  side: "left" | "right";
   name: string;
-  x: number;
-  y: number;
   lit: boolean;
   enter?: boolean;
   children: React.ReactNode;
@@ -257,16 +256,16 @@ function SceneActor({
   const reduce = useReducedMotion();
   return (
     <div
-      className="sp-actor"
-      style={{ left: `${x}%`, top: `${y}%`, zIndex: Math.round(y) }}
+      className={`scene-dimmable pointer-events-none absolute z-0 ${
+        side === "left" ? "left-[2%]" : "right-[2%]"
+      }`}
+      style={{ top: -(STAGE_SIZE - STAGE_CLIP) }}
     >
-      <div
-        className={`relative -translate-x-1/2 -translate-y-full ${
-          enter && !reduce ? "sp-enter" : ""
-        }`}
-      >
+      {/* the pop-in animates ONLY opacity/scale — the actor mounts already
+          at its final spot, so a partner swap can't flash or jump */}
+      <div className={enter && !reduce ? "sp-pop" : ""}>
         <div
-          className={`transition-[opacity,filter,transform] duration-500 ${
+          className={`relative transition-[opacity,filter,transform] duration-500 ${
             lit && !reduce ? "sp-bob" : ""
           }`}
           style={
@@ -279,11 +278,11 @@ function SceneActor({
               : {
                   opacity: 0.4,
                   filter: "saturate(0.35) brightness(0.92)",
-                  transform: "translateY(3px) scale(0.94)",
+                  transform: "translateY(4px) scale(0.97)",
                 }
           }
         >
-          <span className="pixel-name font-pixel absolute -top-4 left-1/2 -translate-x-1/2 text-[7px] whitespace-nowrap">
+          <span className="pixel-name font-pixel absolute top-0 left-1/2 -translate-x-1/2 text-[8px] whitespace-nowrap">
             [{name}]
           </span>
           {children}
@@ -338,7 +337,7 @@ function DialogueBox({
   const meta = [event.place, formatClock(event.ts)].filter(Boolean).join(" · ");
 
   return (
-    <div className="relative">
+    <div className="relative z-10">
       {/* speaker nameplate riding the box's top edge, on the speaker's side */}
       <span
         className={`dlg-nameplate font-pixel absolute -top-4 z-10 px-2.5 py-1.5 text-[9px] ${
