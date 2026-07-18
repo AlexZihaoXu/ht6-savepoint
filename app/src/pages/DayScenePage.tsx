@@ -11,7 +11,12 @@
  */
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import {
+  Link,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
 import { useReducedMotion } from "framer-motion";
 import { PiCaretDown, PiScroll, PiX } from "react-icons/pi";
 import { Icon } from "@/components/Icon";
@@ -29,6 +34,7 @@ import {
   fallbackAvatar,
   formatClock,
   nameFor,
+  nearestEventTs,
   partnerAt,
   YOU_AVATAR,
 } from "@/lib/scene-utils";
@@ -36,7 +42,18 @@ import {
 export function DayScenePage() {
   const { date } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const isToday = !date || date === "today";
+
+  // ?t= / ?ts= deep link (ISO string or epoch ms): open the day scrubbed to
+  // that moment — a person's "Recent interactions" rows land the user right
+  // inside the conversation instead of at the start of the day.
+  const rawT = searchParams.get("t") ?? searchParams.get("ts");
+  const deepMs = rawT
+    ? /^\d+$/.test(rawT)
+      ? Number(rawT)
+      : Date.parse(rawT)
+    : NaN;
 
   const [view, setView] = useState<ApiDayView | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -48,15 +65,22 @@ export function DayScenePage() {
     (isToday ? api.today(ac.signal) : api.day(date!, ac.signal)).then(
       (v) => {
         setView(v);
+        // Land on the deep-linked moment (snapped to the nearest event so
+        // the matching line is active), else on the day's first event.
         const first = v.events[0];
-        setScrubT(first ? new Date(first.ts).getTime() : null);
+        setScrubT(
+          nearestEventTs(v.events, deepMs) ??
+            (first ? new Date(first.ts).getTime() : null),
+        );
       },
       (e) => {
         if (!ac.signal.aborted) setError(String(e));
       },
     );
     return () => ac.abort();
-  }, [date, isToday]);
+    // deepMs only changes with the URL (scrubbing is local state), so this
+    // re-runs exactly on navigation. NaN is Object.is-stable as a dep.
+  }, [date, isToday, deepMs]);
 
   const events = useMemo(() => view?.events ?? [], [view]);
   const peopleById = useMemo(

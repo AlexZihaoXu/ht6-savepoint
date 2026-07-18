@@ -87,13 +87,17 @@ export function PersonPage() {
 
   const name = displayName(person);
   // Most recent days this person appeared in (from their event history).
+  // `first` is their opening moment that day — the row's clock AND the
+  // deep-link target, so tapping lands at the start of that conversation.
   const recentDays = [...person.events]
     .sort((a, b) => b.ts.localeCompare(a.ts))
-    .reduce<Array<{ day: string; count: number; last: string }>>((acc, e) => {
+    .reduce<Array<{ day: string; count: number; first: string }>>((acc, e) => {
       const hit = acc.find((d) => d.day === e.day_id);
-      if (hit) hit.count += 1;
-      else if (acc.length < 5)
-        acc.push({ day: e.day_id, count: 1, last: e.ts });
+      if (hit) {
+        hit.count += 1;
+        hit.first = e.ts; // descending scan → the last write is the earliest
+      } else if (acc.length < 5)
+        acc.push({ day: e.day_id, count: 1, first: e.ts });
       return acc;
     }, []);
 
@@ -157,7 +161,7 @@ export function PersonPage() {
       <Card variant="secondary">
         <Card.Header>
           <Card.Title>Recent interactions</Card.Title>
-          <Card.Description>Tap a row to replay that day</Card.Description>
+          <Card.Description>Tap a row to jump into that chat</Card.Description>
         </Card.Header>
         <Card.Content className="flex flex-col gap-2">
           {recentDays.length === 0 && (
@@ -168,11 +172,14 @@ export function PersonPage() {
           {recentDays.map((d) => (
             <Link
               key={d.day}
-              to={`/scene/${d.day}`}
+              // ?t= deep-links the day scene STRAIGHT to this interaction —
+              // the scrubber opens at the row's timestamp, mid-conversation,
+              // not at the start of the day.
+              to={`/scene/${d.day}?t=${encodeURIComponent(d.first)}`}
               className="touch-target flex items-center justify-between border border-[var(--separator)] px-3 py-2 text-sm transition-colors hover:bg-[var(--surface-tertiary)]"
             >
               <span>
-                {fmtDay(d.day + "T00:00:00Z")} · {formatClock(d.last)} ·{" "}
+                {fmtDay(d.day + "T00:00:00Z")} · {formatClock(d.first)} ·{" "}
                 {d.count} {d.count === 1 ? "moment" : "moments"}
               </span>
               <Icon icon={PiCaretRight} className="text-[var(--muted)]" />

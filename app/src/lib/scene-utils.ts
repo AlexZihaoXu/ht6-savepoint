@@ -78,6 +78,26 @@ export function partnerAt(
   return null;
 }
 
+/**
+ * The timestamp (epoch ms) of the event nearest `targetMs` — used by the
+ * day scene's `?t=` deep link to land the scrubber ON a conversation moment
+ * (a person's profile links straight into their chat). Ties go to the
+ * earlier event. Null when there are no events or the target is NaN.
+ */
+export function nearestEventTs(
+  events: ApiEvent[],
+  targetMs: number,
+): number | null {
+  if (!events.length || Number.isNaN(targetMs)) return null;
+  let best: number | null = null;
+  for (const e of events) {
+    const ts = new Date(e.ts).getTime();
+    if (best === null || Math.abs(ts - targetMs) < Math.abs(best - targetMs))
+      best = ts;
+  }
+  return best;
+}
+
 /** Name for an event's person_id, given the day's resolved people. */
 export function nameFor(
   id: string,

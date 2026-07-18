@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   fallbackAvatar,
   formatClock,
+  nearestEventTs,
   partnerAt,
   YOU_AVATAR,
 } from "./scene-utils";
@@ -23,6 +24,54 @@ describe("scene helpers", () => {
     expect(formatClock("2026-07-18T08:00:00Z")).toBe("8:00AM");
     expect(formatClock("2026-07-18T22:30:00Z")).toBe("10:30PM");
     expect(formatClock("2026-07-18T17:30:00Z", false)).toBe("5:30");
+  });
+});
+
+describe("nearestEventTs (?t= deep link into a conversation)", () => {
+  const at = (ts: string): ApiEvent => ({
+    _id: `e-${ts}`,
+    ts,
+    person_id: "kenji",
+    type: "spoke",
+    text: "hi",
+    emotion: null,
+    place: null,
+    day_id: "d",
+  });
+  const events = [
+    at("2026-07-18T08:00:00Z"),
+    at("2026-07-18T08:04:00Z"),
+    at("2026-07-18T12:30:00Z"),
+  ];
+  const ms = (iso: string) => new Date(iso).getTime();
+
+  it("snaps an exact event timestamp to that event", () => {
+    expect(nearestEventTs(events, ms("2026-07-18T08:04:00Z"))).toBe(
+      ms("2026-07-18T08:04:00Z"),
+    );
+  });
+
+  it("picks the nearest event for an in-between time", () => {
+    expect(nearestEventTs(events, ms("2026-07-18T08:05:30Z"))).toBe(
+      ms("2026-07-18T08:04:00Z"),
+    );
+    expect(nearestEventTs(events, ms("2026-07-18T11:00:00Z"))).toBe(
+      ms("2026-07-18T12:30:00Z"),
+    );
+  });
+
+  it("clamps to the first/last event outside the day's range", () => {
+    expect(nearestEventTs(events, ms("2026-07-18T01:00:00Z"))).toBe(
+      ms("2026-07-18T08:00:00Z"),
+    );
+    expect(nearestEventTs(events, ms("2026-07-18T23:00:00Z"))).toBe(
+      ms("2026-07-18T12:30:00Z"),
+    );
+  });
+
+  it("is null with no events or an invalid target (fallback: day start)", () => {
+    expect(nearestEventTs([], ms("2026-07-18T08:00:00Z"))).toBeNull();
+    expect(nearestEventTs(events, Number.NaN)).toBeNull();
   });
 });
 
