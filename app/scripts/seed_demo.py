@@ -108,6 +108,53 @@ EVENTS_17 = [
 ]
 
 EVENTS_PAST = {
+    # Every seeded day has real events, so "view day" never opens empty.
+    # Casts respect each person's first_seen date.
+    "2026-07-01": [
+        spoke("2026-07-01", 8, 5, "demo-kenji", "New here? This window seat is the good one.", "Cafe Oro"),
+        spoke("2026-07-01", 8, 7, "you", "Sold. I'm Kenji-window-seat person now."),
+    ],
+    "2026-07-02": [
+        spoke("2026-07-02", 10, 0, "demo-mia", "Careful — you almost stepped on my seedlings!", "Community garden"),
+        spoke("2026-07-02", 10, 2, "you", "Sorry! Wait, are those basil? Teach me."),
+        spoke("2026-07-02", 10, 5, "demo-mia", "Deal. First lesson: water less than you think."),
+        seen("2026-07-02", 18, 30, "demo-kenji", "Cafe Oro"),
+    ],
+    "2026-07-03": [
+        spoke("2026-07-03", 9, 0, "demo-kenji", "Rain check on the hike? Trail's flooded.", "Cafe Oro"),
+    ],
+    "2026-07-05": [
+        spoke("2026-07-05", 14, 0, "demo-noah", "You're the one Mia mentioned! Come see the lab.", "Robotics lab"),
+        spoke("2026-07-05", 14, 3, "you", "If nothing in there can pinch me, sure."),
+        spoke("2026-07-05", 14, 5, "demo-noah", "No promises. The claw has opinions."),
+        spoke("2026-07-05", 16, 20, "demo-amara", "Market's closing — mangoes, half price!", "Farmers market"),
+        spoke("2026-07-05", 18, 0, "demo-mia", "Did Noah show you the claw? It waved at me once."),
+    ],
+    "2026-07-06": [
+        spoke("2026-07-06", 13, 0, "demo-priya", "Is this seat taken? Also, do you get eigenvalues?", "Library"),
+        spoke("2026-07-06", 13, 2, "you", "Barely. Let's be confused together."),
+        spoke("2026-07-06", 13, 5, "demo-priya", "A study alliance. I like it."),
+    ],
+    "2026-07-09": [
+        spoke("2026-07-09", 18, 10, "demo-sofia", "Hi! We just moved into 4B — I'm Sofia, this is Bun.", "Courtyard"),
+        spoke("2026-07-09", 18, 12, "you", "Welcome! Bun can dig up my garden anytime. Once."),
+    ],
+    "2026-07-13": [
+        spoke("2026-07-13", 11, 0, "demo-priya", "Practice midterm. Library. Bring snacks.", "Library"),
+        spoke("2026-07-13", 11, 2, "you", "Bringing Kenji's pastries. We can't fail now."),
+        spoke("2026-07-13", 15, 30, "demo-noah", "The arm picked up a screwdriver today. On purpose!"),
+    ],
+    "2026-07-15": [
+        seen("2026-07-15", 9, 0, "demo-mia", "Community garden"),
+        spoke("2026-07-15", 9, 5, "demo-mia", "Your basil survived the heat. I'm impressed."),
+    ],
+    "2026-07-16": [
+        spoke("2026-07-16", 12, 0, "demo-amara", "Peach season's ending — last crate, take two.", "Farmers market"),
+        spoke("2026-07-16", 12, 2, "you", "You always save me the good ones."),
+        spoke("2026-07-16", 19, 30, "demo-leo", "New song tonight. It's about a garden, kind of.", "The Attic"),
+        spoke("2026-07-16", 19, 32, "demo-sofia", "Bun and I are front row. He howls the chorus."),
+        spoke("2026-07-16", 21, 0, "you", "Best encore yet — even the howling."),
+    ],
     "2026-07-08": [
         spoke("2026-07-08", 9, 30, "demo-amara", "Fresh peaches today — first of the season!", "Farmers market"),
         spoke("2026-07-08", 9, 32, "you", "Save me two. No, four."),
@@ -148,42 +195,67 @@ for ev in DB.events.find({"day_id": TODAY, "person_id": {"$regex": "^Speaker"}})
     DB.events.update_one({"_id": ev["_id"]}, {"$set": {"ts": new_ts}})
 
 # ---- days (July 2026 garden) ---------------------------------------------
-def day(date, stage, people, events, mood):
-    return {"_id": date, "date": date, "mood_color": mood, "journal_notes": None,
-            "plant_stage": stage, "summary": {"people": people, "events": events}}
+# Every day doc's summary + plant stage are recomputed from the events that
+# actually exist, and the people tally counts REAL characters only — the
+# wearer ("you") and unresolved diarizer labels ("Speaker N") are excluded,
+# so the day bubble never claims more people than the plaza shows.
+DAY_MOODS = {
+    "2026-07-01": "#a3c46a",
+    "2026-07-02": "#8bc34a",
+    "2026-07-03": "#a3c46a",
+    "2026-07-05": "#7ac74f",
+    "2026-07-06": "#8bc34a",
+    "2026-07-08": "#63b34e",
+    "2026-07-09": "#a3c46a",
+    "2026-07-11": "#7ac74f",
+    "2026-07-13": "#8bc34a",
+    "2026-07-14": "#63b34e",
+    "2026-07-15": "#a3c46a",
+    "2026-07-16": "#7ac74f",
+    "2026-07-17": "#8bc34a",
+    TODAY: "#63b34e",
+}
 
 
-DAYS = [
-    day("2026-07-01", 1, 1, 2, "#a3c46a"),
-    day("2026-07-02", 2, 2, 4, "#8bc34a"),
-    day("2026-07-03", 1, 1, 1, "#a3c46a"),
-    day("2026-07-05", 3, 3, 7, "#7ac74f"),
-    day("2026-07-06", 2, 2, 3, "#8bc34a"),
-    day("2026-07-08", 4, 5, 12, "#63b34e"),
-    day("2026-07-09", 1, 1, 2, "#a3c46a"),
-    day("2026-07-11", 3, 2, 8, "#7ac74f"),
-    day("2026-07-13", 2, 2, 4, "#8bc34a"),
-    day("2026-07-14", 4, 4, 11, "#63b34e"),
-    day("2026-07-15", 1, 1, 1, "#a3c46a"),
-    day("2026-07-16", 3, 3, 6, "#7ac74f"),
-    day("2026-07-17", 2, 3, 4, "#8bc34a"),
-]
-for d in DAYS:
-    DB.days.replace_one({"_id": d["_id"]}, d, upsert=True)
+def day_tally(date):
+    n_events = DB.events.count_documents({"day_id": date})
+    n_people = len([
+        p for p in DB.events.distinct("person_id", {"day_id": date})
+        if p != "you" and not p.startswith("Speaker")
+    ])
+    score = n_events + 2 * max(n_people - 1, 0)
+    stage = next(
+        s for s, t in ((4, 10), (3, 6), (2, 3), (1, 1), (0, 0)) if score >= t
+    )
+    return n_events, n_people, stage
 
-# Today: recompute the real tallies from what is now in the events collection.
-n_events = DB.events.count_documents({"day_id": TODAY})
-n_people = len(DB.events.distinct("person_id", {"day_id": TODAY}))
-score = n_events + 2 * max(n_people - 1, 0)
-stage = next(s for s, t in ((4, 10), (3, 6), (2, 3), (1, 1), (0, 0)) if score >= t)
-DB.days.update_one(
-    {"_id": TODAY},
-    {"$set": {"date": TODAY, "plant_stage": stage,
-              "summary": {"people": n_people, "events": n_events}}},
-    upsert=True,
-)
 
-# ---- recaps for a few past days (today already has a real gemma recap) ----
+for date, mood in DAY_MOODS.items():
+    n_events, n_people, day_stage = day_tally(date)
+    if n_events == 0:
+        continue  # never emit a day doc without events behind it
+    DB.days.update_one(
+        {"_id": date},
+        {"$set": {"date": date, "mood_color": mood, "plant_stage": day_stage,
+                  "summary": {"people": n_people, "events": n_events}},
+         "$setOnInsert": {"journal_notes": None}},
+        upsert=True,
+    )
+
+n_events, n_people, stage = day_tally(TODAY)
+
+# ---- recaps ---------------------------------------------------------------
+# Today normally has a real gemma recap; seed a fallback ONLY if missing so
+# the garden peek is never blank (and a real recap is never clobbered).
+if DB.recaps.find_one({"_id": f"{TODAY}:day"}) is None:
+    DB.recaps.insert_one({
+        "_id": f"{TODAY}:day", "date": TODAY, "scope": "day",
+        "narrative": ("A full loop of the neighbourhood — coffee with Kenji, "
+                      "robots with Noah, basil from Amara, and one last quiz "
+                      "on the library steps."),
+        "highlights": [],
+    })
+
 RECAPS = [
     ("2026-07-08", "A bright, crowded day — the market, the lab, and five familiar faces before sundown."),
     ("2026-07-11", "A slow morning that turned into a long porch talk; the garden got watered twice."),
