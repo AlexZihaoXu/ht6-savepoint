@@ -27,6 +27,7 @@ import {
 } from "react-icons/pi";
 import { Icon } from "@/components/Icon";
 import { PixelHeader } from "@/components/PixelChrome";
+import { DetailedSprite } from "@/lib/detailed-sprite";
 import { ParametricSprite } from "@/lib/sprite";
 import {
   api,
@@ -224,13 +225,16 @@ export function DayScenePage() {
           <Cabin className="absolute top-[8%] right-[8%] h-[95px] w-auto" />
         </div>
 
-        {/* dialogue box — the two big characters stand right on top of it,
-            [you] LEFT / partner RIGHT, their lower third hidden by the box */}
+        {/* dialogue box — the two detailed portraits stand right on top of
+            it, [you] LEFT / partner RIGHT, torso bottoms tucked behind it */}
         <div className="flex-none px-2 pt-4">
           {active && (
             <div className="relative">
+              {/* the talking pair gets the DETAILED portrait style (mock art
+                  for now — see detailed-sprite.tsx); everywhere else keeps
+                  the small plaza sprite */}
               <StageActor side="left" name="You" lit={youSpeaking}>
-                <ParametricSprite params={YOU_AVATAR} size={STAGE_SIZE} />
+                <DetailedSprite params={YOU_AVATAR} size={STAGE_SIZE} />
               </StageActor>
               {partnerId && (
                 <StageActor
@@ -240,7 +244,7 @@ export function DayScenePage() {
                   lit={!youSpeaking}
                   enter
                 >
-                  <ParametricSprite
+                  <DetailedSprite
                     params={
                       peopleById.get(partnerId)?.avatar_params ??
                       fallbackAvatar(partnerId)
@@ -331,8 +335,8 @@ export function DayScenePage() {
 
 /** Visual-novel scale — the pair towers over the dialogue box. */
 const STAGE_SIZE = 176;
-/** Bottom ~third of each character hides behind the box. */
-const STAGE_CLIP = Math.round(STAGE_SIZE * 0.34);
+/** The portrait's torso bottom tucks behind the box (bust framing). */
+const STAGE_CLIP = Math.round(STAGE_SIZE * 0.24);
 
 /**
  * One of the two conversation characters, anchored to the dialogue box: it
