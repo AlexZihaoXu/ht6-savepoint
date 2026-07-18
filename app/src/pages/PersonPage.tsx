@@ -138,6 +138,13 @@ export function PersonPage() {
         </div>
       </div>
 
+      {/* Generated character flavor — distinct from the freeform Notes card below. */}
+      {person.bio?.trim() && (
+        <p className="border-l-2 border-[var(--accent)] pl-3 text-sm leading-relaxed text-[var(--muted)] italic">
+          {person.bio.trim()}
+        </p>
+      )}
+
       {person.tags.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {person.tags.map((tag) => (

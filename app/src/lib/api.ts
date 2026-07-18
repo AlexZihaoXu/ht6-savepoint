@@ -32,6 +32,8 @@ export interface ApiPerson {
   first_seen: string | null;
   last_seen: string | null;
   notes: string | null;
+  /** Warm 1–2 sentence generated character bio (null until the backend writes one). */
+  bio: string | null;
 }
 
 export interface ApiEvent {
