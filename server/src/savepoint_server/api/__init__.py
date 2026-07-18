@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
+from savepoint_server.api.binding import router as binding_router
 from savepoint_server.api.bio import router as bio_router
 from savepoint_server.api.health import router as health_router
 from savepoint_server.api.ingest import router as ingest_router
@@ -22,6 +23,7 @@ api_router.include_router(speech_router)
 api_router.include_router(ingest_router)
 api_router.include_router(read_router)
 api_router.include_router(recap_router)
+api_router.include_router(binding_router)
 api_router.include_router(bio_router)
 
 __all__ = ["api_router"]
