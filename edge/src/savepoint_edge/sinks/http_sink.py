@@ -1,8 +1,10 @@
-"""POSTs each event's JSON to an HTTP endpoint.
+"""POSTs events to the server's ``/ingest/video`` route as a JSON array.
 
-There is no `/events` (or similar) ingest route on server/ yet (only
-`/health` exists as of this writing) — this sink is ready for whenever one
-lands. Point `endpoint` at it then.
+The server accepts ``list[EdgeEvent]`` at ``POST /ingest/video`` (added in
+PR #19), so each event is sent as a **one-element JSON array** — the same
+body shape a future batched sink would use, and what the endpoint expects
+(a bare object would be rejected as 422). Point ``endpoint`` at
+``http://<server>:8000/ingest/video`` (see ``edge/.env.example`` / README).
 
 Every call is bounded by `timeout=`, and every failure mode is caught and
 turned into a `return False`, never a propagated exception or an indefinite
@@ -43,9 +45,14 @@ class HttpSink:
             line = try_serialize_edge_event(event)
             if line is None:
                 return False
+            # /ingest/video takes a JSON ARRAY (list[EdgeEvent]) so a batch can
+            # land in one request; wrap this single event as a one-element array.
+            # `line` is already compact valid JSON for the object, so bracketing
+            # it yields a valid list[EdgeEvent] body (a bare object would 422).
+            body = f"[{line}]".encode()
             request = urllib.request.Request(
                 self._endpoint,
-                data=line.encode("utf-8"),
+                data=body,
                 headers={"Content-Type": "application/json"},
                 method="POST",
             )

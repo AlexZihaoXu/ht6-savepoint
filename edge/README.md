@@ -35,7 +35,7 @@ Pick where events go with `SAVEPOINT_EDGE_SINK`:
 ```bash
 SAVEPOINT_EDGE_SINK=stdout uv run savepoint-edge                      # default
 SAVEPOINT_EDGE_SINK=file:session.ndjson uv run savepoint-edge         # newline-delimited JSON file
-SAVEPOINT_EDGE_SINK=http://100.x.x.x:8000/events uv run savepoint-edge  # POST each event
+SAVEPOINT_EDGE_SINK=http://100.x.x.x:8000/ingest/video uv run savepoint-edge  # POST events to the server (list[EdgeEvent])
 ```
 
 Run the tests and linter:
@@ -180,16 +180,14 @@ closer to a raw detection than a finished DB row:
   cross-checks this against server's actual model when server's deps are
   importable in the test environment (skips otherwise — edge/ has no
   dependency on server/, see that test's docstring).
-- `face_embedding` — **does not exist on any current server Pydantic
-  model** (`Person` only has `voice_embedding`). This is the gap
-  DESIGN.md's "match by nearest face embedding" flow assumes but that
-  hasn't been built server-side yet. Whoever wires up the ingest endpoint
-  needs to either add a field to accept it or resolve identity some other
-  way — flagging this explicitly rather than silently changing someone
-  else's model.
+- `face_embedding` — now accepted server-side: `Person.face_embedding`
+  and the `POST /ingest/video` body (`list[EdgeEvent]`) both carry it (PR
+  #19), stored for DESIGN.md's "match by nearest face embedding" flow.
 
-There is no ingest endpoint on `server/` yet (only `/health` exists as of
-this writing) — `HttpSink` is ready for whenever one lands.
+The server ingest endpoint exists: **`POST /ingest/video`** accepts a JSON
+array of EdgeEvents (`list[EdgeEvent]`) — `HttpSink` posts each event as a
+one-element array to it. Point `SAVEPOINT_EDGE_SINK` at
+`http://<server>:8000/ingest/video` (see `.env.example`).
 
 ### Why hand-rolled hashing but stdlib JSON/HTTP
 
