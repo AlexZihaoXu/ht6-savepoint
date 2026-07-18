@@ -27,15 +27,18 @@ const DayViewPage = lazy(() =>
 const PlazaPage = lazy(() =>
   import("@/pages/PlazaPage").then((m) => ({ default: m.PlazaPage })),
 );
+const DayScenePage = lazy(() =>
+  import("@/pages/DayScenePage").then((m) => ({ default: m.DayScenePage })),
+);
 
 /**
  * Animated, suspense-wrapped route element. The Suspense boundary sits INSIDE
  * the PageTransition so the shell (top bar + bottom nav) never unmounts and
  * exit/enter animations keep working while a chunk downloads.
  */
-function page(Page: ComponentType) {
+function page(Page: ComponentType, fullBleed = false) {
   return (
-    <PageTransition>
+    <PageTransition fullBleed={fullBleed}>
       <Suspense fallback={<PageFallback />}>
         <Page />
       </Suspense>
@@ -47,9 +50,16 @@ function page(Page: ComponentType) {
  * App layout: sticky TopBar, an animated scrollable content region, and a
  * fixed BottomNav. Routes are wrapped in <AnimatePresence mode="wait"> keyed on
  * the pathname so every navigation animates (fade + slide) via PageTransition.
+ *
+ * The immersive pixel screens (/plaza and /scene/*) bring their OWN chrome —
+ * wooden header + mockup bottom bar — so the classic TopBar/BottomNav and the
+ * padded reading column are skipped for them.
  */
 export function AppShell() {
   const location = useLocation();
+  const immersive =
+    location.pathname.startsWith("/plaza") ||
+    location.pathname.startsWith("/scene");
 
   // New screen → start reading from the top (the window is the scroller).
   useEffect(() => {
@@ -61,13 +71,19 @@ export function AppShell() {
       <a href="#main-content" className="skip-link">
         Skip to content
       </a>
-      <TopBar />
-      <main id="main-content" tabIndex={-1} className="app-main">
+      {!immersive && <TopBar />}
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className={immersive ? "app-main-flush" : "app-main"}
+      >
         <AnimatePresence mode="wait">
           <Routes location={location} key={location.pathname}>
             <Route path="/" element={page(TodayPage)} />
             <Route path="/garden" element={page(GardenPage)} />
-            <Route path="/plaza" element={page(PlazaPage)} />
+            <Route path="/plaza" element={page(PlazaPage, true)} />
+            <Route path="/scene" element={page(DayScenePage, true)} />
+            <Route path="/scene/:date" element={page(DayScenePage, true)} />
             <Route path="/people" element={page(PeoplePage)} />
             <Route path="/people/:id" element={page(PersonPage)} />
             <Route path="/day/:date" element={page(DayViewPage)} />
@@ -75,7 +91,7 @@ export function AppShell() {
           </Routes>
         </AnimatePresence>
       </main>
-      <BottomNav />
+      {!immersive && <BottomNav />}
     </div>
   );
 }

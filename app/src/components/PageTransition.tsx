@@ -9,7 +9,14 @@ import type { ReactNode } from "react";
  * Respects prefers-reduced-motion (Alex's explicit requirement): when reduced,
  * we drop the vertical slide and shorten the fade to a barely-there crossfade.
  */
-export function PageTransition({ children }: { children: ReactNode }) {
+export function PageTransition({
+  children,
+  fullBleed = false,
+}: {
+  children: ReactNode;
+  /** Immersive screens (plaza / day scene) span edge-to-edge, no column padding. */
+  fullBleed?: boolean;
+}) {
   const reduce = useReducedMotion();
 
   const variants: Variants = reduce
@@ -34,7 +41,7 @@ export function PageTransition({ children }: { children: ReactNode }) {
         duration: reduce ? 0.12 : 0.28,
         ease: [0.22, 1, 0.36, 1],
       }}
-      className="app-column"
+      className={fullBleed ? "app-column-flush" : "app-column"}
     >
       {children}
     </motion.div>
