@@ -1,12 +1,18 @@
 import { Link } from "react-router-dom";
 import { Card } from "@heroui/react";
-import { gardenDays, type DayTile } from "@/lib/seed";
+import type { IconType } from "react-icons";
+import { GiSprout, GiThreeLeaves, GiSunflower } from "react-icons/gi";
+import { PiCaretDown } from "react-icons/pi";
+import { Icon } from "@/components/Icon";
+import { gardenDays } from "@/lib/seed";
 
-const PLANT_BY_STAGE = ["·", "🌱", "🌿", "🌻"] as const;
-
-function plantFor(day: DayTile): string {
-  return PLANT_BY_STAGE[day.stage];
-}
+// Growth stages 1..3 → cozy plant glyphs; stage 0 is an un-logged day (a dot).
+const PLANT_BY_STAGE: (IconType | null)[] = [
+  null,
+  GiSprout,
+  GiThreeLeaves,
+  GiSunflower,
+];
 
 /** Garden — a calendar where each day is a plant tile. Tap a plant → Day view. */
 export function GardenPage() {
@@ -47,16 +53,32 @@ export function GardenPage() {
                 <span className="text-[0.6rem] text-[var(--muted)]">
                   {day.label}
                 </span>
-                <span aria-hidden className="text-lg leading-none">
-                  {plantFor(day)}
+                <span
+                  aria-hidden
+                  className="text-lg leading-none text-[var(--accent)]"
+                >
+                  {PLANT_BY_STAGE[day.stage] ? (
+                    <Icon icon={PLANT_BY_STAGE[day.stage]!} />
+                  ) : (
+                    <span className="text-[var(--muted)]">·</span>
+                  )}
                 </span>
               </Link>
             ))}
           </div>
         </Card.Content>
         <Card.Footer className="justify-between text-xs text-[var(--muted)]">
-          <span>🌱 sprouting · 🌿 growing · 🌻 in bloom</span>
-          <span>Past months ▾</span>
+          <span className="flex items-center gap-1.5">
+            <Icon icon={GiSprout} className="text-[var(--accent)]" /> sprouting
+            ·
+            <Icon icon={GiThreeLeaves} className="text-[var(--accent)]" />{" "}
+            growing ·{" "}
+            <Icon icon={GiSunflower} className="text-[var(--accent)]" /> in
+            bloom
+          </span>
+          <span className="flex items-center gap-1">
+            Past months <Icon icon={PiCaretDown} />
+          </span>
         </Card.Footer>
       </Card>
     </section>

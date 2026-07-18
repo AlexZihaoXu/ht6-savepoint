@@ -1,5 +1,12 @@
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Button, Card, Chip } from "@heroui/react";
+import {
+  PiCaretLeft,
+  PiCaretRight,
+  PiStarFill,
+  PiUserCircleDashed,
+} from "react-icons/pi";
+import { Icon } from "@/components/Icon";
 import { SpriteAvatar } from "@/components/SpriteAvatar";
 import { findPerson, TODAY_ISO } from "@/lib/seed";
 
@@ -12,7 +19,10 @@ export function PersonPage() {
   if (!person) {
     return (
       <section className="flex flex-col items-center gap-3 py-10 text-center">
-        <span className="text-4xl">🫥</span>
+        <Icon
+          icon={PiUserCircleDashed}
+          className="text-5xl text-[var(--muted)]"
+        />
         <h1 className="text-xl font-semibold">No one here yet</h1>
         <p className="text-sm text-[var(--muted)]">
           We haven&rsquo;t met this character.
@@ -26,8 +36,11 @@ export function PersonPage() {
 
   return (
     <section className="flex flex-col gap-5" aria-labelledby="person-heading">
-      <Link to="/people" className="text-sm text-[var(--muted)]">
-        ‹ People
+      <Link
+        to="/people"
+        className="inline-flex items-center gap-1 text-sm text-[var(--muted)]"
+      >
+        <Icon icon={PiCaretLeft} /> People
       </Link>
 
       <div className="flex items-center gap-4">
@@ -40,7 +53,13 @@ export function PersonPage() {
             className="flex items-center gap-2 text-2xl font-semibold tracking-tight"
           >
             {person.name}
-            {person.favorite && <span aria-label="favorite">⭐</span>}
+            {person.favorite && (
+              <Icon
+                icon={PiStarFill}
+                label="favorite"
+                className="text-[var(--accent)]"
+              />
+            )}
           </h1>
           <p className="text-sm text-[var(--muted)]">
             Last seen {person.lastSeen}
@@ -74,18 +93,14 @@ export function PersonPage() {
             className="flex items-center justify-between border border-[var(--separator)] px-3 py-2 text-sm hover:bg-[var(--surface-tertiary)]"
           >
             <span>Today · morning</span>
-            <span aria-hidden className="text-[var(--muted)]">
-              ›
-            </span>
+            <Icon icon={PiCaretRight} className="text-[var(--muted)]" />
           </Link>
           <Link
             to="/day/2026-07-15"
             className="flex items-center justify-between border border-[var(--separator)] px-3 py-2 text-sm hover:bg-[var(--surface-tertiary)]"
           >
             <span>Jul 15 · afternoon</span>
-            <span aria-hidden className="text-[var(--muted)]">
-              ›
-            </span>
+            <Icon icon={PiCaretRight} className="text-[var(--muted)]" />
           </Link>
         </Card.Content>
       </Card>

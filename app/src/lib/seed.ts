@@ -22,7 +22,7 @@ export interface Person {
 export interface DayTile {
   date: string; // ISO yyyy-mm-dd
   label: string; // day-of-month
-  /** garden growth stage 0..3 driving the plant emoji */
+  /** garden growth stage 0..3 driving the plant icon */
   stage: 0 | 1 | 2 | 3;
   isToday: boolean;
   people: number;

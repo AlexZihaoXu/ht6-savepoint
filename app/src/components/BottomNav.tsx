@@ -1,20 +1,28 @@
 import { NavLink } from "react-router-dom";
+import type { IconType } from "react-icons";
+import {
+  PiChatCircleDots,
+  PiPlant,
+  PiSunHorizon,
+  PiUsersThree,
+} from "react-icons/pi";
+import { Icon } from "./Icon";
 import { TODAY_ISO } from "@/lib/seed";
 
 interface Tab {
   to: string;
   label: string;
-  icon: string;
+  icon: IconType;
   end?: boolean;
 }
 
 // Mobile-first bottom tab bar. The Person and Day-view screens are reached from
 // within People / Garden / Today, so the bar stays to four primary destinations.
 const tabs: Tab[] = [
-  { to: "/", label: "Today", icon: "🌤️", end: true },
-  { to: "/garden", label: "Garden", icon: "🌱" },
-  { to: `/day/${TODAY_ISO}`, label: "Story", icon: "💬" },
-  { to: "/people", label: "People", icon: "🧑‍🤝‍🧑" },
+  { to: "/", label: "Today", icon: PiSunHorizon, end: true },
+  { to: "/garden", label: "Garden", icon: PiPlant },
+  { to: `/day/${TODAY_ISO}`, label: "Story", icon: PiChatCircleDots },
+  { to: "/people", label: "People", icon: PiUsersThree },
 ];
 
 export function BottomNav() {
@@ -47,7 +55,7 @@ export function BottomNav() {
                       isActive ? "-translate-y-0.5" : "",
                     ].join(" ")}
                   >
-                    {tab.icon}
+                    <Icon icon={tab.icon} />
                   </span>
                   <span>{tab.label}</span>
                 </>

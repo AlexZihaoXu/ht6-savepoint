@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@heroui/react";
+import { PiGearSix, PiMoonStars, PiSun } from "react-icons/pi";
+import { Icon } from "./Icon";
 import { getCurrentTheme, toggleTheme, type ThemeMode } from "@/lib/theme";
 
 /** Sticky top bar: logo + name on the left, theme toggle + settings right. */
@@ -33,10 +35,13 @@ export function TopBar() {
             aria-label={`Switch to ${mode === "dark" ? "light" : "dark"} theme`}
             onPress={() => setMode(toggleTheme())}
           >
-            <span aria-hidden>{mode === "dark" ? "🌙" : "☀️"}</span>
+            <Icon
+              icon={mode === "dark" ? PiMoonStars : PiSun}
+              className="text-lg"
+            />
           </Button>
           <Button variant="tertiary" aria-label="Settings">
-            <span aria-hidden>⚙️</span>
+            <Icon icon={PiGearSix} className="text-lg" />
           </Button>
         </div>
       </div>

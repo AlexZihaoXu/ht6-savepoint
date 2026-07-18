@@ -1,5 +1,7 @@
 import { Link, useNavigate } from "react-router-dom";
 import { Button, Card, Chip } from "@heroui/react";
+import { PiArrowRight, PiPlant, PiSparkle } from "react-icons/pi";
+import { Icon } from "@/components/Icon";
 import { SpriteAvatar } from "@/components/SpriteAvatar";
 import { people, TODAY_ISO } from "@/lib/seed";
 
@@ -48,7 +50,7 @@ export function TodayPage() {
             </div>
           ) : (
             <div className="flex flex-col items-center gap-2 py-6 text-center">
-              <span className="text-4xl">🌱</span>
+              <Icon icon={PiPlant} className="text-4xl text-[var(--accent)]" />
               <p className="text-sm text-[var(--muted)]">
                 A quiet day so far — go say hi to someone.
               </p>
@@ -69,7 +71,11 @@ export function TodayPage() {
           <p className="text-sm leading-relaxed">
             You spent the morning building the garden view with Vee and caught
             up with Dan about the Pi. It felt like a good, productive save
-            point. 🌟
+            point.{" "}
+            <Icon
+              icon={PiSparkle}
+              className="inline-block align-text-bottom text-[var(--accent)]"
+            />
           </p>
         </Card.Content>
         <Card.Footer>
@@ -77,7 +83,9 @@ export function TodayPage() {
             variant="primary"
             onPress={() => navigate(`/day/${TODAY_ISO}`)}
           >
-            Replay today&rsquo;s story →
+            <span className="inline-flex items-center gap-1.5">
+              Replay today&rsquo;s story <Icon icon={PiArrowRight} />
+            </span>
           </Button>
         </Card.Footer>
       </Card>

@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Card, Chip } from "@heroui/react";
+import { PiCaretRight, PiStarFill } from "react-icons/pi";
+import { Icon } from "@/components/Icon";
 import { SpriteAvatar } from "@/components/SpriteAvatar";
 import { people } from "@/lib/seed";
 
@@ -58,15 +60,22 @@ export function PeoplePage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
                       <span className="truncate font-medium">{p.name}</span>
-                      {p.favorite && <span aria-label="favorite">⭐</span>}
+                      {p.favorite && (
+                        <Icon
+                          icon={PiStarFill}
+                          label="favorite"
+                          className="shrink-0 text-[var(--accent)]"
+                        />
+                      )}
                     </div>
                     <p className="truncate text-xs text-[var(--muted)]">
                       {p.tags.join(" · ")} — {p.lastSeen}
                     </p>
                   </div>
-                  <span aria-hidden className="text-[var(--muted)]">
-                    ›
-                  </span>
+                  <Icon
+                    icon={PiCaretRight}
+                    className="shrink-0 text-[var(--muted)]"
+                  />
                 </Card.Content>
               </Card>
             </Link>

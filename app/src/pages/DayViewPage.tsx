@@ -1,12 +1,19 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Button, Card } from "@heroui/react";
+import {
+  PiCaretDown,
+  PiCaretLeft,
+  PiCaretRight,
+  PiFlagPennant,
+} from "react-icons/pi";
+import { Icon } from "@/components/Icon";
 import { sampleDialogue } from "@/lib/seed";
 
 /**
  * Day view — the reusable timeline + Undertale-style dialogue playback.
- * This scaffold steps through the seed dialogue with ◀ / ▶; the real
- * typewriter engine + timeline flags (DESIGN.md §10.2/§10.5) land later.
+ * This scaffold steps through the seed dialogue with the Back / Next controls;
+ * the real typewriter engine + timeline flags (DESIGN.md §10.2/§10.5) land later.
  */
 export function DayViewPage() {
   const { date } = useParams();
@@ -19,8 +26,11 @@ export function DayViewPage() {
   return (
     <section className="flex flex-col gap-5" aria-labelledby="day-heading">
       <header className="flex flex-col gap-1">
-        <Link to="/garden" className="text-sm text-[var(--muted)]">
-          ‹ Garden
+        <Link
+          to="/garden"
+          className="inline-flex items-center gap-1 text-sm text-[var(--muted)]"
+        >
+          <Icon icon={PiCaretLeft} /> Garden
         </Link>
         <h1 id="day-heading" className="text-2xl font-semibold tracking-tight">
           {date ?? "Today"}
@@ -46,8 +56,8 @@ export function DayViewPage() {
             ].join(" ")}
           >
             {line.text}
-            <span className="ml-1 animate-pulse" aria-hidden>
-              ▼
+            <span className="ml-1 inline-flex animate-pulse align-middle">
+              <Icon icon={PiCaretDown} className="text-sm" />
             </span>
           </div>
         </Card.Content>
@@ -57,7 +67,9 @@ export function DayViewPage() {
             isDisabled={atStart}
             onPress={() => setIndex((i) => Math.max(0, i - 1))}
           >
-            ◀ Back
+            <span className="inline-flex items-center gap-1">
+              <Icon icon={PiCaretLeft} /> Back
+            </span>
           </Button>
           <span className="text-xs text-[var(--muted)]">
             {index + 1} / {sampleDialogue.length}
@@ -69,7 +81,9 @@ export function DayViewPage() {
               setIndex((i) => Math.min(sampleDialogue.length - 1, i + 1))
             }
           >
-            Next ▶
+            <span className="inline-flex items-center gap-1">
+              Next <Icon icon={PiCaretRight} />
+            </span>
           </Button>
         </Card.Footer>
       </Card>
@@ -92,7 +106,7 @@ export function DayViewPage() {
             ].join(" ")}
           >
             <span aria-hidden className="text-lg leading-none">
-              🚩
+              <Icon icon={PiFlagPennant} />
             </span>
             <span className="text-[0.65rem]">{l.time}</span>
           </button>
