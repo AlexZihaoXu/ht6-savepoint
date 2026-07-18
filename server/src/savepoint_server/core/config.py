@@ -48,6 +48,8 @@ class Settings(BaseSettings):
     # via SAVEPOINT_GEMMA_MODEL to match whatever `--served-model-name` it exposes.
     gemma_model: str = "gemma"
     gemini_api_key: str | None = None
+    # Model id for Gemini's generateContent REST API (used by transcript_refine below).
+    gemini_model: str = "gemini-2.0-flash"
     backboard_api_key: str | None = None
     # FreeSolo Flash fine-tuned adapter (see server/finetune/): a small model SFT-trained
     # specifically on SavePoint's day-events -> recap task via the FreeSolo Flash
@@ -61,6 +63,15 @@ class Settings(BaseSettings):
     # default) is the only one wired today; gemini/backboard land in SAV-51/52 and
     # any OpenAI-compatible endpoint swaps in here.
     recap_backend: Literal["gemma", "gemini", "backboard", "freesolo"] = "gemma"
+
+    # --- Transcript refinement (SAV-56) ---
+    # OPTIONAL, non-blocking Gemini cleanup of diarized transcript text on the
+    # audio-ingest path. "none" (default) makes NO Gemini call and leaves ingest
+    # byte-identical to today; "gemini" runs a best-effort ASR/punctuation cleanup
+    # that can NEVER block or 500 ingest — any failure/timeout/mismatch falls back to
+    # the raw transcript (see services/transcript_refine.py). Requires gemini_api_key;
+    # with the key unset the refiner is disabled even when "gemini" is selected.
+    transcript_refine: Literal["none", "gemini"] = "none"
 
     # --- Speech pipeline (SAV-32) ---
     # Which transcriber the speech service uses. "stub" (default) is CI-safe and
