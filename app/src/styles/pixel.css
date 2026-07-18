@@ -44,6 +44,25 @@
   filter: brightness(0.78) saturate(0.9);
 }
 
+/* Subtle cinematic vignette on the day-scene stage: darkens the corners of
+   the scene art only (above the backdrop props, below the z-10 status text —
+   and the dialogue box / scrubber / transcript live outside this container
+   entirely). A fixed dark glaze reads fine on both themes; dark mode's
+   scene dim simply stacks beneath it. */
+.scene-vignette::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 55%,
+    rgba(0, 0, 0, 0.14) 78%,
+    rgba(0, 0, 0, 0.38) 100%
+  );
+}
+
 /* ---- chrome -------------------------------------------------------------- */
 
 .wood-bar {

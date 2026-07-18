@@ -150,7 +150,7 @@ export function DayScenePage() {
         </div>
 
         {/* the scene */}
-        <div className="grass-bg scene-dimmable relative isolate [height:36%] flex-none overflow-hidden">
+        <div className="grass-bg scene-dimmable scene-vignette relative isolate [height:36%] flex-none overflow-hidden">
           <FenceRow className="absolute top-1 left-0 w-full" />
           <Tree className="absolute -top-1 -left-2 h-16 w-auto" />
           <Tree className="absolute -top-2 right-0 h-16 w-auto" />
