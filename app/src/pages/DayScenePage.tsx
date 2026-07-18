@@ -10,8 +10,8 @@
  * bottom moves through the day.
  */
 
-import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useReducedMotion } from "framer-motion";
 import { PiCaretDown, PiScroll, PiX } from "react-icons/pi";
 import { Icon } from "@/components/Icon";
@@ -35,6 +35,7 @@ import {
 
 export function DayScenePage() {
   const { date } = useParams();
+  const navigate = useNavigate();
   const isToday = !date || date === "today";
 
   const [view, setView] = useState<ApiDayView | null>(null);
@@ -177,6 +178,7 @@ export function DayScenePage() {
                 onAdvance={() =>
                   jumpTo(Math.min(activeIdx + 1, events.length - 1))
                 }
+                onDone={() => navigate("/plaza")}
               />
             </div>
           )}
@@ -294,12 +296,16 @@ function StageActor({
 
 /* ---- dialogue box ---------------------------------------------------------- */
 
+/** A dialogue box never shows more than this many wrapped text lines. */
+const MAX_BOX_LINES = 5;
+
 function DialogueBox({
   event,
   name,
   side,
   hasNext,
   onAdvance,
+  onDone,
 }: {
   event: ApiEvent;
   name: string;
@@ -307,24 +313,73 @@ function DialogueBox({
   side: "left" | "right";
   hasNext: boolean;
   onAdvance: () => void;
+  /** Final tap on the day's last line/page — leave the scene. */
+  onDone: () => void;
 }) {
   const reduce = useReducedMotion();
   const text =
     event.type === "spoke" && event.text ? event.text : `(${name} stopped by.)`;
 
-  // Typewriter reveal, restarted per line; instant for reduced motion.
+  // Wrap-aware pagination: a hidden measurer with the exact width +
+  // typography of the visible paragraph splits a long line into pages of at
+  // most MAX_BOX_LINES rendered lines, breaking on word boundaries (binary
+  // search per page for the longest word-span that still fits). One speaker
+  // line can span as many boxes as it needs; nameplate + lit character stay
+  // put while its pages turn.
+  const measureRef = useRef<HTMLParagraphElement>(null);
+  const [pages, setPages] = useState<string[]>([text]);
+  const [page, setPage] = useState(0);
+
+  useLayoutEffect(() => {
+    const m = measureRef.current;
+    if (!m) {
+      setPages([text]);
+      setPage(0);
+      return;
+    }
+    const lineH = parseFloat(getComputedStyle(m).lineHeight) || 21;
+    const maxH = lineH * (MAX_BOX_LINES + 0.5); // half-line tolerance
+    const words = text.split(/\s+/).filter(Boolean);
+    const out: string[] = [];
+    let start = 0;
+    while (start < words.length) {
+      let lo = start + 1;
+      let hi = words.length;
+      let fit = start + 1; // always make progress, never split a word
+      while (lo <= hi) {
+        const mid = (lo + hi) >> 1;
+        m.textContent = words.slice(start, mid).join(" ");
+        if (m.scrollHeight <= maxH) {
+          fit = mid;
+          lo = mid + 1;
+        } else {
+          hi = mid - 1;
+        }
+      }
+      out.push(words.slice(start, fit).join(" "));
+      start = fit;
+    }
+    m.textContent = "";
+    setPages(out.length ? out : [text]);
+    setPage(0);
+  }, [text]);
+
+  const pageText = pages[Math.min(page, pages.length - 1)] ?? text;
+  const lastPage = page >= pages.length - 1;
+
+  // Typewriter reveal, restarted per page; instant for reduced motion.
   // (No run-once guards: the effect must survive StrictMode's double-invoke,
   // so it is written to be safely restartable — reset, tick, cleanup.)
   const [shown, setShown] = useState(0);
   useEffect(() => {
     if (reduce) {
-      setShown(text.length);
+      setShown(pageText.length);
       return;
     }
     setShown(0);
     const iv = window.setInterval(() => {
       setShown((n) => {
-        if (n >= text.length) {
+        if (n >= pageText.length) {
           window.clearInterval(iv);
           return n;
         }
@@ -332,9 +387,10 @@ function DialogueBox({
       });
     }, 22);
     return () => window.clearInterval(iv);
-  }, [event._id, text.length, reduce]);
+  }, [event._id, page, pageText.length, reduce]);
 
   const meta = [event.place, formatClock(event.ts)].filter(Boolean).join(" · ");
+  const revealed = shown >= pageText.length;
 
   return (
     <div className="relative z-10">
@@ -349,22 +405,41 @@ function DialogueBox({
       <button
         type="button"
         className="dlg-wood block w-full cursor-pointer p-3 text-left"
-        onClick={() =>
-          shown < text.length ? setShown(text.length) : hasNext && onAdvance()
-        }
+        onClick={() => {
+          if (!revealed) setShown(pageText.length);
+          else if (!lastPage) setPage((p) => p + 1);
+          else if (hasNext) onAdvance();
+          else onDone(); // day replayed to the end — back to the plaza
+        }}
         aria-label="Dialogue — tap to continue"
       >
-        <div className="dlg-text relative min-h-24 px-3 py-2">
+        <div className="dlg-text relative min-h-24 px-3 pt-2 pb-5">
           {meta && <p className="font-pixel text-[8px] opacity-60">{meta}</p>}
           <p className="mt-1.5 text-[15px] leading-snug font-medium">
-            {text.slice(0, shown)}
+            {pageText.slice(0, shown)}
           </p>
-          {shown >= text.length && hasNext && (
+          {/* hidden measurer — same width + typography as the paragraph */}
+          <p
+            ref={measureRef}
+            aria-hidden
+            className="invisible absolute inset-x-3 top-0 text-[15px] leading-snug font-medium"
+          />
+          {pages.length > 1 && (
+            <span className="font-pixel absolute bottom-1 left-2 text-[8px] opacity-50">
+              {page + 1}/{pages.length}
+            </span>
+          )}
+          {revealed && (!lastPage || hasNext) && (
             <span
               aria-hidden
               className="absolute right-2 bottom-1 animate-bounce opacity-60"
             >
               <Icon icon={PiCaretDown} size={14} />
+            </span>
+          )}
+          {revealed && lastPage && !hasNext && (
+            <span className="font-pixel absolute right-2 bottom-1.5 text-[8px] opacity-60">
+              to the plaza
             </span>
           )}
         </div>
