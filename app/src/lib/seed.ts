@@ -73,14 +73,14 @@ export const people: Person[] = [
   },
   {
     id: "mentor",
-    name: "QNX Mentor",
-    initials: "QM",
+    name: "Hackathon Mentor",
+    initials: "HM",
     tint: "oklch(84% 0.10 140)",
     lastSeen: "3d ago",
     tags: ["mentor"],
     favorite: false,
     spokeToday: false,
-    blurb: "Confirmed the on-device inference path counts for the prize.",
+    blurb: "Helped debug the camera pipeline. Good energy about the demo.",
   },
 ];
 

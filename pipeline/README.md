@@ -5,8 +5,8 @@ a merged transcript of `Speaker N: text` turns, correctly recovering **overlappi
 speech** (both people talking at once) instead of dropping or duplicating it.
 
 This is jiucheng's validated pipeline, vendored from `two-speaker-demo/`. It is the
-speech workstream for SavePoint (epic **SAV-7**) and runs **server-side, not on the QNX
-device**.
+speech workstream for SavePoint (epic **SAV-7**) and runs **server-side, not on the
+Pi**.
 
 ## How it works
 
