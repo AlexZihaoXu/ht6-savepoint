@@ -59,9 +59,10 @@ def get_transcriber_dep() -> Transcriber:
     return get_transcriber()
 
 
-def get_transcript_refiner_dep() -> TranscriptRefineClient | None:
-    """Provide the optional transcript refiner (``None`` unless ``transcript_refine``
-    is enabled with a Gemini key; overridable in tests via dependency_overrides)."""
+def get_transcript_refiner_dep() -> list[TranscriptRefineClient] | None:
+    """Provide the optional transcript-refine engine chain (``None`` unless
+    ``transcript_refine`` is enabled and an engine is configured; overridable in tests
+    via dependency_overrides). The chain is tried in order (Gemini, then Gemma)."""
     return get_transcript_refiner()
 
 
@@ -122,15 +123,18 @@ async def ingest_video(
 async def ingest_audio(
     body: AudioIngestRequest,
     repos: Annotated[Repositories, Depends(get_repos)],
-    refiner: Annotated[TranscriptRefineClient | None, Depends(get_transcript_refiner_dep)],
+    refine_engines: Annotated[
+        list[TranscriptRefineClient] | None, Depends(get_transcript_refiner_dep)
+    ],
 ) -> AudioIngestResult:
     """Land the app's audio-derived JSON: record diarized SPOKE events by ts.
 
     When ``transcript_refine`` is enabled the turns' text is first cleaned by an
-    optional Gemini pass (SAV-56); that pass can never block or 500 this route.
+    optional LLM chain (SAV-56/58: Gemini, then a quota-free Gemma fallback); that
+    pass can never block or 500 this route.
     """
     try:
-        return await ingest_audio_segments(body, repos=repos, refiner=refiner)
+        return await ingest_audio_segments(body, repos=repos, refine_engines=refine_engines)
     except IngestValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -147,7 +151,9 @@ async def ingest_audio_clip(
     started_at: StartedAtForm,
     repos: Annotated[Repositories, Depends(get_repos)],
     transcriber: Annotated[Transcriber, Depends(get_transcriber_dep)],
-    refiner: Annotated[TranscriptRefineClient | None, Depends(get_transcript_refiner_dep)],
+    refine_engines: Annotated[
+        list[TranscriptRefineClient] | None, Depends(get_transcript_refiner_dep)
+    ],
 ) -> AudioIngestResult:
     """Upload a recorded clip -> diarize -> NTP-anchored SPOKE events (SAV-40 option A).
 
@@ -185,7 +191,7 @@ async def ingest_audio_clip(
             for seg in transcript.segments
         ]
         return await ingest_audio_segments(
-            AudioIngestRequest(segments=segments), repos=repos, refiner=refiner
+            AudioIngestRequest(segments=segments), repos=repos, refine_engines=refine_engines
         )
     except IngestValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

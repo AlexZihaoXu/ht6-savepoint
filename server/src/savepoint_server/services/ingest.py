@@ -412,7 +412,7 @@ async def ingest_audio_segments(
     request: AudioIngestRequest,
     *,
     repos: Repositories,
-    refiner: TranscriptRefineClient | None = None,
+    refine_engines: list[TranscriptRefineClient] | None = None,
 ) -> AudioIngestResult:
     """Land the app's audio-derived JSON: record diarized SPOKE events by ts.
 
@@ -421,19 +421,20 @@ async def ingest_audio_segments(
     timestamp is parsed up front (bad ``start``/``end`` -> 400, whole-batch), events
     are stored in start-time order, and each touched day is re-rolled up.
 
-    When ``refiner`` is supplied (SAV-56, opt-in via ``transcript_refine="gemini"``),
-    the turns' **text** is first run through an OPTIONAL Gemini cleanup pass before
-    events are created — speaker labels, turn count, order, and timing are left
+    When ``refine_engines`` is supplied (SAV-56/58, opt-in via
+    ``transcript_refine="gemini"``/``"gemma"``), the turns' **text** is first run
+    through an OPTIONAL LLM cleanup chain (Gemini, then a quota-free Gemma fallback)
+    before events are created — speaker labels, turn count, order, and timing are left
     untouched. That pass is best-effort and can NEVER block or 500 ingest: it is
     guarded here (belt-and-suspenders on top of :func:`refine_segments`, which itself
-    never raises), so any failure just falls back to the raw transcript. With no
-    ``refiner`` (the default), behavior is byte-identical to plain ingest — no Gemini
-    call is made.
+    tries each engine and never raises), so any failure across all engines just falls
+    back to the raw transcript. With no ``refine_engines`` (the default), behavior is
+    byte-identical to plain ingest — no LLM call is made.
     """
     segments = request.segments
-    if refiner is not None:
+    if refine_engines:
         try:
-            segments = await refine_segments(segments, client=refiner)
+            segments = await refine_segments(segments, engines=refine_engines)
         except Exception:
             # refine_segments never raises, but guard the call site too so a transcript
             # refiner can never propagate an error onto the ingest HTTP response.

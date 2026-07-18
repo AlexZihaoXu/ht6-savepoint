@@ -64,14 +64,20 @@ class Settings(BaseSettings):
     # any OpenAI-compatible endpoint swaps in here.
     recap_backend: Literal["gemma", "gemini", "backboard", "freesolo"] = "gemma"
 
-    # --- Transcript refinement (SAV-56) ---
-    # OPTIONAL, non-blocking Gemini cleanup of diarized transcript text on the
-    # audio-ingest path. "none" (default) makes NO Gemini call and leaves ingest
-    # byte-identical to today; "gemini" runs a best-effort ASR/punctuation cleanup
-    # that can NEVER block or 500 ingest — any failure/timeout/mismatch falls back to
-    # the raw transcript (see services/transcript_refine.py). Requires gemini_api_key;
-    # with the key unset the refiner is disabled even when "gemini" is selected.
-    transcript_refine: Literal["none", "gemini"] = "none"
+    # --- Transcript refinement (SAV-56/58) ---
+    # OPTIONAL, non-blocking LLM cleanup of diarized transcript text on the
+    # audio-ingest path via an ordered engine chain (first valid result wins). "none"
+    # (default) makes NO LLM call and leaves ingest byte-identical to today. In every
+    # mode the cleanup is best-effort and can NEVER block or 500 ingest — any failure/
+    # timeout/mismatch across ALL engines falls back to the raw transcript (see
+    # services/transcript_refine.py). Modes:
+    #   "none"   -> no refinement (default).
+    #   "gemini" -> Gemini first (needs gemini_api_key), then Gemma as a quota-free
+    #               fallback when a real gemma_base_url is set. If neither is
+    #               configured, refinement is disabled.
+    #   "gemma"  -> Gemma only (needs a real gemma_base_url, i.e. moved off the
+    #               placeholder default). No quota, so no Gemini key required.
+    transcript_refine: Literal["none", "gemini", "gemma"] = "none"
 
     # --- Speech pipeline (SAV-32) ---
     # Which transcriber the speech service uses. "stub" (default) is CI-safe and
