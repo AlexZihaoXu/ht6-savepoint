@@ -30,11 +30,11 @@ export function PixelHeader() {
         {/* corner brackets, per the mockup logotype */}
         <span
           aria-hidden
-          className="absolute -top-0.5 left-0 h-2.5 w-2.5 border-t-2 border-l-2 border-[#fff6e6]"
+          className="absolute -top-0.5 left-0 h-2.5 w-2.5 border-t-2 border-l-2 border-[#f7ecd7]"
         />
         <span
           aria-hidden
-          className="absolute right-0 -bottom-0.5 h-2.5 w-2.5 border-r-2 border-b-2 border-[#fff6e6]"
+          className="absolute right-0 -bottom-0.5 h-2.5 w-2.5 border-r-2 border-b-2 border-[#f7ecd7]"
         />
         <span className="font-pixel text-[15px] leading-none">Savepoint</span>
       </Link>
@@ -81,7 +81,7 @@ export function PixelBottomNav() {
     >
       <button
         type="button"
-        className="pixel-btn touch-target flex-1 px-4 py-2.5"
+        className="pixel-btn pixel-btn-primary touch-target flex-1 px-4 py-2.5"
         onClick={() => navigate("/scene/today")}
       >
         <span className="font-pixel text-[13px]">Today</span>

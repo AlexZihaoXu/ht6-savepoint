@@ -29,7 +29,7 @@ import {
   type ApiEvent,
   type ApiPerson,
 } from "@/lib/api";
-import { FenceRow, Tree } from "@/lib/scene";
+import { Cabin, FenceRow, Tree } from "@/lib/scene";
 import {
   fallbackAvatar,
   formatClock,
@@ -157,21 +157,25 @@ export function DayScenePage() {
 
           <div className="dirt-plot absolute inset-x-[5%] top-[18%] bottom-[6%]">
             {error && (
-              <p className="pixel-name font-pixel absolute inset-x-4 top-1/3 text-center text-[10px] leading-5">
+              <p className="pixel-name font-pixel absolute inset-x-4 top-1/3 z-10 text-center text-[10px] leading-5">
                 Backend asleep… is the API up?
               </p>
             )}
             {!error && !view && (
-              <p className="pixel-name font-pixel absolute inset-x-4 top-1/3 animate-pulse text-center text-[10px] leading-5">
+              <p className="pixel-name font-pixel absolute inset-x-4 top-1/3 z-10 animate-pulse text-center text-[10px] leading-5">
                 Loading your world…
               </p>
             )}
             {!error && view && events.length === 0 && (
-              <p className="pixel-name font-pixel absolute inset-x-4 top-1/4 text-center text-[10px] leading-5">
+              <p className="pixel-name font-pixel absolute inset-x-4 top-1/4 z-10 text-center text-[10px] leading-5">
                 Nothing recorded this day.
               </p>
             )}
           </div>
+
+          {/* waterprism's cabin at the back of the yard (1x scale), clear of
+              the stage characters standing along the bottom of the scene */}
+          <Cabin className="absolute top-[8%] right-[8%] h-[95px] w-auto" />
         </div>
 
         {/* dialogue box — the two big characters stand right on top of it,
@@ -544,9 +548,9 @@ function TranscriptPanel({
   onClose: () => void;
 }) {
   return (
-    <div className="absolute inset-0 z-40 flex flex-col bg-[#0d0906]">
+    <div className="absolute inset-0 z-40 flex flex-col bg-[#14121e]">
       <div className="flex flex-none items-center justify-between px-4 py-3">
-        <h2 className="font-pixel text-[11px] text-[#f3e2b8]">Transcript</h2>
+        <h2 className="font-pixel text-[11px] text-[#eec39a]">Transcript</h2>
         <button
           type="button"
           aria-label="Close transcript"
@@ -572,7 +576,7 @@ function TranscriptPanel({
                   {formatClock(e.ts)}
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="text-xs font-bold text-[#ffdf8a]">
+                  <span className="text-xs font-bold text-[#f9f360]">
                     {name}
                   </span>{" "}
                   <span className="text-sm text-white/90">

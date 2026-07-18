@@ -1,77 +1,64 @@
 /**
  * Scene COMPONENTS for the pixel screens: the growth-stage plant sprite and
- * scenery props (trees, rocks, fences) built from the LPC tile crops in
- * `public/assets/tiles/`. Pure helpers live in scene-utils.ts.
+ * scenery props (trees, rocks, fences, lamp, cabin), all cut from
+ * waterprism's spritesheet into `public/assets/sheet/`. Pure helpers live in
+ * scene-utils.ts.
  */
-
-import { useId } from "react";
 
 /* ---- growth-stage plant sprite ----------------------------------------- */
 
-const LEAF = "#3d8b40";
-const LEAF_LIGHT = "#66bb5a";
-const STEM = "#2f6b33";
-const BLOOM = "#e8a33d";
-const BLOOM_CORE = "#c25b3f";
+/** The sheet's flower columns — four palettes, each drawn in 4 growth rows. */
+const FLOWER_COLORS = ["pink", "gold", "blue", "green"] as const;
+
+/** Deterministic flower colour per seed (e.g. the day's ISO date). */
+function flowerColor(seed: string): (typeof FLOWER_COLORS)[number] {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  return FLOWER_COLORS[h % FLOWER_COLORS.length];
+}
 
 /**
- * A day's plant, drawn as crisp pixel rects: stage 0 (bare soil) .. 4 (bloom).
- * Bigger stage = bigger, fuller plant — the garden reads at a glance.
+ * A day's plant: stage 0 (bare soil) .. 4 (full bloom), straight from the
+ * sheet's flower growth rows. Same seed → same flower colour, so a day keeps
+ * its plant across renders. Bigger stage = bigger, fuller flower — the
+ * garden reads at a glance.
  */
 export function PlantSprite({
   stage,
   size = 22,
+  seed = "",
   className,
 }: {
   stage: number;
   size?: number;
+  seed?: string;
   className?: string;
 }) {
   const s = Math.max(0, Math.min(4, stage));
+  if (s === 0) {
+    return (
+      <svg
+        viewBox="0 0 16 16"
+        width={size}
+        height={size}
+        shapeRendering="crispEdges"
+        className={className}
+        aria-hidden
+      >
+        <rect x="6" y="12" width="4" height="2" fill="#875940" opacity="0.55" />
+      </svg>
+    );
+  }
   return (
-    <svg
-      viewBox="0 0 16 16"
+    <img
+      src={`/assets/sheet/flower-${flowerColor(seed)}-${s}.png`}
+      alt=""
+      aria-hidden
+      draggable={false}
       width={size}
       height={size}
-      shapeRendering="crispEdges"
-      className={className}
-      aria-hidden
-    >
-      {s === 0 && (
-        <rect x="6" y="12" width="4" height="2" fill="#7a5136" opacity="0.55" />
-      )}
-      {s >= 1 && (
-        <g>
-          <rect x="7" y="10" width="2" height="4" fill={STEM} />
-          <rect x="5" y="9" width="2" height="2" fill={LEAF_LIGHT} />
-          <rect x="9" y="9" width="2" height="2" fill={LEAF} />
-        </g>
-      )}
-      {s >= 2 && (
-        <g>
-          <rect x="7" y="6" width="2" height="4" fill={STEM} />
-          <rect x="4" y="6" width="3" height="2" fill={LEAF} />
-          <rect x="9" y="5" width="3" height="2" fill={LEAF_LIGHT} />
-        </g>
-      )}
-      {s >= 3 && (
-        <g>
-          <rect x="7" y="3" width="2" height="3" fill={STEM} />
-          <rect x="3" y="8" width="2" height="2" fill={LEAF_LIGHT} />
-          <rect x="11" y="8" width="2" height="2" fill={LEAF} />
-          <rect x="5" y="3" width="2" height="2" fill={LEAF} />
-          <rect x="9" y="2" width="2" height="2" fill={LEAF_LIGHT} />
-        </g>
-      )}
-      {s >= 4 && (
-        <g>
-          <rect x="6" y="1" width="4" height="3" fill={BLOOM} />
-          <rect x="7" y="2" width="2" height="1" fill={BLOOM_CORE} />
-          <rect x="4" y="0" width="2" height="2" fill={BLOOM} />
-          <rect x="10" y="0" width="2" height="2" fill={BLOOM} />
-        </g>
-      )}
-    </svg>
+      className={`pixelated pointer-events-none select-none ${className ?? ""}`}
+    />
   );
 }
 
@@ -82,73 +69,74 @@ interface PropStyle {
   style?: React.CSSProperties;
 }
 
-export function Tree({ className, style }: PropStyle) {
-  return (
-    <img
-      src="/assets/tiles/tree.png"
-      alt=""
-      aria-hidden
-      draggable={false}
-      className={`pixelated pointer-events-none select-none ${className ?? ""}`}
-      style={style}
-    />
-  );
+function propImg(src: string) {
+  return function Prop({ className, style }: PropStyle) {
+    return (
+      <img
+        src={src}
+        alt=""
+        aria-hidden
+        draggable={false}
+        className={`pixelated pointer-events-none select-none ${className ?? ""}`}
+        style={style}
+      />
+    );
+  };
 }
 
-export function Pine({ className, style }: PropStyle) {
-  return (
-    <img
-      src="/assets/tiles/pine.png"
-      alt=""
-      aria-hidden
-      draggable={false}
-      className={`pixelated pointer-events-none select-none ${className ?? ""}`}
-      style={style}
-    />
-  );
-}
+/** The sheet's leafy oak (33x41). */
+export const Tree = propImg("/assets/sheet/tree-oak.png");
+/** The sheet's rounder second tree (31x41) — keeps the old `Pine` name so
+    call sites stay untouched. */
+export const Pine = propImg("/assets/sheet/tree-round.png");
+/** Street lamp (10x40). */
+export const Lamp = propImg("/assets/sheet/lamp.png");
+/** Fallen log (25x11). */
+export const Log = propImg("/assets/sheet/log.png");
+/** The red-roof cabin (72x95) — day-scene backdrop. */
+export const Cabin = propImg("/assets/sheet/cabin.png");
+
+const ROCK_BIG = propImg("/assets/sheet/rock.png");
+const ROCK_SMALL = propImg("/assets/sheet/pebbles.png");
 
 export function Rock({
   small,
   className,
   style,
 }: PropStyle & { small?: boolean }) {
-  return (
-    <img
-      src={small ? "/assets/tiles/pebbles.png" : "/assets/tiles/rock.png"}
-      alt=""
-      aria-hidden
-      draggable={false}
-      className={`pixelated pointer-events-none select-none ${className ?? ""}`}
-      style={style}
-    />
-  );
+  const Img = small ? ROCK_SMALL : ROCK_BIG;
+  return <Img className={className} style={style} />;
 }
 
-/** A run of wooden fence (posts + two rails), tiled to any width. */
+/** Tiny ground accents scattered on the grass. */
+export function GroundFlower({
+  kind,
+  className,
+  style,
+}: PropStyle & { kind: "mushroom" | "daisies" | "buttercups" }) {
+  const Img = DECO[kind];
+  return <Img className={className} style={style} />;
+}
+const DECO = {
+  mushroom: propImg("/assets/sheet/deco-mushroom.png"),
+  daisies: propImg("/assets/sheet/deco-daisies.png"),
+  buttercups: propImg("/assets/sheet/deco-buttercups.png"),
+};
+
+/** A run of wooden fence — the sheet's post+rails piece on a 16px period,
+    tiled to any width at 1.5x. */
 export function FenceRow({ className, style }: PropStyle) {
-  const pid = useId();
   return (
-    <svg
-      className={`pointer-events-none select-none ${className ?? ""}`}
-      style={style}
-      height="26"
-      width="100%"
+    <div
       aria-hidden
-      shapeRendering="crispEdges"
-    >
-      <defs>
-        <pattern id={pid} width="34" height="26" patternUnits="userSpaceOnUse">
-          <rect x="0" y="4" width="34" height="4" fill="#8a5a34" />
-          <rect x="0" y="13" width="34" height="4" fill="#8a5a34" />
-          <rect x="0" y="8" width="34" height="1" fill="#6d4326" />
-          <rect x="0" y="17" width="34" height="1" fill="#6d4326" />
-          <rect x="4" y="0" width="6" height="24" fill="#9a6a3e" />
-          <rect x="4" y="0" width="6" height="2" fill="#b5834f" />
-          <rect x="8" y="0" width="2" height="24" fill="#6d4326" />
-        </pattern>
-      </defs>
-      <rect width="100%" height="26" fill={`url(#${pid})`} />
-    </svg>
+      className={`pixelated pointer-events-none select-none ${className ?? ""}`}
+      style={{
+        height: 36,
+        backgroundImage: 'url("/assets/sheet/fence.png")',
+        backgroundSize: "24px 36px",
+        backgroundRepeat: "repeat-x",
+        ...style,
+      }}
+    />
   );
 }

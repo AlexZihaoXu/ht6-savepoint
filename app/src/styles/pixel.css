@@ -1,11 +1,12 @@
 /*
  * Cozy-pixel layer for the redesigned screens (plaza / garden / day scene).
  *
- * Ground rules: LPC tile art + the Press Start 2P display font render at
- * integer-ish scales with `image-rendering: pixelated`; interface chrome
- * (wood header, gray pixel buttons, speech bubbles) is plain CSS so it stays
- * crisp at any DPR and themes cleanly. Scene art keeps its fixed palette in
- * both themes — dark mode just dims the world a little (nighttime plaza).
+ * Art direction: waterprism's spritesheet + palette (2026-07-18), sliced into
+ * `public/assets/sheet/` (see design-assets/palette.md). Ground, plots, the
+ * dialogue panel and the chunky buttons are her pixels served as tiles /
+ * border-images with `image-rendering: pixelated`; the remaining CSS chrome
+ * draws from the same swatches. Scene art keeps its fixed palette in both
+ * themes — dark mode just dims the world a little (nighttime plaza).
  */
 
 @font-face {
@@ -24,16 +25,17 @@
 /* ---- ground + props ------------------------------------------------------ */
 
 .grass-bg {
-  background-image: url("/assets/tiles/grass.png");
-  background-size: 48px 48px;
+  /* flat sheet green + waterprism's tuft accents, 48px tile shown at 2x */
+  background-image: url("/assets/sheet/grass.png");
+  background-size: 96px 96px;
   image-rendering: pixelated;
 }
 
-/* Rounded dirt plot: the LPC 3x3 scalloped patch as a border-image, so any
-   box becomes an organic plot over the grass. */
+/* Rounded dirt plot: a 3x3 patch assembled from the sheet's dirt autotile
+   (grass-fringed edges), so any box becomes an organic plot over the grass. */
 .dirt-plot {
-  border: 22px solid transparent;
-  border-image: url("/assets/tiles/dirt-patch.png") 32 fill round;
+  border: 24px solid transparent;
+  border-image: url("/assets/sheet/dirt-patch.png") 16 fill round;
   image-rendering: pixelated;
 }
 
@@ -46,23 +48,33 @@
 
 .wood-bar {
   background:
-    linear-gradient(rgba(255, 255, 255, 0.07), rgba(0, 0, 0, 0.08)), #6d4a30;
-  border-bottom: 3px solid #4a3120;
-  color: #fff6e6;
+    linear-gradient(rgba(255, 255, 255, 0.06), rgba(0, 0, 0, 0.1)), #875940;
+  border-bottom: 3px solid #603b33;
+  color: #f7ecd7;
 }
 
+/* Chunky buttons = the sheet's rounded UI tiles as border-images.
+   Light: tan tile w/ ink outline + brown bottom lip; dark: deep-brown tile. */
 .pixel-btn {
-  background: var(--pixel-btn-bg);
+  border: solid transparent;
+  border-width: 9px 9px 12px;
+  border-image: url("/assets/sheet/btn.png") 9 9 12 9 fill stretch;
   color: var(--pixel-btn-fg);
-  border: none;
-  box-shadow:
-    0 2px 0 rgba(0, 0, 0, 0.28),
-    inset 0 1px 0 rgba(255, 255, 255, 0.35);
   image-rendering: pixelated;
 }
 .pixel-btn:active {
   transform: translateY(1px);
-  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.28);
+}
+.dark .pixel-btn {
+  border-width: 9px;
+  border-image: url("/assets/sheet/btn-dark.png") 9 fill stretch;
+}
+/* Primary action (e.g. [ Today ]) rides the sheet's blue tile in both themes. */
+.pixel-btn-primary,
+.dark .pixel-btn-primary {
+  border-width: 9px 9px 12px;
+  border-image: url("/assets/sheet/btn-blue.png") 9 9 12 9 fill stretch;
+  color: #222033;
 }
 
 .pixel-bar {
@@ -71,20 +83,18 @@
 }
 
 :root {
-  --pixel-btn-bg: #e9e4d8;
-  --pixel-btn-fg: #241f18;
-  --pixel-bar-bg: #f7f4ec;
-  --pixel-bar-border: #d9d2c2;
-  --bubble-bg: #ffffff;
-  --bubble-fg: #241f18;
+  --pixel-btn-fg: #45283c;
+  --pixel-bar-bg: #efe3c8;
+  --pixel-bar-border: #d8c7a4;
+  --bubble-bg: #fdf8ee;
+  --bubble-fg: #222033;
 }
 .dark {
-  --pixel-btn-bg: #3b382f;
-  --pixel-btn-fg: #f0ead8;
-  --pixel-bar-bg: #211f1a;
-  --pixel-bar-border: #3b382f;
-  --bubble-bg: #2c2a24;
-  --bubble-fg: #f0ead8;
+  --pixel-btn-fg: #f3e2b8;
+  --pixel-bar-bg: #1d1a2b;
+  --pixel-bar-border: #322e50;
+  --bubble-bg: #2d2947;
+  --bubble-fg: #e9e7f4;
 }
 
 /* ---- speech bubble ------------------------------------------------------- */
@@ -105,39 +115,37 @@
   border-bottom-width: 0;
 }
 
-/* Floating name tags in the scene: white pixel text with a hard outline. */
+/* Floating name tags in the scene: white pixel text with a hard ink outline. */
 .pixel-name {
   color: #fff;
   text-shadow:
-    1px 0 0 #1d1712,
-    -1px 0 0 #1d1712,
-    0 1px 0 #1d1712,
-    0 -1px 0 #1d1712,
-    1px 1px 0 #1d1712;
+    1px 0 0 #222033,
+    -1px 0 0 #222033,
+    0 1px 0 #222033,
+    0 -1px 0 #222033,
+    1px 1px 0 #222033;
 }
 
 /* ---- Stardew dialogue box ------------------------------------------------ */
 
+/* The sheet's big tan panel as a border-image (2x), tan fill included. */
 .dlg-wood {
-  background: #c89d63;
-  border: 3px solid #4a3120;
-  box-shadow:
-    inset 0 0 0 3px #e8c288,
-    inset 0 0 0 6px #a9764a;
+  border: 20px solid transparent;
+  border-image: url("/assets/sheet/panel.png") 10 fill stretch;
   image-rendering: pixelated;
 }
 /* Speaker nameplate riding the top edge of the dialogue box (ref style). */
 .dlg-nameplate {
-  background: #f7e9c8;
-  color: #4a3120;
-  border: 3px solid #4a3120;
+  background: #eec39a;
+  color: #663931;
+  border: 3px solid #663931;
   box-shadow: 0 2px 0 rgba(0, 0, 0, 0.3);
   image-rendering: pixelated;
 }
 .dlg-text {
-  background: #f7e9c8;
-  color: #4a3120;
-  border: 2px solid #d9b98c;
+  background: #f6d9ae;
+  color: #663931;
+  border: 2px solid #d9a066;
   border-radius: 10px;
 }
 
@@ -153,8 +161,8 @@
 }
 .scrub::-webkit-slider-runnable-track {
   height: 10px;
-  background: #cfc3ae;
-  border: 2px solid #7c7260;
+  background: #d8c39a;
+  border: 2px solid #8f563b;
   box-shadow: inset 0 2px 0 rgba(0, 0, 0, 0.18);
 }
 .scrub::-webkit-slider-thumb {
@@ -163,8 +171,8 @@
   width: 24px;
   height: 24px;
   margin-top: -9px;
-  background: #e9dcc0;
-  border: 3px solid #8d8272;
+  background: #eec39a;
+  border: 3px solid #663931;
   border-radius: 7px 10px 8px 9px;
   box-shadow:
     inset -3px -3px 0 rgba(0, 0, 0, 0.16),
@@ -172,14 +180,14 @@
 }
 .scrub::-moz-range-track {
   height: 10px;
-  background: #cfc3ae;
-  border: 2px solid #7c7260;
+  background: #d8c39a;
+  border: 2px solid #8f563b;
 }
 .scrub::-moz-range-thumb {
   width: 20px;
   height: 20px;
-  background: #e9dcc0;
-  border: 3px solid #8d8272;
+  background: #eec39a;
+  border: 3px solid #663931;
   border-radius: 7px 10px 8px 9px;
 }
 .scrub:disabled {

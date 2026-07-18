@@ -17,7 +17,16 @@ import { PixelBottomNav, PixelHeader } from "@/components/PixelChrome";
 import { ParametricSprite } from "@/lib/sprite";
 import { api, displayName, type ApiDay, type ApiPerson } from "@/lib/api";
 import { addMonth, monthGrid, monthName } from "@/lib/calendar";
-import { FenceRow, Pine, PlantSprite, Rock, Tree } from "@/lib/scene";
+import {
+  FenceRow,
+  GroundFlower,
+  Lamp,
+  Log,
+  Pine,
+  PlantSprite,
+  Rock,
+  Tree,
+} from "@/lib/scene";
 import { rand, relativeSeen } from "@/lib/scene-utils";
 import {
   createWanderer,
@@ -343,6 +352,20 @@ function PlazaPanel({
       <Rock className="absolute top-[42%] right-1 h-8 w-auto" />
       <Rock small className="absolute right-[30%] bottom-[7%] h-7 w-auto" />
       <FenceRow className="absolute bottom-[3%] left-0 w-[55%]" />
+      <Lamp className="absolute bottom-[2.5%] left-[58%] h-20 w-auto" />
+      <Log className="absolute top-[6%] left-[44%] h-[22px] w-auto" />
+      <GroundFlower
+        kind="daisies"
+        className="absolute top-[8.5%] right-[24%] h-[26px] w-auto"
+      />
+      <GroundFlower
+        kind="mushroom"
+        className="absolute top-[9.5%] left-[28%] h-4 w-auto"
+      />
+      <GroundFlower
+        kind="buttercups"
+        className="absolute top-[40%] left-[1%] h-4 w-auto"
+      />
 
       {/* the plot everyone wanders */}
       <div
@@ -480,6 +503,14 @@ function GardenPanel({
       <Tree className="absolute -top-2 right-3 h-24 w-auto" />
       <Rock small className="absolute bottom-[8%] left-[8%] h-7 w-auto" />
       <Pine className="absolute bottom-[2%] left-[-12px] h-20 w-auto" />
+      <GroundFlower
+        kind="daisies"
+        className="absolute right-[10%] bottom-[4%] h-[26px] w-auto"
+      />
+      <GroundFlower
+        kind="mushroom"
+        className="absolute bottom-[5%] left-[24%] h-4 w-auto"
+      />
 
       <div className="dirt-plot absolute inset-x-[4%] top-[13%] bottom-[13%] flex flex-col">
         {/* month header */}
@@ -558,7 +589,7 @@ function GardenPanel({
                     className={[
                       "relative flex items-end justify-center border border-black/10 pb-0.5",
                       cell.iso === TODAY_ISO
-                        ? "outline-2 outline-offset-[-2px] outline-[#ffdf8a]"
+                        ? "outline-2 outline-offset-[-2px] outline-[#f9f360]"
                         : "",
                     ].join(" ")}
                   >
@@ -567,7 +598,8 @@ function GardenPanel({
                     </span>
                     <PlantSprite
                       stage={byIso.get(cell.iso)?.plant_stage ?? 0}
-                      size={18 + (byIso.get(cell.iso)?.plant_stage ?? 0) * 8}
+                      size={16 + (byIso.get(cell.iso)?.plant_stage ?? 0) * 8}
+                      seed={cell.iso}
                     />
                   </button>
                 ) : (

@@ -46,7 +46,7 @@ export function MicCapture() {
         >
           <span
             aria-hidden
-            className="h-2.5 w-2.5 animate-pulse rounded-full bg-[#c0392b]"
+            className="h-2.5 w-2.5 animate-pulse rounded-full bg-[#a03c37]"
           />
           <span className="font-pixel text-[11px] tabular-nums">
             {formatElapsed(state.elapsed)}
