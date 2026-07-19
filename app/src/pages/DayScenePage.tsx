@@ -27,6 +27,8 @@ import {
 } from "react-icons/pi";
 import { Icon } from "@/components/Icon";
 import { PixelHeader } from "@/components/PixelChrome";
+import { CustomAvatar } from "@/lib/custom-avatar";
+import { CANVAS_W, loadAvatar } from "@/lib/customizer";
 import { PixelSprite } from "@/lib/pixel-sprite";
 import { ParametricSprite } from "@/lib/sprite";
 import {
@@ -73,6 +75,9 @@ export function DayScenePage() {
   // when the picker is closed. Captured on tap so scrubbing mid-pick can't
   // silently retarget the assignment.
   const [namingLabel, setNamingLabel] = useState<string | null>(null);
+  // The wearer's own customizer-built character (SAV-61), read once per
+  // visit — null falls back to the parametric "You" sprite.
+  const [customYou] = useState(() => loadAvatar());
 
   useEffect(() => {
     const ac = new AbortController();
@@ -234,12 +239,35 @@ export function DayScenePage() {
                   to stage scale (integer pixel scale, so it stays crisp);
                   anyone un-sprited keeps the parametric fallback */}
               <StageActor side="left" name="You" lit={youSpeaking}>
-                <PixelSprite
-                  localId="you"
-                  sprite={null}
-                  params={YOU_AVATAR}
-                  size={STAGE_SIZE}
-                />
+                {customYou ? (
+                  // The customizer-built You (SAV-61): feet on the layout
+                  // box's bottom edge, centered like the sprite tiles.
+                  <span
+                    style={{
+                      position: "relative",
+                      display: "block",
+                      width: STAGE_SIZE,
+                      height: STAGE_SIZE,
+                    }}
+                  >
+                    <CustomAvatar
+                      parts={customYou}
+                      scale={YOU_STAGE_SCALE}
+                      style={{
+                        position: "absolute",
+                        bottom: 0,
+                        left: (STAGE_SIZE - CANVAS_W * YOU_STAGE_SCALE) / 2,
+                      }}
+                    />
+                  </span>
+                ) : (
+                  <PixelSprite
+                    localId="you"
+                    sprite={null}
+                    params={YOU_AVATAR}
+                    size={STAGE_SIZE}
+                  />
+                )}
               </StageActor>
               {partnerId && (
                 <StageActor
@@ -349,6 +377,13 @@ export function DayScenePage() {
 const STAGE_SIZE = 140;
 /** Crisp integer blow-up of the sprite tile on stage (92 → 184px). */
 const STAGE_PIXEL_SCALE = 2;
+/**
+ * The custom "You" avatar's stage scale: its 32×96 canvas holds a ~90px
+ * character, so 1.5× stands it ~135px tall — matching the ~140px PixelLab
+ * partner beside it. Half-integer scale stays device-pixel exact on the
+ * ≥2× phone screens this ships on.
+ */
+const YOU_STAGE_SCALE = 1.5;
 /** The characters' feet/shins tuck behind the dialogue box. */
 const STAGE_CLIP = 28;
 

@@ -71,6 +71,13 @@ export function PixelHeader() {
           >
             People list
           </Link>
+          <Link
+            to="/customize"
+            className="px-3 py-2.5 font-medium"
+            onClick={() => setMenuOpen(false)}
+          >
+            Your character
+          </Link>
         </div>
       )}
     </header>

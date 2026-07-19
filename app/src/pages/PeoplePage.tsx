@@ -5,6 +5,7 @@ import {
   PiCheck,
   PiFunnel,
   PiStarFill,
+  PiUserGear,
   PiUsersThree,
 } from "react-icons/pi";
 import { Icon } from "@/components/Icon";
@@ -94,21 +95,31 @@ export function PeoplePage() {
                 : "Loading your world…"}
           </p>
         </div>
-        <button
-          type="button"
-          aria-label="Filter and sort"
-          aria-expanded={filtersOpen}
-          className="pixel-btn touch-target relative flex flex-none items-center justify-center"
-          onClick={() => setFiltersOpen((v) => !v)}
-        >
-          <Icon icon={PiFunnel} size={20} />
-          {nonDefault && (
-            <span
-              aria-hidden
-              className="absolute top-0.5 right-0.5 h-2 w-2 bg-[var(--accent)]"
-            />
-          )}
-        </button>
+        <div className="flex flex-none items-center gap-2">
+          {/* your own character — the modular customizer (SAV-61) */}
+          <Link
+            to="/customize"
+            aria-label="Customize your character"
+            className="pixel-btn touch-target flex flex-none items-center justify-center"
+          >
+            <Icon icon={PiUserGear} size={20} />
+          </Link>
+          <button
+            type="button"
+            aria-label="Filter and sort"
+            aria-expanded={filtersOpen}
+            className="pixel-btn touch-target relative flex flex-none items-center justify-center"
+            onClick={() => setFiltersOpen((v) => !v)}
+          >
+            <Icon icon={PiFunnel} size={20} />
+            {nonDefault && (
+              <span
+                aria-hidden
+                className="absolute top-0.5 right-0.5 h-2 w-2 bg-[var(--accent)]"
+              />
+            )}
+          </button>
+        </div>
 
         {filtersOpen && (
           <FilterSheet
