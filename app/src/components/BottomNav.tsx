@@ -7,7 +7,6 @@ import {
   PiUsersThree,
 } from "react-icons/pi";
 import { Icon } from "./Icon";
-import { TODAY_ISO } from "@/lib/seed";
 
 interface Tab {
   to: string;
@@ -16,12 +15,14 @@ interface Tab {
   end?: boolean;
 }
 
-// Mobile-first bottom tab bar. The Person and Day-view screens are reached from
-// within People / Garden / Today, so the bar stays to four primary destinations.
+// Mobile-first bottom tab bar (shown on the classic-chrome screens, i.e.
+// People). Every tab targets a REAL screen: the plaza home, the garden
+// (page 2 of the plaza — a swipe, not a separate page), today's day scene,
+// and the people list. The old scaffold pages are gone.
 const tabs: Tab[] = [
-  { to: "/", label: "Today", icon: PiSunHorizon, end: true },
-  { to: "/garden", label: "Garden", icon: PiPlant },
-  { to: `/day/${TODAY_ISO}`, label: "Story", icon: PiChatCircleDots },
+  { to: "/plaza", label: "Today", icon: PiSunHorizon, end: true },
+  { to: "/plaza?view=garden", label: "Garden", icon: PiPlant },
+  { to: "/scene/today", label: "Story", icon: PiChatCircleDots },
   { to: "/people", label: "People", icon: PiUsersThree },
 ];
 

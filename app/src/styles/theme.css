@@ -1,7 +1,9 @@
 /*
- * HeroUI Theme Customization
- * Add this to your global.css after importing @heroui/styles
- * Only includes variables users need to customize
+ * HeroUI Theme Customization — waterprism's SavePoint palette (2026-07-18).
+ * Every value is either an exact swatch from design-assets/palette.md or a
+ * light/dark ramp derived from one: leaf green `#7ebc49` accent, warm CTA
+ * `#d1773a`, ink `#222033`, parchment surfaces from `#e7c69f`, night surfaces
+ * from the ink/indigo darks (`#222033` / `#403e70`).
  * @see https://heroui.com/docs/react/getting-started/theming
  */
 
@@ -10,38 +12,38 @@
 .default,
 [data-theme="light"],
 [data-theme="default"] {
-  /* Theme Colors (Light Mode) */
-  --accent: oklch(79.92% 0.1663 146.23);
-  --accent-foreground: oklch(15% 0.0300 146.23);
-  --background: oklch(97.02% 0.0027 146.23);
-  --border: oklch(90.00% 0.0027 146.23);
-  --danger: oklch(65.32% 0.2341 12.83);
-  --danger-foreground: oklch(99.11% 0 0);
-  --default: oklch(94.00% 0.0027 146.23);
-  --default-foreground: oklch(21.03% 0.0059 146.23);
-  --field-background: oklch(100.00% 0.0014 146.23);
+  /* Theme Colors (Light Mode) — warm parchment day */
+  --accent: #7ebc49;
+  --accent-foreground: #1f2b13;
+  --background: #f3ead8;
+  --border: #d9c9a8;
+  --danger: #a03c37;
+  --danger-foreground: #fdf6ee;
+  --default: #e7dcc4;
+  --default-foreground: #222033;
+  --field-background: #fdf8ee;
   --field-border: transparent;
-  --field-foreground: oklch(21.03% 0.0027 146.23);
-  --field-placeholder: oklch(55.17% 0.0054 146.23);
-  --focus: oklch(79.92% 0.1663 146.23);
-  --foreground: oklch(21.03% 0.0027 146.23);
-  --muted: oklch(55.17% 0.0054 146.23);
-  --overlay: oklch(100.00% 0.0008 146.23);
-  --overlay-foreground: oklch(21.03% 0.0027 146.23);
-  --scrollbar: oklch(87.10% 0.0027 146.23);
-  --segment: oklch(100.00% 0.0027 146.23);
-  --segment-foreground: oklch(21.03% 0.0027 146.23);
-  --separator: oklch(92.00% 0.0027 146.23);
-  --success: oklch(73.29% 0.1945 137.90);
-  --success-foreground: oklch(21.03% 0.0059 137.90);
-  --surface: oklch(100.00% 0.0014 146.23);
-  --surface-foreground: oklch(21.03% 0.0027 146.23);
-  --surface-secondary: oklch(95.24% 0.0022 146.23);
-  --surface-secondary-foreground: oklch(21.03% 0.0027 146.23);
-  --surface-tertiary: oklch(93.73% 0.0022 146.23);
-  --surface-tertiary-foreground: oklch(21.03% 0.0027 146.23);
-  --warning: oklch(78.19% 0.1594 59.42);
-  --warning-foreground: oklch(21.03% 0.0059 59.42);
+  --field-foreground: #222033;
+  --field-placeholder: #837e85;
+  --focus: #7ebc49;
+  --foreground: #222033;
+  --muted: #6f6a76;
+  --overlay: #fdf8ee;
+  --overlay-foreground: #222033;
+  --scrollbar: #cfc0a4;
+  --segment: #fdf8ee;
+  --segment-foreground: #222033;
+  --separator: #e2d5b8;
+  --success: #529271;
+  --success-foreground: #f0f7f0;
+  --surface: #faf3e3;
+  --surface-foreground: #222033;
+  --surface-secondary: #f0e5cd;
+  --surface-secondary-foreground: #222033;
+  --surface-tertiary: #ead9bd;
+  --surface-tertiary-foreground: #222033;
+  --warning: #d1773a;
+  --warning-foreground: #2c1503;
 
   /* Border Radius */
   --radius: 0;
@@ -55,36 +57,36 @@
 .dark,
 [data-theme="dark"] {
   color-scheme: dark;
-  /* Theme Colors (Dark Mode) */
-  --accent: oklch(79.92% 0.1663 146.23);
-  --accent-foreground: oklch(15% 0.0300 146.23);
-  --background: oklch(12.00% 0.0027 146.23);
-  --border: oklch(28.00% 0.0027 146.23);
-  --danger: oklch(59.40% 0.1978 11.72);
-  --danger-foreground: oklch(99.11% 0 0);
-  --default: oklch(27.40% 0.0027 146.23);
-  --default-foreground: oklch(99.11% 0 0);
-  --field-background: oklch(21.03% 0.0054 146.23);
+  /* Theme Colors (Dark Mode) — ink/indigo night */
+  --accent: #7ebc49;
+  --accent-foreground: #1f2b13;
+  --background: #191724;
+  --border: #3a365a;
+  --danger: #ca5f66;
+  --danger-foreground: #fdf3f2;
+  --default: #322e50;
+  --default-foreground: #e9e7f4;
+  --field-background: #262239;
   --field-border: transparent;
-  --field-foreground: oklch(99.11% 0.0027 146.23);
-  --field-placeholder: oklch(70.50% 0.0054 146.23);
-  --focus: oklch(79.92% 0.1663 146.23);
-  --foreground: oklch(99.11% 0.0027 146.23);
-  --muted: oklch(70.50% 0.0054 146.23);
-  --overlay: oklch(21.03% 0.0054 146.23);
-  --overlay-foreground: oklch(99.11% 0.0027 146.23);
-  --scrollbar: oklch(70.50% 0.0027 146.23);
-  --segment: oklch(39.64% 0.0027 146.23);
-  --segment-foreground: oklch(99.11% 0.0027 146.23);
-  --separator: oklch(25.00% 0.0027 146.23);
-  --success: oklch(73.29% 0.1945 137.90);
-  --success-foreground: oklch(21.03% 0.0059 137.90);
-  --surface: oklch(21.03% 0.0054 146.23);
-  --surface-foreground: oklch(99.11% 0.0027 146.23);
-  --surface-secondary: oklch(25.70% 0.0040 146.23);
-  --surface-secondary-foreground: oklch(99.11% 0.0027 146.23);
-  --surface-tertiary: oklch(27.21% 0.0040 146.23);
-  --surface-tertiary-foreground: oklch(99.11% 0.0027 146.23);
-  --warning: oklch(82.03% 0.1395 63.43);
-  --warning-foreground: oklch(21.03% 0.0059 63.43);
+  --field-foreground: #e9e7f4;
+  --field-placeholder: #9eacb6;
+  --focus: #7ebc49;
+  --foreground: #e9e7f4;
+  --muted: #9eacb6;
+  --overlay: #262239;
+  --overlay-foreground: #e9e7f4;
+  --scrollbar: #4a4568;
+  --segment: #322e50;
+  --segment-foreground: #e9e7f4;
+  --separator: #322e50;
+  --success: #529271;
+  --success-foreground: #eaf5ee;
+  --surface: #222033;
+  --surface-foreground: #e9e7f4;
+  --surface-secondary: #2a2743;
+  --surface-secondary-foreground: #e9e7f4;
+  --surface-tertiary: #322e50;
+  --surface-tertiary-foreground: #e9e7f4;
+  --warning: #d1773a;
+  --warning-foreground: #2c1503;
 }

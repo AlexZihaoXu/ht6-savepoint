@@ -1,0 +1,312 @@
+import { describe, expect, it } from "vitest";
+import {
+  createWanderer,
+  gaitOffset,
+  hopOffset,
+  stepWanderers,
+  HOP_DURATION,
+  TALK_GAP,
+  type Wanderer,
+} from "./wander";
+import { rand } from "./scene-utils";
+
+/** Deterministic rng from scene-utils' hash (same trick the page uses). */
+function seededRng(seed: string) {
+  let n = 0;
+  return () => rand(seed, n++);
+}
+
+/** rng pinned to 0.5 → zero steering jitter, so paths are fully predictable. */
+const flat = () => 0.5;
+
+const BOUNDS = { w: 400, h: 300 };
+
+function make(id: string, x: number, y: number, heading = 0): Wanderer {
+  const w = createWanderer(id, x, y, seededRng(id));
+  w.heading = heading;
+  w.turnIn = 999; // no spontaneous intent changes during the test
+  w.idleIn = 999; // no idle pauses during the test
+  // Most characters SPAWN standing now — these unit tests exercise walkers,
+  // so force a mid-amble state at cruising pace.
+  w.idleFor = 0;
+  w.speed = w.baseSpeed;
+  w.targetSpeed = w.baseSpeed;
+  return w;
+}
+
+describe("wander sim", () => {
+  it("never leaves the plot over a long random walk", () => {
+    const ws = ["a", "b", "c", "d", "e", "f", "g"].map((id, i) =>
+      createWanderer(id, 50 + i * 40, 60 + (i % 3) * 60, seededRng(id)),
+    );
+    const rng = seededRng("world");
+    for (let step = 0; step < 3000; step++) {
+      stepWanderers(ws, 1 / 30, BOUNDS, rng);
+      for (const w of ws) {
+        expect(w.x).toBeGreaterThanOrEqual(0);
+        expect(w.x).toBeLessThanOrEqual(BOUNDS.w);
+        expect(w.y).toBeGreaterThanOrEqual(0);
+        expect(w.y).toBeLessThanOrEqual(BOUNDS.h);
+      }
+    }
+  });
+
+  it("reflects off a wall instead of clipping through", () => {
+    const w = make("wall", 395, 150, 0); // heading right, at the right edge
+    stepWanderers([w], 1 / 30, BOUNDS, flat);
+    expect(w.x).toBeLessThanOrEqual(BOUNDS.w - 29);
+    expect(Math.cos(w.heading)).toBeLessThan(0); // now heading left
+  });
+
+  it("bumps two characters apart when close in BOTH axes", () => {
+    const a = make("a", 100, 100, 0); // walking right…
+    const b = make("b", 120, 106, Math.PI); // …into b walking left
+    const d0 = Math.hypot(b.x - a.x, b.y - a.y);
+    stepWanderers([a, b], 1 / 30, BOUNDS, flat);
+    expect(a.bumpCooldown).toBeGreaterThan(0);
+    expect(b.bumpCooldown).toBeGreaterThan(0);
+    // They turn onto diverging courses and separate over the next second.
+    for (let i = 0; i < 30; i++) stepWanderers([a, b], 1 / 30, BOUNDS, flat);
+    expect(Math.hypot(b.x - a.x, b.y - a.y)).toBeGreaterThan(d0);
+  });
+
+  it("does NOT collide when overlapping in x but far apart in y (depth levels)", () => {
+    const a = make("a", 100, 60, 0);
+    const b = make("b", 104, 160, Math.PI); // same x zone, other depth level
+    stepWanderers([a, b], 1 / 30, BOUNDS, flat);
+    expect(a.bumpCooldown).toBe(0);
+    expect(b.bumpCooldown).toBe(0);
+    expect(a.heading).toBeCloseTo(0, 5); // course unchanged — they pass by
+    expect(b.heading).toBeCloseTo(Math.PI, 5);
+  });
+
+  it("freezes a selected character but keeps the others moving", () => {
+    const a = make("a", 100, 100, 0);
+    const b = make("b", 300, 200, Math.PI);
+    a.frozen = true;
+    stepWanderers([a, b], 1 / 30, BOUNDS, flat);
+    expect(a.x).toBe(100);
+    expect(a.y).toBe(100);
+    expect(b.x).not.toBe(300);
+  });
+
+  it("faces the direction of travel", () => {
+    const right = make("r", 200, 150, 0);
+    const left = make("l", 200, 150, Math.PI);
+    left.x = 100;
+    stepWanderers([right, left], 1 / 30, BOUNDS, flat);
+    expect(right.facing).toBe(1);
+    expect(left.facing).toBe(-1);
+  });
+
+  it("gives each character its own pace + gait phase (deterministic per id)", () => {
+    const a = createWanderer("a", 0, 0, seededRng("a"));
+    const b = createWanderer("b", 0, 0, seededRng("b"));
+    const a2 = createWanderer("a", 0, 0, seededRng("a"));
+    expect(a.baseSpeed).not.toBe(b.baseSpeed); // amblers vs brisk walkers
+    expect(a.gaitT).not.toBe(b.gaitT); // staggered bounce phase
+    expect(a.idleIn).not.toBe(b.idleIn); // staggered pauses
+    expect(a.baseSpeed).toBe(a2.baseSpeed); // same id → same personality
+    expect(a.gaitT).toBe(a2.gaitT);
+  });
+
+  it("varies a character's speed over time around its own pace", () => {
+    const w = make("pace", 200, 150, 0);
+    const before = w.speed;
+    w.turnIn = 0; // force an intent change
+    stepWanderers([w], 1 / 30, BOUNDS, seededRng("roll"));
+    expect(w.speed).not.toBe(before);
+    expect(w.speed).toBeGreaterThan(0);
+  });
+
+  it("bounces in two beats: up-tilt-right then up-tilt-left", () => {
+    expect(hopOffset(-1)).toEqual({ dy: 0, tilt: 0 });
+    const first = hopOffset(HOP_DURATION * 0.25);
+    const second = hopOffset(HOP_DURATION * 0.75);
+    expect(first.dy).toBeLessThan(0); // airborne
+    expect(second.dy).toBeLessThan(0);
+    expect(first.tilt).toBeGreaterThan(0); // right…
+    expect(second.tilt).toBeLessThan(0); // …then left
+  });
+
+  it("bounces ONLY while moving — idle or frozen characters stand still", () => {
+    const w = make("gait", 200, 150, 0);
+    w.gaitT = HOP_DURATION * 0.25; // mid-stride
+    expect(gaitOffset(w).dy).toBeLessThan(0); // walking → airborne
+
+    w.idleFor = 2; // paused → no bounce
+    expect(gaitOffset(w)).toEqual({ dy: 0, tilt: 0 });
+
+    w.idleFor = 0;
+    w.frozen = true; // tapped → no bounce
+    expect(gaitOffset(w)).toEqual({ dy: 0, tilt: 0 });
+  });
+
+  it("advances the gait only while walking", () => {
+    const walking = make("walk", 200, 150, 0);
+    walking.gaitT = 0;
+    stepWanderers([walking], 1 / 30, BOUNDS, flat);
+    expect(walking.gaitT).toBeGreaterThan(0);
+
+    const idle = make("stand", 200, 150, 0);
+    idle.gaitT = 0;
+    idle.idleFor = 5;
+    stepWanderers([idle], 1 / 30, BOUNDS, flat);
+    expect(idle.gaitT).toBe(0);
+  });
+
+  it("takes an idle pause — decelerates to a stop, stands, then resumes", () => {
+    const w = make("pause", 200, 150, 0);
+    w.idleIn = 0.001; // pause imminent
+    // Deceleration ramp: speed only shrinks until the stop lands.
+    let prev = w.speed;
+    let steps = 0;
+    while (w.idleFor === 0 && steps < 200) {
+      stepWanderers([w], 1 / 30, BOUNDS, flat);
+      expect(w.speed).toBeLessThanOrEqual(prev); // never speeds up mid-stop
+      prev = w.speed;
+      steps++;
+    }
+    expect(w.idleFor).toBeGreaterThan(0); // reached the pause…
+    expect(steps).toBeGreaterThan(3); // …but NOT instantly (eased ramp)
+    expect(w.speed).toBe(0);
+    const [x0, y0] = [w.x, w.y];
+    for (let i = 0; i < 30; i++) stepWanderers([w], 1 / 30, BOUNDS, flat);
+    if (w.idleFor > 0) {
+      expect(w.x).toBe(x0); // …not moving while idle
+      expect(w.y).toBe(y0);
+    }
+    // Idle pauses are long now (up to ~13 s) — step until this one ends
+    // (a fixed count would land inside the NEXT long pause).
+    let waited = 0;
+    while (w.idleFor > 0 && waited++ < 600)
+      stepWanderers([w], 1 / 30, BOUNDS, flat);
+    expect(w.idleFor).toBe(0); // pause ended
+    for (let i = 0; i < 60; i++) stepWanderers([w], 1 / 30, BOUNDS, flat);
+    expect(w.x === x0 && w.y === y0).toBe(false); // walking again
+  });
+
+  it("accelerates smoothly out of a stop (no instant velocity jump)", () => {
+    const w = make("ramp", 200, 150, 0);
+    w.idleIn = 999;
+    w.speed = 0;
+    w.targetSpeed = 30;
+    stepWanderers([w], 1 / 30, BOUNDS, flat);
+    expect(w.speed).toBeGreaterThan(0); // pulling away…
+    expect(w.speed).toBeLessThan(10); // …but nowhere near cruise yet
+    for (let i = 0; i < 90; i++) stepWanderers([w], 1 / 30, BOUNDS, flat);
+    expect(w.speed).toBeGreaterThan(25); // eased up to cruising speed
+  });
+
+  it("spawns a calm lobby — most characters start standing, wake-ups staggered", () => {
+    const ws = Array.from({ length: 24 }, (_, i) =>
+      createWanderer(`p${i}`, 100, 100, seededRng(`p${i}`)),
+    );
+    const standing = ws.filter((w) => w.idleFor > 0 && w.speed === 0);
+    expect(standing.length).toBeGreaterThan(ws.length / 2);
+    expect(standing.length).toBeLessThan(ws.length); // …but not frozen solid
+    // Wake-ups are staggered — no two standers get moving in sync.
+    const wakeups = new Set(standing.map((w) => w.idleFor.toFixed(3)));
+    expect(wakeups.size).toBe(standing.length);
+  });
+
+  it("keeps most of the crowd idle at any moment (calm-lobby duty cycle)", () => {
+    const ws = Array.from({ length: 12 }, (_, i) =>
+      createWanderer(
+        `c${i}`,
+        60 + (i % 4) * 90,
+        60 + Math.floor(i / 4) * 80,
+        seededRng(`c${i}`),
+      ),
+    );
+    const rng = seededRng("calm-world");
+    let samples = 0;
+    let movingSum = 0;
+    // Two simulated minutes, sampled once a second (skip the first ten so
+    // the spawn stagger has fully mixed into the steady state).
+    for (let step = 0; step < 3600; step++) {
+      stepWanderers(ws, 1 / 30, BOUNDS, rng);
+      if (step >= 300 && step % 30 === 0) {
+        samples++;
+        movingSum += ws.filter((w) => w.idleFor === 0 && w.speed > 1).length;
+      }
+    }
+    const avgMoving = movingSum / samples;
+    expect(avgMoving).toBeLessThan(ws.length * 0.4); // mostly a still crowd…
+    expect(avgMoving).toBeGreaterThan(0.3); // …that still shows signs of life
+  });
+
+  it("a bump sometimes becomes a chat — both stop, face each other, y-align", () => {
+    const a = make("a", 100, 100, 0); // walking right…
+    const b = make("b", 120, 108, Math.PI); // …into b, slightly deeper
+    const chatty = () => 0.1; // every roll under TALK_CHANCE → they chat
+    stepWanderers([a, b], 1 / 30, BOUNDS, chatty);
+    expect(a.talkPartner).toBe("b");
+    expect(b.talkPartner).toBe("a");
+    expect(a.bumpCooldown).toBe(0); // a chat, not a bump
+    expect(a.facing).toBe(1); // the left one faces right…
+    expect(b.facing).toBe(-1); // …at the right one facing left
+    // They slide onto ONE depth line, side by side, and stand still.
+    for (let i = 0; i < 45; i++) stepWanderers([a, b], 1 / 30, BOUNDS, chatty);
+    expect(a.talkPartner).toBe("b"); // ~1.5 s in — still under the 2 s floor
+    expect(Math.abs(a.y - b.y)).toBeLessThan(0.01);
+    expect(b.x - a.x).toBeCloseTo(TALK_GAP, 5);
+    expect(a.speed).toBe(0);
+    expect(b.speed).toBe(0);
+    expect(gaitOffset(a)).toEqual({ dy: 0, tilt: 0 }); // no bounce mid-chat
+  });
+
+  it("a chat ends after its short timer — the pair parts and roams again", () => {
+    const a = make("a", 100, 100, 0);
+    const b = make("b", 120, 106, Math.PI);
+    const chatty = () => 0.1;
+    stepWanderers([a, b], 1 / 30, BOUNDS, chatty);
+    expect(a.talkPartner).toBe("b");
+    let steps = 1;
+    while (a.talkPartner !== null && steps < 300) {
+      stepWanderers([a, b], 1 / 30, BOUNDS, chatty);
+      steps++;
+    }
+    expect(a.talkPartner).toBeNull(); // over…
+    expect(b.talkPartner).toBeNull(); // …for BOTH at once
+    expect(steps / 30).toBeGreaterThanOrEqual(2); // within the promised
+    expect(steps / 30).toBeLessThanOrEqual(5); // 2–5 s window
+    expect(a.targetSpeed).toBeGreaterThan(0); // both wander off…
+    expect(b.targetSpeed).toBeGreaterThan(0);
+    expect(a.bumpCooldown).toBeGreaterThan(0); // …with goodbye grace
+    // Parting courses actually separate them over the next second.
+    const d0 = Math.hypot(b.x - a.x, b.y - a.y);
+    for (let i = 0; i < 30; i++) stepWanderers([a, b], 1 / 30, BOUNDS, chatty);
+    expect(Math.hypot(b.x - a.x, b.y - a.y)).toBeGreaterThan(d0);
+  });
+
+  it("passers-by never shove a talking pair", () => {
+    const a = make("a", 100, 100, 0);
+    const b = make("b", 120, 106, Math.PI);
+    const chatty = () => 0.1;
+    stepWanderers([a, b], 1 / 30, BOUNDS, chatty); // chat starts…
+    for (let i = 0; i < 30; i++) stepWanderers([a, b], 1 / 30, BOUNDS, chatty);
+    const [ax, ay] = [a.x, a.y]; // …and the stance has settled
+    const c = make("c", a.x - 20, a.y + 4, 0); // barges straight through
+    for (let i = 0; i < 30; i++)
+      stepWanderers([a, b, c], 1 / 30, BOUNDS, chatty);
+    expect(a.talkPartner).toBe("b"); // chat undisturbed
+    expect(a.x).toBe(ax); // stance holds — c crossed behind/in front
+    expect(a.y).toBe(ay);
+    expect(c.bumpCooldown).toBe(0); // and c never "bumped" anyone
+  });
+
+  it("fades the bounce out as speed ramps down", () => {
+    const w = make("fade", 200, 150, 0);
+    w.gaitT = HOP_DURATION * 0.25; // mid-stride
+    w.speed = 30;
+    const fast = Math.abs(gaitOffset(w).dy);
+    w.speed = 5; // decelerating through the fade band
+    const slow = Math.abs(gaitOffset(w).dy);
+    w.speed = 0;
+    const stopped = Math.abs(gaitOffset(w).dy);
+    expect(fast).toBeGreaterThan(slow);
+    expect(slow).toBeGreaterThan(0);
+    expect(stopped).toBe(0);
+  });
+});
