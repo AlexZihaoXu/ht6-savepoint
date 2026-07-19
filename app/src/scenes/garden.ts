@@ -1,24 +1,30 @@
 /**
- * GardenScene — the calendar of days as a cozy garden.
+ * GardenScene — the calendar of days as a cozy garden (engine v2).
  *
- * `api.days()` → one flower per journaled day, planted in a fenced dirt plot
- * laid out as a month calendar (Sun..Sat columns). Flower growth stage comes
- * from `day.plant_stage` (flower-*-{1..4}.png) and the hue (pink/gold/green/
- * blue) from `day.mood_color`. Tap a journaled day (or today) → `day` nav
- * intent. The garden is the right half of the plaza↔garden panning world:
- * swipe horizontally or tap the left edge arrow → `plaza` intent. Month
- * arrows browse between the months that have data (and the current month).
+ * WORLD (drawn under the Camera): grass tiles across the ENTIRE viewport via
+ * `drawWorldGrass` — same camera setup as the plaza, so any aspect ratio is
+ * filled edge-to-edge, crisp, no letterbox. The garden's actual content is
+ * chrome, so the world stays a calm backdrop.
  *
- * ENGINE-V2 NOTE: this scene is only minimally adapted to the two-space model
- * (a later pass refactors it properly). The world pass draws camera-tiled
- * grass; the whole old layout renders in `renderUI` under one ctx.scale(k, k)
- * at guiScale, with input mapped back through `scaleInput`.
+ * UI (drawn via the UiContext at guiScale, anchored + auto-laid-out):
+ *   SavePoint header (top-center), Past (top-right), month bar `‹ Mon YYYY ›`
+ *   (top-center — the overlap pass flows it below the header), the bottom nav
+ *   (Today/Journal/People, full width), and the plaza arrow (left edge). The
+ *   fenced dirt PLOT with the month calendar fills whatever screen space is
+ *   left between the placed chrome, drawn in UI units through `ui.scaled`:
+ *   one cell per day, a flower per journaled day (`flower-{hue}-{stage}.png`,
+ *   stage from `day.plant_stage`, hue bucketed from `day.mood_color`), today
+ *   framed, future day-numbers faded.
+ *
+ * Input routing: own UI rects first (screen px: Past, arrows, month nav, nav
+ * bar, then day cells), `input.onUi` as the chrome catch-all, world last
+ * (nothing tappable there). Swipe or left-arrow → plaza.
  */
 
 import { api, type ApiDay } from "../lib/api";
 import { SHEET } from "../engine/assets";
 import type { Camera } from "../engine/camera";
-import { scaleInput, type Nav, type Scene, type SceneInput } from "../engine/scene";
+import type { Nav, Scene, SceneInput } from "../engine/scene";
 import { px, type PixelSurface } from "../engine/surface";
 import { drawText } from "../engine/text";
 import { drawWorldGrass, fenceBorder, tiledPatch } from "../engine/tilemap";
@@ -30,9 +36,11 @@ import {
   rect,
   type Rect,
   type UiContext,
+  type UiRect,
 } from "../engine/ui";
 
-const SWIPE_PX = 45;
+/** Horizontal swipe (screen px) that flips back to the plaza. */
+const SWIPE_PX = 60;
 
 /** The four flower hue families on the sheet. */
 type FlowerHue = "pink" | "gold" | "green" | "blue";
@@ -52,7 +60,7 @@ const MONTHS = [
 
 const WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"] as const;
 
-/** One calendar cell for the currently-viewed month. */
+/** One calendar cell for the currently-viewed month. `r` is SCREEN px. */
 interface Cell {
   date: string; // YYYY-MM-DD
   dayNum: number;
@@ -131,15 +139,12 @@ class GardenScene implements Scene {
   private maxMonth: number;
   private t = 0;
 
-  // layout cache (filled by render; update bails until w > 0)
-  private w = 0;
-  /** guiScale the old art-px layout renders at (screen = art × k). */
-  private k = 1;
-  private plotRect: Rect = rect(0, 0, 0, 0);
-  private pastRect: Rect = rect(0, 0, 0, 0);
-  private arrowL: Rect = rect(0, 0, 0, 0);
-  private prevRect: Rect = rect(0, 0, 0, 0);
-  private nextRect: Rect = rect(0, 0, 0, 0);
+  // UI hit rects (SCREEN px, cached from renderUI; update bails until ready)
+  private ready = false;
+  private pastRect: UiRect | null = null;
+  private arrowL: UiRect | null = null;
+  private prevRect: Rect | null = null;
+  private nextRect: Rect | null = null;
   private navRects: { label: string; r: Rect }[] = [];
   private cells: Cell[] = [];
 
@@ -195,10 +200,8 @@ class GardenScene implements Scene {
 
   /* ------------------------------------------------------------- update -- */
 
-  update(dt: number, rawInput: SceneInput): void {
+  update(dt: number, input: SceneInput): void {
     this.t += dt;
-    if (this.w === 0) return; // waiting for the first render's layout
-    const input = scaleInput(rawInput, this.k);
 
     // Horizontal swipe → back to the plaza (one continuous panning world).
     const de = input.dragEnd;
@@ -208,13 +211,17 @@ class GardenScene implements Scene {
     }
 
     const tap = input.tap;
-    if (!tap) return;
+    if (!tap || !this.ready) return;
 
-    // Chrome first (drawn on top), plot cells last.
-    if (hit(this.pastRect, tap)) return this.nav.go({ kind: "past" });
-    if (hit(this.arrowL, tap)) return this.nav.go({ kind: "plaza" });
-    if (hit(this.prevRect, tap)) return this.shiftMonth(-1);
-    if (hit(this.nextRect, tap)) return this.shiftMonth(1);
+    // 1) Own UI rects first, in screen space (chrome above, plot cells last).
+    if (this.pastRect && hit(this.pastRect, tap)) {
+      return this.nav.go({ kind: "past" });
+    }
+    if (this.arrowL && hit(this.arrowL, tap)) {
+      return this.nav.go({ kind: "plaza" });
+    }
+    if (this.prevRect && hit(this.prevRect, tap)) return this.shiftMonth(-1);
+    if (this.nextRect && hit(this.nextRect, tap)) return this.shiftMonth(1);
     for (const { label, r } of this.navRects) {
       if (!hit(r, tap)) continue;
       if (label === "Today") return this.nav.go({ kind: "day", date: "today" });
@@ -229,115 +236,225 @@ class GardenScene implements Scene {
       }
       return;
     }
+    // Any other chrome (header, month bar, plot soil, nav dead space)
+    // swallows the tap. The garden world has nothing tappable below.
+    if (input.onUi(tap)) return;
   }
 
-  /* ------------------------------------------------------------- render -- */
+  /* -------------------------------------------------------- renderWorld -- */
 
   renderWorld(
     ctx: CanvasRenderingContext2D,
     cam: Camera,
     _surface: PixelSurface,
   ): void {
+    // Same camera discipline as the plaza: integer zoom from the viewport,
+    // centered — grass fills the whole viewport at any aspect ratio.
     cam.zoom = cam.pickZoom();
     cam.centerOn(0, 0);
     drawWorldGrass(ctx, cam);
   }
 
+  /* ----------------------------------------------------------- renderUI -- */
+
   renderUI(ctx: CanvasRenderingContext2D, ui: UiContext): void {
-    this.k = ui.guiScale;
-    const w = Math.ceil(ui.viewW / this.k);
-    const h = Math.ceil(ui.viewH / this.k);
-    this.w = w;
-    ctx.save();
-    ctx.scale(this.k, this.k);
+    this.ready = true;
 
-    const navH = 24;
-    const monthBarY = 32;
-    const monthBarH = 20;
-    const plotTop = monthBarY + monthBarH + 4;
-    this.plotRect = rect(8, plotTop, w - 16, h - plotTop - navH - 8);
-
-    this.drawPlot(ctx);
-    this.drawCalendar(ctx);
-    this.drawChrome(ctx, w, h, navH, monthBarY, monthBarH);
-
-    if (!this.days) this.drawNotice(ctx, w, h, this.error ?? "Watering the garden...");
-    else if (this.days.size === 0) {
-      this.drawNotice(ctx, w, h, "Nothing planted yet — live a day!");
-    }
-    ctx.restore();
-  }
-
-  /** The fenced dirt plot the calendar is planted in, plus light dressing. */
-  private drawPlot(ctx: CanvasRenderingContext2D): void {
-    const P = this.plotRect;
-    const dirt = ensure(`${SHEET}/dirt-patch.png`);
-    if (dirt) tiledPatch(ctx, dirt, P.x, P.y, P.w, P.h, 10);
-    else {
-      ctx.fillStyle = "#c9a26a";
-      ctx.fillRect(px(P.x), px(P.y), px(P.w), px(P.h));
-    }
-    const fence = ensure(`${SHEET}/fence.png`);
-    if (fence) fenceBorder(ctx, fence, P.x + 2, P.y + 6, P.w - 4, P.h - 2);
-    // A couple of grass-strip decorations outside the plot.
-    const at = (key: string, x: number, baseY: number): void => {
-      const img = ensure(`${SHEET}/${key}.png`);
-      if (img) ctx.drawImage(img, px(x - img.width / 2), px(baseY - img.height));
-    };
-    at("deco-mushroom", P.x + 4, P.y + P.h + 7);
-    at("deco-daisies", P.x + P.w - 12, P.y + P.h + 8);
-  }
-
-  /** Weekday header + day cells + planted flowers for the viewed month. */
-  private drawCalendar(ctx: CanvasRenderingContext2D): void {
-    const P = this.plotRect;
-    const innerX = P.x + 8;
-    const innerW = P.w - 16;
-    const headY = P.y + 12;
-
-    const cellW = Math.floor(innerW / 7);
-    const gridX = innerX + Math.floor((innerW - cellW * 7) / 2);
-
-    for (let i = 0; i < 7; i++) {
-      drawText(ctx, WEEKDAYS[i] ?? "", gridX + i * cellW + cellW / 2, headY, {
-        size: 6,
-        color: "#8a6a42",
+    // SavePoint header, top-center (same as the plaza).
+    const header = ui.place("top-center", 96, 22, { margin: 5 });
+    ui.scaled(ctx, header, (w, h) => {
+      button(ctx, rect(0, 0, w, h), "", { style: "dark" });
+      drawText(ctx, "SavePoint", w / 2, (h - 10) / 2 + 1, {
+        size: 10,
+        color: "#f5e5c5",
         align: "center",
+        shadow: "#4a2e18",
       });
-    }
+    });
+    ui.registerHit(header); // header swallows taps
 
-    const firstWeekday = new Date(this.year, this.month0, 1).getDay();
-    const daysInMonth = new Date(this.year, this.month0 + 1, 0).getDate();
-    const rows = Math.ceil((firstWeekday + daysInMonth) / 7);
-    // Cap cell height so tall phone viewports don't stretch each week into a
-    // huge band (number at top / flower at bottom drift apart); center the
-    // capped grid vertically in the plot instead.
-    const gridTop = headY + 10;
-    const gridSpace = P.y + P.h - 6 - gridTop;
-    const cellH = Math.max(16, Math.min(44, Math.floor(gridSpace / rows)));
-    const gridY = gridTop + Math.max(0, Math.floor((gridSpace - cellH * rows) / 2));
+    // Past, top-right.
+    this.pastRect = ui.button(ctx, ui.place("top-right", 40, 20, { margin: 4 }), "Past", {
+      style: "tan",
+    });
+
+    // Month bar `‹ Mon YYYY ›`, top-center — the overlap pass flows it down
+    // below the header (and clear of Past on narrow windows).
+    const monthBar = ui.place("top-center", 124, 18, { margin: 4 });
+    const label = `${MONTHS[this.month0] ?? "?"} ${this.year}`;
+    ui.scaled(ctx, monthBar, (w, h) => {
+      // Center plaque, then the arrow buttons flanking it.
+      button(ctx, rect(20, 0, w - 40, h), "", { style: "dark" });
+      drawText(ctx, label, w / 2, (h - 8) / 2 + 1, {
+        size: 8,
+        color: "#f5e5c5",
+        align: "center",
+        shadow: "#4a2e18",
+      });
+      button(ctx, rect(0, 0, 18, h), "", { style: "tan" });
+      button(ctx, rect(w - 18, 0, 18, h), "", { style: "tan" });
+      drawText(ctx, "<", 9, (h - 6) / 2, {
+        size: 6,
+        color: "#2a2140",
+        align: "center",
+        alpha: this.monthIndex > this.minMonth ? 1 : 0.3,
+      });
+      drawText(ctx, ">", w - 9, (h - 6) / 2, {
+        size: 6,
+        color: "#2a2140",
+        align: "center",
+        alpha: this.monthIndex < this.maxMonth ? 1 : 0.3,
+      });
+    });
+    ui.registerHit(monthBar);
+    const s = monthBar.scale;
+    this.prevRect = rect(monthBar.x, monthBar.y, 18 * s, monthBar.h);
+    this.nextRect = rect(monthBar.x + monthBar.w - 18 * s, monthBar.y, 18 * s, monthBar.h);
+
+    // Bottom nav — full width (place clamps the oversize request).
+    const bar = ui.place("bottom-center", 4000, 24, { margin: 0 });
+    ui.scaled(ctx, bar, (w, h) => {
+      // Oversize the 9-slice sideways so only its top border shows.
+      button(ctx, rect(-3, 0, w + 6, h + 3), "", { style: "tan" });
+      const labels = ["Today", "Journal", "People"] as const;
+      labels.forEach((navLabel, i) => {
+        const active = navLabel === "Journal"; // the plaza/garden world
+        drawText(ctx, navLabel, (w / 3) * i + w / 6, 9, {
+          size: 6,
+          color: active ? "#7a4a20" : "#2a2140",
+          align: "center",
+        });
+        if (active) {
+          ctx.fillStyle = "#7a4a20";
+          ctx.fillRect(px((w / 3) * i + w / 6 - 9), px(h - 7), 18, 2);
+        }
+      });
+    });
+    ui.registerHit(bar); // the bar's dead space never falls through
+    this.navRects = ["Today", "Journal", "People"].map((navLabel, i) => ({
+      label: navLabel,
+      r: rect(bar.x + (bar.w / 3) * i, bar.y, bar.w / 3, bar.h),
+    }));
+
+    // Plaza arrow on the left edge (swipe hint), pulsing.
+    const pulse = Math.floor(this.t * 2) % 2 === 0 ? 0 : 1;
+    this.arrowL = ui.place("left-edge", 12, 26, { margin: 0 });
+    ui.scaled(ctx, this.arrowL, (w, h) => {
+      ctx.save();
+      ctx.globalAlpha = 0.75;
+      ctx.fillStyle = "#2a2140";
+      ctx.fillRect(px(0), px((h - 20) / 2), px(w - 2), 20);
+      ctx.restore();
+      drawText(ctx, "<", 2 - pulse, h / 2 - 3, { size: 8, color: "#f5e5c5" });
+    });
+    ui.registerHit(this.arrowL);
+
+    // The garden plot fills the screen space left between the placed chrome.
+    this.renderPlot(ctx, ui, header, monthBar, this.pastRect, bar, this.arrowL);
+
+    // Loading / empty notice.
+    if (!this.days) {
+      this.drawNotice(ctx, ui, this.error ?? "Watering the garden...");
+    } else if (this.days.size === 0) {
+      this.drawNotice(ctx, ui, "Nothing planted yet — live a day!");
+    }
+  }
+
+  /**
+   * Fenced dirt plot + month calendar, in the SCREEN rect between the chrome
+   * that `place()` laid out (below header/month-bar/Past, above the nav bar,
+   * clear of the edge arrow). Drawn in UI units via `ui.scaled`; cells cached
+   * in screen px for hit-testing.
+   */
+  private renderPlot(
+    ctx: CanvasRenderingContext2D,
+    ui: UiContext,
+    header: UiRect,
+    monthBar: UiRect,
+    past: UiRect,
+    navBar: UiRect,
+    arrowL: UiRect,
+  ): void {
+    const s = ui.guiScale;
+    const gap = 4 * s;
+    // fenceBorder rails are BOTTOM-aligned to the y they're given: the 24-unit
+    // fence art drawn at local y=6 pokes 18 UI units ABOVE the plot rect. Push
+    // the plot down by that overhang so the fence never covers the month bar.
+    const fenceOverhang = 18 * s;
+    const top =
+      Math.max(header.y + header.h, monthBar.y + monthBar.h, past.y + past.h) +
+      gap +
+      fenceOverhang;
+    const bottom = navBar.y - gap;
+    const left = Math.max(gap, arrowL.x + arrowL.w + 2);
+    const right = ui.viewW - gap;
+    const plot: UiRect = {
+      x: left,
+      y: top,
+      w: Math.max(40 * s, right - left),
+      h: Math.max(40 * s, bottom - top),
+      scale: s,
+    };
+    ui.registerHit(plot); // soil swallows taps; cells route via this.cells
 
     this.cells = [];
-    for (let d = 1; d <= daysInMonth; d++) {
-      const slot = firstWeekday + d - 1;
-      const col = slot % 7;
-      const row = Math.floor(slot / 7);
-      const r = rect(gridX + col * cellW, gridY + row * cellH, cellW, cellH);
-      const date = isoDate(this.year, this.month0, d);
-      const cell: Cell = {
-        date,
-        dayNum: d,
-        r,
-        day: this.days?.get(date) ?? null,
-        future: date > this.today,
-      };
-      this.cells.push(cell);
-      this.drawCell(ctx, cell);
-    }
+    ui.scaled(ctx, plot, (w, h) => {
+      // Dirt + fence.
+      const dirt = ensure(`${SHEET}/dirt-patch.png`);
+      if (dirt) tiledPatch(ctx, dirt, 0, 0, w, h, 10);
+      else {
+        ctx.fillStyle = "#c9a26a";
+        ctx.fillRect(px(0), px(0), px(w), px(h));
+      }
+      const fence = ensure(`${SHEET}/fence.png`);
+      if (fence) fenceBorder(ctx, fence, 2, 6, w - 4, h - 2);
+
+      // Weekday header row.
+      const innerX = 8;
+      const innerW = w - 16;
+      const headY = 12;
+      const cellW = Math.floor(innerW / 7);
+      const gridX = innerX + Math.floor((innerW - cellW * 7) / 2);
+      for (let i = 0; i < 7; i++) {
+        drawText(ctx, WEEKDAYS[i] ?? "", gridX + i * cellW + cellW / 2, headY, {
+          size: 6,
+          color: "#8a6a42",
+          align: "center",
+        });
+      }
+
+      // Day grid. Cap cell height so tall viewports don't stretch each week
+      // into a huge band; center the capped grid vertically in the plot.
+      const firstWeekday = new Date(this.year, this.month0, 1).getDay();
+      const daysInMonth = new Date(this.year, this.month0 + 1, 0).getDate();
+      const rows = Math.ceil((firstWeekday + daysInMonth) / 7);
+      const gridTop = headY + 10;
+      const gridSpace = h - 6 - gridTop;
+      const cellH = Math.max(16, Math.min(44, Math.floor(gridSpace / rows)));
+      const gridY = gridTop + Math.max(0, Math.floor((gridSpace - cellH * rows) / 2));
+
+      for (let d = 1; d <= daysInMonth; d++) {
+        const slot = firstWeekday + d - 1;
+        const col = slot % 7;
+        const row = Math.floor(slot / 7);
+        const r = rect(gridX + col * cellW, gridY + row * cellH, cellW, cellH);
+        const date = isoDate(this.year, this.month0, d);
+        const cell: Cell = {
+          date,
+          dayNum: d,
+          // Hit rect in SCREEN px (the draw below uses local UI units).
+          r: rect(plot.x + r.x * s, plot.y + r.y * s, r.w * s, r.h * s),
+          day: this.days?.get(date) ?? null,
+          future: date > this.today,
+        };
+        this.cells.push(cell);
+        this.drawCell(ctx, cell, r);
+      }
+    });
   }
 
-  private drawCell(ctx: CanvasRenderingContext2D, cell: Cell): void {
-    const { r } = cell;
+  /** One day cell, drawn in the plot's local UI units (`r`). */
+  private drawCell(ctx: CanvasRenderingContext2D, cell: Cell, r: Rect): void {
     const isToday = cell.date === this.today;
 
     // Today gets a soft cream plot-marker frame.
@@ -349,7 +466,7 @@ class GardenScene implements Scene {
       ctx.restore();
     }
 
-    // Day number, top-left corner of the cell.
+    // Day number, top-left corner of the cell (future days faded).
     drawText(ctx, String(cell.dayNum), r.x + 2, r.y + 2, {
       size: 6,
       color: isToday ? "#7a4a20" : "#5a4632",
@@ -386,92 +503,15 @@ class GardenScene implements Scene {
     }
   }
 
-  private drawChrome(
-    ctx: CanvasRenderingContext2D,
-    w: number,
-    h: number,
-    navH: number,
-    monthBarY: number,
-    monthBarH: number,
-  ): void {
-    // Wooden SavePoint header (same as the plaza).
-    const hw = Math.min(118, w - 56);
-    const header = rect((w - hw) / 2, 5, hw, 22);
-    button(ctx, header, "", { style: "dark" });
-    drawText(ctx, "SavePoint", w / 2, 12, {
-      size: 10,
-      color: "#f5e5c5",
-      align: "center",
-      shadow: "#4a2e18",
-    });
-
-    // Past (top-right).
-    this.pastRect = button(ctx, rect(w - 42, 6, 38, 20), "Past", { style: "tan" });
-
-    // Month bar: < Mon YYYY > — arrows fade out at the browsable bounds.
-    const label = `${MONTHS[this.month0] ?? "?"} ${this.year}`;
-    this.prevRect = button(ctx, rect(8, monthBarY, 20, monthBarH), "", { style: "tan" });
-    this.nextRect = button(ctx, rect(w - 28, monthBarY, 20, monthBarH), "", { style: "tan" });
-    drawText(ctx, "<", this.prevRect.x + 7, monthBarY + 7, {
-      size: 6,
-      color: "#2a2140",
-      alpha: this.monthIndex > this.minMonth ? 1 : 0.3,
-    });
-    drawText(ctx, ">", this.nextRect.x + 7, monthBarY + 7, {
-      size: 6,
-      color: "#2a2140",
-      alpha: this.monthIndex < this.maxMonth ? 1 : 0.3,
-    });
-    drawText(ctx, label, w / 2, monthBarY + 6, {
-      size: 8,
-      color: "#f5e5c5",
-      align: "center",
-      shadow: "#4a2e18",
-    });
-
-    // Left edge arrow hinting the swipe back to the plaza.
-    const midY = this.plotRect.y + this.plotRect.h / 2;
-    this.arrowL = rect(0, midY - 14, 13, 28);
-    const pulse = Math.floor(this.t * 2) % 2 === 0 ? 0 : 1;
-    ctx.save();
-    ctx.globalAlpha = 0.75;
-    ctx.fillStyle = "#2a2140";
-    ctx.fillRect(px(this.arrowL.x), px(this.arrowL.y + 4), px(this.arrowL.w - 2), px(20));
-    ctx.restore();
-    drawText(ctx, "<", this.arrowL.x + 2 - pulse, midY - 3, { size: 8, color: "#f5e5c5" });
-
-    // Bottom nav bar (Journal = this plaza/garden world).
-    const bar = rect(-3, h - navH, w + 6, navH + 3);
-    const panelImg = ensure(`${SHEET}/panel.png`);
-    if (panelImg) {
-      button(ctx, bar, "", { style: "tan" });
-    } else {
-      ctx.fillStyle = "#eec39a";
-      ctx.fillRect(px(bar.x), px(bar.y), px(bar.w), px(bar.h));
-    }
-    const labels = ["Today", "Journal", "People"];
-    this.navRects = labels.map((label, i) => {
-      const r = rect((w / 3) * i, h - navH, w / 3, navH);
-      const active = label === "Journal";
-      drawText(ctx, label, r.x + r.w / 2, h - navH + 9, {
+  private drawNotice(ctx: CanvasRenderingContext2D, ui: UiContext, msg: string): void {
+    const r = ui.place("center", 170, 34);
+    ui.scaled(ctx, r, (w, h) => {
+      panel(ctx, 0, 0, w, h);
+      drawText(ctx, msg, w / 2, h / 2 - 3, {
         size: 6,
-        color: active ? "#7a4a20" : "#2a2140",
+        color: "#5a4632",
         align: "center",
       });
-      if (active) {
-        ctx.fillStyle = "#7a4a20";
-        ctx.fillRect(px(r.x + r.w / 2 - 9), px(h - 7), 18, 2);
-      }
-      return { label, r };
     });
-  }
-
-  private drawNotice(ctx: CanvasRenderingContext2D, w: number, h: number, msg: string): void {
-    const bw = Math.min(170, w - 20);
-    const bh = 34;
-    const bx = (w - bw) / 2;
-    const by = h / 2 - 40;
-    panel(ctx, bx, by, bw, bh);
-    drawText(ctx, msg, w / 2, by + 14, { size: 6, color: "#5a4632", align: "center" });
   }
 }

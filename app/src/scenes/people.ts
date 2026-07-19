@@ -1,20 +1,26 @@
 /**
- * PeopleScene (contacts-style list) + PersonScene (profile) — Phase 2.
+ * PeopleScene (contacts-style list) + PersonScene (profile) — engine v2.
  *
- * PeopleScene: `api.people()` → an A–Z contacts list on a parchment panel;
- * each row = front sprite + displayName + last-seen. Drag to scroll (with a
- * light flick inertia), tap a row → `person` nav intent. Chrome mirrors the
- * PlazaScene reference: wooden header, back button, Today/Journal/People
- * bottom bar (People active).
+ * WORLD (renderWorld): camera-tiled grass across the whole viewport (same
+ * drawWorldGrass + integer pickZoom as PlazaScene — fills any aspect ratio,
+ * no letterbox). These are UI-heavy scenes; the world is just the backdrop.
  *
- * PersonScene: `createPersonScene(nav, localId)` → `api.person(localId)` →
- * big front sprite + name + bio (italic, leaf-green) + notes + recent
- * events, one drag-scrollable column; back button → `back` intent.
+ * UI (renderUI, via the UiContext at guiScale, anchored + auto-laid-out):
+ *   PeopleScene: wooden header (top-center), back button (top-left),
+ *   Today/Journal/People nav (bottom, People active), and a parchment
+ *   contacts panel filling the band between the chrome — each row = front
+ *   sprite + displayName + last-seen, drag-to-scroll with flick inertia,
+ *   tap a row → `person` nav intent.
  *
- * ENGINE-V2 NOTE: both scenes are only minimally adapted to the two-space
- * model (a later pass refactors them properly). The world pass draws
- * camera-tiled grass; the whole old layout renders in `renderUI` under one
- * ctx.scale(k, k) at guiScale, with input mapped back through `scaleInput`.
+ *   PersonScene (`createPersonScene(nav, localId)` → `api.person(localId)`):
+ *   header (person's name), back button, and one drag-scrollable profile
+ *   panel — big front sprite + name + bio (italic, leaf-green) + notes +
+ *   recent events.
+ *
+ * Input routing (v2 rule): own UI rects first in SCREEN px (back, nav
+ * thirds, list rows), then `input.onUi` swallows any other chrome; these
+ * scenes have no world interactions. Scroll state lives in UI units — drag
+ * deltas (screen px) are divided by the panel's scale.
  */
 
 import {
@@ -25,15 +31,9 @@ import {
   type ApiPerson,
   type ApiPersonDetail,
 } from "../lib/api";
-import { SHEET } from "../engine/assets";
 import type { Camera } from "../engine/camera";
-import {
-  scaleInput,
-  type LegacyInput,
-  type Nav,
-  type Scene,
-  type SceneInput,
-} from "../engine/scene";
+import type { DragState } from "../engine/input";
+import type { Nav, Scene, SceneInput } from "../engine/scene";
 import { drawPersonSprite } from "../engine/sprite";
 import { px, type PixelSurface } from "../engine/surface";
 import { drawText, wrapText, type TextOpts } from "../engine/text";
@@ -46,6 +46,7 @@ import {
   rect,
   type Rect,
   type UiContext,
+  type UiRect,
 } from "../engine/ui";
 
 /* ------------------------------------------------------------ palette ---- */
@@ -55,8 +56,6 @@ const CREAM = "#f5e5c5";
 const BROWN = "#7a4a20";
 const MUTED = "#6b5b45";
 const LEAF = "#2f7a3f";
-
-const NAV_H = 24; // bottom bar height (matches PlazaScene)
 
 /* ------------------------------------------------------------ helpers ---- */
 
@@ -121,58 +120,69 @@ function shadow(
   ctx.restore();
 }
 
-/** Wooden SavePoint-style header bar with a centered title. */
+/**
+ * Wooden SavePoint-style header (top-center, dark 9-slice, title centered)
+ * — same chrome as PlazaScene's header. Registered so it swallows taps.
+ */
 function drawHeader(
   ctx: CanvasRenderingContext2D,
-  w: number,
+  ui: UiContext,
   title: string,
   size: 8 | 10,
+): UiRect {
+  const r = ui.place("top-center", 96, 22, { margin: 5 });
+  ui.scaled(ctx, r, (w, h) => {
+    button(ctx, rect(0, 0, w, h), "", { style: "dark" });
+    drawText(ctx, ellipsize(title, Math.max(3, Math.floor((w - 8) / size))), w / 2, (h - size) / 2 + 1, {
+      size,
+      color: CREAM,
+      align: "center",
+      shadow: "#4a2e18",
+    });
+  });
+  ui.registerHit(r);
+  return r;
+}
+
+/** Loading / error / empty notice panel (center-anchored, like PlazaScene). */
+function drawNotice(
+  ctx: CanvasRenderingContext2D,
+  ui: UiContext,
+  msg: string,
 ): void {
-  const hw = Math.min(118, w - 56);
-  button(ctx, rect((w - hw) / 2, 5, hw, 22), "", { style: "dark" });
-  drawText(ctx, ellipsize(title, Math.floor((hw - 8) / size)), w / 2, 5 + (22 - size) / 2, {
-    size,
-    color: CREAM,
-    align: "center",
-    shadow: "#4a2e18",
+  const r = ui.place("center", 170, 34);
+  ui.scaled(ctx, r, (w, h) => {
+    panel(ctx, 0, 0, w, h);
+    drawText(ctx, msg, w / 2, h / 2 - 3, {
+      size: 6,
+      color: "#5a4632",
+      align: "center",
+    });
   });
 }
 
-/** Loading / error / empty notice panel (same look as PlazaScene). */
-function drawNotice(
-  ctx: CanvasRenderingContext2D,
-  w: number,
-  h: number,
-  msg: string,
-): void {
-  const bw = Math.min(170, w - 20);
-  const bh = 34;
-  const bx = (w - bw) / 2;
-  const by = h / 2 - 40;
-  panel(ctx, bx, by, bw, bh);
-  drawText(ctx, msg, w / 2, by + 14, { size: 6, color: "#5a4632", align: "center" });
-}
-
 /**
- * Drag-to-scroll state for one vertical list: content follows the finger
- * while a drag that STARTED inside `area` is live, then coasts with a light
- * exponential-decay inertia. `max` is set by render once content height is
- * known; `y` stays clamped to [0, max].
+ * Drag-to-scroll state for one vertical list. `y`/`max`/`vel` live in UI
+ * units; the drag arrives in SCREEN px and is divided by the panel's scale.
+ * Content follows the finger while a drag that STARTED inside `area`
+ * (screen px) is live, then coasts with a light exponential-decay inertia.
+ * `max` is set by render once content height is known; `y` stays clamped
+ * to [0, max].
  */
 class Scroll {
   y = 0;
   max = 0;
 
-  private lastDy = 0;
+  private lastDy = 0; // screen px
   private dragging = false;
-  private vel = 0; // art px / s, positive = scrolling down
+  private vel = 0; // UI units / s, positive = scrolling down
 
-  update(dt: number, input: LegacyInput, area: Rect): void {
-    const d = input.drag;
-    if (d && (this.dragging || hit(area, { x: d.startX, y: d.startY }))) {
+  update(dt: number, drag: DragState | null, area: Rect, scale: number): void {
+    const k = Math.max(1, scale);
+    if (drag && (this.dragging || hit(area, { x: drag.startX, y: drag.startY }))) {
       this.dragging = true;
-      const delta = d.dy - this.lastDy;
-      this.lastDy = d.dy;
+      const delta = (drag.dy - this.lastDy) / k;
+      this.lastDy = drag.dy;
       if (delta !== 0) {
         this.y -= delta;
         if (dt > 0) this.vel = -delta / dt;
@@ -198,7 +208,7 @@ class Scroll {
   }
 }
 
-/** Thin scroll indicator along the right edge of `inner` (only when needed). */
+/** Thin scroll indicator along the right edge of `inner` (UI units). */
 function drawScrollbar(
   ctx: CanvasRenderingContext2D,
   inner: Rect,
@@ -219,6 +229,8 @@ function drawScrollbar(
 
 const ROW_H = 32;
 const ROW_SPRITE_H = 23; // 92px tile at a clean 1:4
+/** Inner padding of the contacts/profile panel, UI units. */
+const PAD = { x: 4, top: 5, bottom: 5 };
 
 export function createPeopleScene(nav: Nav): Scene {
   return new PeopleScene(nav);
@@ -231,15 +243,16 @@ class PeopleScene implements Scene {
   private people: ApiPerson[] | null = null;
   private error: string | null = null;
 
-  // scroll
+  // scroll (UI units)
   private scroll = new Scroll();
 
-  // layout cache (filled by render; update bails until w > 0)
-  private w = 0;
-  /** guiScale the old art-px layout renders at (screen = art × k). */
+  // UI hit rects (SCREEN px, cached from renderUI; update bails until ready)
+  private ready = false;
+  /** The scale the panel content draws at (screen px per UI unit). */
   private k = 1;
-  private backRect: Rect = rect(0, 0, 0, 0);
-  private innerRect: Rect = rect(0, 0, 0, 0);
+  private backRect: UiRect | null = null;
+  /** The scrollable list viewport, screen px. */
+  private innerScreen: Rect = rect(0, 0, 0, 0);
   private navRects: { label: string; r: Rect }[] = [];
 
   constructor(nav: Nav) {
@@ -263,27 +276,33 @@ class PeopleScene implements Scene {
       });
   }
 
-  update(dt: number, rawInput: SceneInput): void {
-    if (this.w === 0) return; // waiting for the first render's layout
-    const input = scaleInput(rawInput, this.k);
+  update(dt: number, input: SceneInput): void {
+    if (!this.ready) return; // waiting for the first render's layout
 
-    this.scroll.update(dt, input, this.innerRect);
+    this.scroll.update(dt, input.drag, this.innerScreen, this.k);
 
     const tap = input.tap;
     if (!tap) return;
 
-    if (hit(this.backRect, tap)) return this.nav.go({ kind: "back" });
+    // 1) Own UI rects first, in screen space.
+    if (this.backRect && hit(this.backRect, tap)) {
+      return this.nav.go({ kind: "back" });
+    }
     for (const { label, r } of this.navRects) {
       if (!hit(r, tap)) continue;
       if (label === "Today") return this.nav.go({ kind: "day", date: "today" });
       if (label === "Journal") return this.nav.go({ kind: "garden" });
       return; // People — already here
     }
-    if (this.people && hit(this.innerRect, tap)) {
-      const i = Math.floor((tap.y - this.innerRect.y + this.scroll.y) / ROW_H);
-      const p = this.people[i];
-      if (p) return this.nav.go({ kind: "person", localId: p.local_id });
+    if (this.people && hit(this.innerScreen, tap)) {
+      const uy = (tap.y - this.innerScreen.y) / this.k + this.scroll.y;
+      const p = this.people[Math.floor(uy / ROW_H)];
+      if (p) this.nav.go({ kind: "person", localId: p.local_id });
+      return;
     }
+    // 2) Any other chrome (header, panel border, nav dead space) swallows it.
+    if (input.onUi(tap)) return;
+    // 3) World: nothing interactive — taps on the grass do nothing.
   }
 
   renderWorld(
@@ -297,39 +316,62 @@ class PeopleScene implements Scene {
   }
 
   renderUI(ctx: CanvasRenderingContext2D, ui: UiContext): void {
+    const header = drawHeader(ctx, ui, "People", 10);
+    this.backRect = ui.button(
+      ctx,
+      ui.place("top-left", 20, 20, { margin: 4 }),
+      "<",
+      { style: "tan", textSize: 8 },
+    );
+
+    const bar = this.drawBottomBar(ctx, ui);
+
+    // Contacts panel fills the band between the chrome (screen px, at
+    // guiScale) — derived from the ACTUAL placed rects, so it never
+    // overlaps them at any window size.
     this.k = ui.guiScale;
-    const w = Math.ceil(ui.viewW / this.k);
-    const h = Math.ceil(ui.viewH / this.k);
-    this.w = w;
-    ctx.save();
-    ctx.scale(this.k, this.k);
+    const k = this.k;
+    const gap = 4 * k;
+    const top = Math.max(header.y + header.h, this.backRect.y + this.backRect.h) + gap;
+    const body: UiRect = {
+      x: 6 * k,
+      y: top,
+      w: Math.max(k, ui.viewW - 12 * k),
+      h: Math.max(24 * k, bar.y - gap - top),
+      scale: k,
+    };
+    ui.panel(ctx, body);
+    ui.registerHit(body); // panel dead space never falls through to world
 
-    drawHeader(ctx, w, "People", 10);
-    this.backRect = button(ctx, rect(4, 6, 20, 20), "<", {
-      style: "tan",
-      textSize: 8,
-    });
-
-    // Contacts panel fills between header and bottom bar.
-    const list = rect(6, 32, w - 12, h - 32 - NAV_H - 4);
-    panel(ctx, list.x, list.y, list.w, list.h);
-    const inner = rect(list.x + 4, list.y + 5, list.w - 8, list.h - 10);
-    this.innerRect = inner;
+    const inner = rect(
+      PAD.x,
+      PAD.top,
+      body.w / k - PAD.x * 2,
+      body.h / k - PAD.top - PAD.bottom,
+    );
+    this.innerScreen = rect(
+      body.x + inner.x * k,
+      body.y + inner.y * k,
+      inner.w * k,
+      inner.h * k,
+    );
 
     if (this.people && this.people.length > 0) {
       this.scroll.max = Math.max(0, this.people.length * ROW_H - inner.h);
-      this.drawRows(ctx, inner);
-      drawScrollbar(ctx, inner, this.scroll);
+      ui.scaled(ctx, body, () => {
+        this.drawRows(ctx, inner);
+        drawScrollbar(ctx, inner, this.scroll);
+      });
     }
 
-    this.drawBottomBar(ctx, w, h);
-
-    if (!this.people) drawNotice(ctx, w, h, this.error ?? "Opening the book...");
+    if (!this.people) drawNotice(ctx, ui, this.error ?? "Opening the book...");
     else if (this.people.length === 0)
-      drawNotice(ctx, w, h, "Nobody here yet — go meet someone!");
-    ctx.restore();
+      drawNotice(ctx, ui, "Nobody here yet — go meet someone!");
+
+    this.ready = true;
   }
 
+  /** The scrollable contact rows, in the panel's UI-unit space (clipped). */
   private drawRows(ctx: CanvasRenderingContext2D, inner: Rect): void {
     const people = this.people ?? [];
     ctx.save();
@@ -375,31 +417,36 @@ class PeopleScene implements Scene {
     ctx.restore();
   }
 
-  /** Bottom Today/Journal/People bar — same pattern as PlazaScene, People active. */
-  private drawBottomBar(ctx: CanvasRenderingContext2D, w: number, h: number): void {
-    const bar = rect(-3, h - NAV_H, w + 6, NAV_H + 3);
-    const panelImg = ensure(`${SHEET}/panel.png`);
-    if (panelImg) {
-      button(ctx, bar, "", { style: "tan" });
-    } else {
-      ctx.fillStyle = "#eec39a";
-      ctx.fillRect(px(bar.x), px(bar.y), px(bar.w), px(bar.h));
-    }
-    const labels = ["Today", "Journal", "People"];
-    this.navRects = labels.map((label, i) => {
-      const r = rect((w / 3) * i, h - NAV_H, w / 3, NAV_H);
-      const active = label === "People";
-      drawText(ctx, label, r.x + r.w / 2, h - NAV_H + 9, {
-        size: 6,
-        color: active ? BROWN : INK,
-        align: "center",
+  /**
+   * Bottom Today/Journal/People bar — full width via the oversize-request
+   * clamp, exactly the PlazaScene pattern, with People active. Caches the
+   * three tap thirds in screen px.
+   */
+  private drawBottomBar(ctx: CanvasRenderingContext2D, ui: UiContext): UiRect {
+    const bar = ui.place("bottom-center", 4000, 24, { margin: 0 });
+    ui.scaled(ctx, bar, (w, h) => {
+      // Oversize the 9-slice sideways so only its top border shows.
+      button(ctx, rect(-3, 0, w + 6, h + 3), "", { style: "tan" });
+      const labels = ["Today", "Journal", "People"] as const;
+      labels.forEach((label, i) => {
+        const active = label === "People";
+        drawText(ctx, label, (w / 3) * i + w / 6, 9, {
+          size: 6,
+          color: active ? BROWN : INK,
+          align: "center",
+        });
+        if (active) {
+          ctx.fillStyle = BROWN;
+          ctx.fillRect(px((w / 3) * i + w / 6 - 9), px(h - 7), 18, 2);
+        }
       });
-      if (active) {
-        ctx.fillStyle = BROWN;
-        ctx.fillRect(px(r.x + r.w / 2 - 9), px(h - 7), 18, 2);
-      }
-      return { label, r };
     });
+    ui.registerHit(bar); // the bar's dead space never falls through
+    this.navRects = ["Today", "Journal", "People"].map((label, i) => ({
+      label,
+      r: rect(bar.x + (bar.w / 3) * i, bar.y, bar.w / 3, bar.h),
+    }));
+    return bar;
   }
 }
 
@@ -417,15 +464,16 @@ class PersonScene implements Scene {
   private detail: ApiPersonDetail | null = null;
   private error: string | null = null;
 
-  // scroll
+  // scroll (UI units)
   private scroll = new Scroll();
 
-  // layout cache (filled by render; update bails until w > 0)
-  private w = 0;
-  /** guiScale the old art-px layout renders at (screen = art × k). */
+  // UI hit rects (SCREEN px, cached from renderUI; update bails until ready)
+  private ready = false;
+  /** The scale the panel content draws at (screen px per UI unit). */
   private k = 1;
-  private backRect: Rect = rect(0, 0, 0, 0);
-  private innerRect: Rect = rect(0, 0, 0, 0);
+  private backRect: UiRect | null = null;
+  /** The scrollable profile viewport, screen px. */
+  private innerScreen: Rect = rect(0, 0, 0, 0);
 
   constructor(nav: Nav, localId: string) {
     this.nav = nav;
@@ -448,15 +496,19 @@ class PersonScene implements Scene {
       });
   }
 
-  update(dt: number, rawInput: SceneInput): void {
-    if (this.w === 0) return; // waiting for the first render's layout
-    const input = scaleInput(rawInput, this.k);
+  update(dt: number, input: SceneInput): void {
+    if (!this.ready) return; // waiting for the first render's layout
 
-    this.scroll.update(dt, input, this.innerRect);
+    this.scroll.update(dt, input.drag, this.innerScreen, this.k);
 
     const tap = input.tap;
     if (!tap) return;
-    if (hit(this.backRect, tap)) return this.nav.go({ kind: "back" });
+    // 1) Own UI rects first, in screen space.
+    if (this.backRect && hit(this.backRect, tap)) {
+      return this.nav.go({ kind: "back" });
+    }
+    // 2) Other chrome swallows the tap; 3) no world interactions here.
+    if (input.onUi(tap)) return;
   }
 
   renderWorld(
@@ -470,34 +522,60 @@ class PersonScene implements Scene {
   }
 
   renderUI(ctx: CanvasRenderingContext2D, ui: UiContext): void {
+    const header = drawHeader(
+      ctx,
+      ui,
+      this.detail ? displayName(this.detail) : "...",
+      8,
+    );
+    this.backRect = ui.button(
+      ctx,
+      ui.place("top-left", 20, 20, { margin: 4 }),
+      "<",
+      { style: "tan", textSize: 8 },
+    );
+
+    // Profile panel fills the rest of the screen (below the placed chrome).
     this.k = ui.guiScale;
-    const w = Math.ceil(ui.viewW / this.k);
-    const h = Math.ceil(ui.viewH / this.k);
-    this.w = w;
-    ctx.save();
-    ctx.scale(this.k, this.k);
+    const k = this.k;
+    const gap = 4 * k;
+    const top = Math.max(header.y + header.h, this.backRect.y + this.backRect.h) + gap;
+    const body: UiRect = {
+      x: 6 * k,
+      y: top,
+      w: Math.max(k, ui.viewW - 12 * k),
+      h: Math.max(24 * k, ui.viewH - 6 * k - top),
+      scale: k,
+    };
+    ui.panel(ctx, body);
+    ui.registerHit(body); // panel dead space never falls through to world
 
-    drawHeader(ctx, w, this.detail ? displayName(this.detail) : "...", 8);
-    this.backRect = button(ctx, rect(4, 6, 20, 20), "<", {
-      style: "tan",
-      textSize: 8,
-    });
-
-    // Profile panel fills the rest of the screen.
-    const body = rect(6, 32, w - 12, h - 32 - 6);
-    panel(ctx, body.x, body.y, body.w, body.h);
-    const inner = rect(body.x + 5, body.y + 5, body.w - 10, body.h - 10);
-    this.innerRect = inner;
+    const inner = rect(
+      PAD.x + 1,
+      PAD.top,
+      body.w / k - (PAD.x + 1) * 2,
+      body.h / k - PAD.top - PAD.bottom,
+    );
+    this.innerScreen = rect(
+      body.x + inner.x * k,
+      body.y + inner.y * k,
+      inner.w * k,
+      inner.h * k,
+    );
 
     if (this.detail) {
-      this.drawProfile(ctx, inner);
-      drawScrollbar(ctx, inner, this.scroll);
+      ui.scaled(ctx, body, () => {
+        this.drawProfile(ctx, inner);
+        drawScrollbar(ctx, inner, this.scroll);
+      });
     } else {
-      drawNotice(ctx, w, h, this.error ?? "Turning to their page...");
+      drawNotice(ctx, ui, this.error ?? "Turning to their page...");
     }
-    ctx.restore();
+
+    this.ready = true;
   }
 
+  /** The scrollable profile column, in the panel's UI-unit space (clipped). */
   private drawProfile(ctx: CanvasRenderingContext2D, inner: Rect): void {
     const d = this.detail;
     if (!d) return;

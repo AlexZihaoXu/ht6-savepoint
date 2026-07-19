@@ -89,54 +89,6 @@ export interface Nav {
 
 export type NavHandler = (intent: NavIntent) => void;
 
-/* -------------------------------------------------- legacy input adapter -- */
-
-/**
- * The pointer surface the pre-v2 scenes were written against (they polled
- * `input.tap/drag/dragEnd/pointer` in ART px). `scaleInput` reproduces that
- * shape in a scene's own scaled UI space: screen px ÷ k.
- *
- * TRANSITIONAL — only for scenes not yet refactored to the two-space model
- * (garden/day/people/past render their old layout under one ctx.scale(k,k)).
- */
-export interface LegacyInput {
-  pointer: PointerState;
-  tap: TapEvent | null;
-  drag: DragState | null;
-  dragEnd: DragEndEvent | null;
-}
-
-/** Divide every screen coord by `k` (a scene's guiScale). */
-export function scaleInput(input: SceneInput, k: number): LegacyInput {
-  const s = 1 / Math.max(1, k);
-  const p = input.pointer;
-  return {
-    pointer: { x: p.x * s, y: p.y * s, down: p.down },
-    tap: input.tap ? { x: input.tap.x * s, y: input.tap.y * s } : null,
-    drag: input.drag
-      ? {
-          startX: input.drag.startX * s,
-          startY: input.drag.startY * s,
-          x: input.drag.x * s,
-          y: input.drag.y * s,
-          dx: input.drag.dx * s,
-          dy: input.drag.dy * s,
-        }
-      : null,
-    dragEnd: input.dragEnd
-      ? {
-          startX: input.dragEnd.startX * s,
-          startY: input.dragEnd.startY * s,
-          x: input.dragEnd.x * s,
-          y: input.dragEnd.y * s,
-          dx: input.dragEnd.dx * s,
-          dy: input.dragEnd.dy * s,
-          durationMs: input.dragEnd.durationMs,
-        }
-      : null,
-  };
-}
-
 /* ----------------------------------------------------------- SceneManager -- */
 
 /** Fade-out / fade-in halves of a scene switch, seconds. */
