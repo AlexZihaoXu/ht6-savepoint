@@ -75,7 +75,7 @@ export function PeoplePage() {
   const nonDefault = filter !== "all" || sort !== "az";
 
   return (
-    <div className="flex h-[100svh] flex-col overflow-hidden">
+    <div className="app-h flex flex-col overflow-hidden">
       <PixelHeader />
 
       {/* sub-header: title + count, and the funnel that opens filter/sort */}

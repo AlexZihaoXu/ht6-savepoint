@@ -165,7 +165,7 @@ export function DayScenePage() {
   };
 
   return (
-    <div className="flex h-[100svh] flex-col overflow-hidden bg-black">
+    <div className="app-h flex flex-col overflow-hidden bg-black">
       <PixelHeader />
 
       <div className="relative flex min-h-0 flex-1 flex-col">

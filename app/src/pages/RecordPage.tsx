@@ -228,7 +228,7 @@ export function RecordPage() {
   };
 
   return (
-    <div className="flex h-[100svh] flex-col overflow-hidden">
+    <div className="app-h flex flex-col overflow-hidden">
       <PixelHeader />
 
       {/* sub-header: back + title + recording timer */}

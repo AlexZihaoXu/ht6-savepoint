@@ -155,7 +155,7 @@ export function PlazaPage() {
     );
 
   return (
-    <div className="flex h-[100svh] flex-col overflow-hidden">
+    <div className="app-h flex flex-col overflow-hidden">
       <PixelHeader />
 
       <div className="relative min-h-0 flex-1">

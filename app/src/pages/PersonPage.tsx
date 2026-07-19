@@ -36,7 +36,7 @@ type Status = "loading" | "ready" | "missing" | "error";
 /** Shared pixel chrome around every Person state (loading/missing/ready). */
 function PersonChrome({ children }: { children: ReactNode }) {
   return (
-    <div className="flex h-[100svh] flex-col overflow-hidden">
+    <div className="app-h flex flex-col overflow-hidden">
       <PixelHeader />
       <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
       <PixelBottomNav />

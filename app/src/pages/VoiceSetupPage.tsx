@@ -213,7 +213,7 @@ export function VoiceSetupPage() {
         : "Record about 10 seconds of yourself talking so SavePoint can recognize your voice in conversations";
 
   return (
-    <div className="flex h-[100svh] flex-col overflow-hidden">
+    <div className="app-h flex flex-col overflow-hidden">
       <PixelHeader />
 
       {/* sub-header: back + title + recording timer */}

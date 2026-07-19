@@ -131,6 +131,25 @@
     padding: 0;
   }
 
+  /* Full-screen height for the immersive pages. In a normal browser tab we use
+     svh (never overflows behind a collapsing address bar). In an iOS home-screen
+     PWA, svh/dvh mis-report on cold start and leave a gap at the bottom (the
+     "where the status bar used to be" gap); 100vh is the only unit correct from
+     cold start there, and there's no address bar to overflow behind — so
+     standalone fills with 100vh. */
+  .app-h {
+    height: 100svh;
+  }
+  @media (display-mode: standalone) {
+    .app-h {
+      height: 100vh;
+    }
+    body,
+    .app-shell {
+      min-height: 100vh;
+    }
+  }
+
   /* Touch-friendly hit target (Apple/Material ~44px minimum). */
   .touch-target {
     min-height: 44px;
