@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SavePoint — your life autosaves</title>
+  <meta name="description" content="A Raspberry Pi 5 wearable and a cozy pixel-art PWA that turn the people you talk to into characters, and your day into a replayable memory." />
+  <link rel="icon" type="image/svg+xml" href="assets/icon.svg" />
+  <link rel="stylesheet" href="assets/site.css" />
+</head>
+<body>
+
+  <header class="topbar">
+    <span class="brand">SAVEPOINT</span>
+    <nav>
+      <a href="#why">Why</a>
+      <a href="#screens">Screens</a>
+      <a href="#built">Built</a>
+      <a href="#team">Team</a>
+    </nav>
+  </header>
+
+  <section class="hero">
+    <div class="wrap">
+      <p class="eyebrow">HACK THE 6IX 2026</p>
+      <h1>SavePoint</h1>
+      <p class="tagline" id="tagline" aria-live="polite"></p>
+      <div class="cta-row">
+        <a class="pixel-btn primary" href="https://github.com/AlexZihaoXu/ht6-savepoint">View the code</a>
+        <a class="pixel-btn" href="https://devpost.com/software/savepoint">Read the Devpost story</a>
+      </div>
+      <div class="cast" aria-hidden="true">
+        <img class="pixelated" src="assets/sprites/kenji-south.png" alt="" width="64" height="64">
+        <img class="pixelated" src="assets/sprites/mia-south.png" alt="" width="64" height="64">
+        <img class="pixelated" src="assets/sprites/priya-south.png" alt="" width="64" height="64">
+        <img class="pixelated" src="assets/sprites/leo-south.png" alt="" width="64" height="64">
+      </div>
+    </div>
+  </section>
+
+  <section id="why">
+    <div class="wrap">
+      <p class="section-title">Why this exists</p>
+      <div class="dlg-wood">
+        <div class="dlg-text">
+          <p>You've had this moment: someone waves, you smile back, and you have no idea who they are. Awkward, forgettable, you move on.</p>
+          <p>Now picture a parent living that moment every day, except it never moves on. The person who once knew your school schedule and the exact way you take your coffee starts asking the same question twice in one conversation. For people living with short-term memory conditions, that isn't occasional. It's constant, and they fight it with notebooks: by the bed, in the car, a name and a promise scrawled on every page they can't afford to lose. Eventually the notebooks take over the house, and because no house holds every page forever, some of them get thrown away. Not clutter. Actual days of someone's life.</p>
+          <p>SavePoint is a small hardware-plus-software attempt at a kinder version of that notebook. A Raspberry Pi 5 worn around the neck sees the people you talk to, your phone hears the conversation, and together they turn each person into a deterministic pixel character and each day into a plant in a garden you can walk back into.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="screens" class="alt">
+    <div class="wrap">
+      <p class="section-title">What it does</p>
+      <div class="lede">
+        <p>Talk to someone at a party, a conference, a family dinner. Within a few seconds they show up on screen as their own sprite, words attached, journaled and time-stamped. At the end of the day, a cinematic scene is waiting: a scrubbable timeline, a garden that grew one more plant, and a short recap of who you saw.</p>
+      </div>
+      <div class="gallery">
+        <figure class="shot">
+          <div class="frame"><img src="assets/screenshots/plaza.png" alt="The plaza screen showing several pixel characters standing in a fenced dirt plot"></div>
+          <figcaption><strong>Plaza</strong>: everyone you've met today, wandering a shared town square.</figcaption>
+        </figure>
+        <figure class="shot">
+          <div class="frame"><img src="assets/screenshots/garden.png" alt="A monthly calendar with small plant icons on several days"></div>
+          <figcaption><strong>Garden</strong>: one tile per day, planted by who you saw and how it went.</figcaption>
+        </figure>
+        <figure class="shot">
+          <div class="frame"><img src="assets/screenshots/garden-day-peek.png" alt="A popover on a calendar day showing a one-line summary and a view day button"></div>
+          <figcaption><strong>Day peek</strong>: a one-line summary before you commit to the full scene.</figcaption>
+        </figure>
+        <figure class="shot">
+          <div class="frame"><img src="assets/screenshots/day-scene.png" alt="A cinematic dialogue scene with two characters and a speech box"></div>
+          <figcaption><strong>Day view</strong>: an Undertale-style cutscene of the actual conversation.</figcaption>
+        </figure>
+        <figure class="shot">
+          <div class="frame"><img src="assets/screenshots/transcript.png" alt="A transcript panel listing timestamped diarized lines"></div>
+          <figcaption><strong>Transcript</strong>: the raw diarized log behind any scene.</figcaption>
+        </figure>
+        <figure class="shot">
+          <div class="frame"><img src="assets/screenshots/people.png" alt="A searchable list of people SavePoint has met"></div>
+          <figcaption><strong>People</strong>: a roster of everyone SavePoint has met.</figcaption>
+        </figure>
+        <figure class="shot">
+          <div class="frame"><img src="assets/screenshots/voice-setup.png" alt="A voice enrollment screen confirming the wearer's voice is set up"></div>
+          <figcaption><strong>Voice setup</strong>: ten seconds so SavePoint never mistakes you for a stranger.</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section id="built">
+    <div class="wrap">
+      <p class="section-title">How it's built</p>
+      <div class="lede">
+        <p>The camera and the microphone are two independently clocked sources: the Pi never hears, the phone never sees. Only derived data crosses the wire, sprite parameters and embeddings, never a raw photo or a raw recording. The server reconciles both streams by timestamp and matches a face or voice to an existing person by nearest embedding.</p>
+      </div>
+      <div class="diagram-card wide">
+        <img src="assets/diagrams/architecture.svg" alt="Architecture diagram: Pi 5 camera and phone mic feed a FastAPI server backed by MongoDB, which serves a read API to the app and routes recaps through a pluggable LLM client">
+      </div>
+      <p class="diagram-caption">Two unsynchronized capture sources, reconciled server-side by timestamp.</p>
+
+      <div class="diagram-card tall">
+        <img src="assets/diagrams/data-model.svg" alt="Entity relationship diagram: people generate events, events roll up into days, days are summarized by recaps">
+      </div>
+      <p class="diagram-caption">Four MongoDB collections, and they aren't a bolt-on: this schema is the game world.</p>
+    </div>
+  </section>
+
+  <section class="alt">
+    <div class="wrap">
+      <p class="section-title">Built with</p>
+      <ul class="tags">
+        <li>Python</li><li>TypeScript</li><li>React</li><li>FastAPI</li><li>Pydantic</li>
+        <li>MongoDB</li><li>Motor</li><li>uv</li><li>HeroUI</li><li>Tailwind CSS</li>
+        <li>Framer Motion</li><li>PWA</li><li>Raspberry Pi</li><li>picamera2</li>
+        <li>gpiozero</li><li>ONNX Runtime</li><li>OpenCV</li><li>Gemma</li>
+        <li>Gemini</li><li>FreeSolo</li><li>Backboard</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="team">
+    <div class="wrap">
+      <p class="section-title">Team</p>
+      <ul class="team">
+        <li><a href="https://devpost.com/ImperialKoi">Imperial Koi</a></li>
+        <li><a href="https://devpost.com/waterprisem">Victoria Y</a></li>
+        <li><a href="https://devpost.com/alex-zihao-xu">Alex Xu</a></li>
+        <li><a href="https://devpost.com/zixuliu">Jiucheng Zang</a></li>
+      </ul>
+      <p><a href="https://devpost.com/software/savepoint">Full Devpost submission →</a> for the inspiration story and prize-track writeups. <a href="https://github.com/AlexZihaoXu/ht6-savepoint">Source on GitHub →</a></p>
+    </div>
+  </section>
+
+  <footer>Hack the 6ix 2026 · Team SavePoint</footer>
+
+  <script src="assets/site.js"></script>
+</body>
+</html>
