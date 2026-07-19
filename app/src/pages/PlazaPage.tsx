@@ -22,13 +22,7 @@ import {
   type ApiDay,
   type ApiPerson,
 } from "@/lib/api";
-import {
-  addMonth,
-  distinctMonths,
-  monthGrid,
-  monthLabel,
-  monthName,
-} from "@/lib/calendar";
+import { addMonth, monthGrid, monthName, todayIso } from "@/lib/calendar";
 import {
   FenceRow,
   GroundFlower,
@@ -48,7 +42,9 @@ import {
   type Rng,
   type Wanderer,
 } from "@/lib/wander";
-import { TODAY_ISO } from "@/lib/seed";
+
+/** How often the plaza re-checks /people for a new Pi camera detection. */
+const PEOPLE_POLL_MS = 4000;
 
 export function PlazaPage() {
   const [searchParams] = useSearchParams();
@@ -63,8 +59,6 @@ export function PlazaPage() {
     searchParams.get("view") === "garden" ? 1 : 0,
   );
   const [lined, setLined] = useState(false);
-  // The Past button's month picker — a look-back popup, NOT the garden swipe.
-  const [pastOpen, setPastOpen] = useState(false);
   // "Clean the save" — the confirm-gated wipe of all People + moments.
   const [cleanOpen, setCleanOpen] = useState(false);
   const [cleaning, setCleaning] = useState(false);
@@ -72,13 +66,27 @@ export function PlazaPage() {
 
   useEffect(() => {
     const ac = new AbortController();
-    api.people(ac.signal).then(setPeople, (e) => {
-      if (!ac.signal.aborted) setPeopleError(String(e));
-    });
     api.days(ac.signal).then(setDays, (e) => {
       if (!ac.signal.aborted) setDaysError(String(e));
     });
     return () => ac.abort();
+  }, []);
+
+  // Poll /people so a Pi camera detection appears without a manual reload —
+  // the wander sim (below) merges this in without disturbing anyone already
+  // on the plot.
+  useEffect(() => {
+    const ac = new AbortController();
+    const fetchPeople = () =>
+      api.people(ac.signal).then(setPeople, (e) => {
+        if (!ac.signal.aborted) setPeopleError(String(e));
+      });
+    fetchPeople();
+    const id = window.setInterval(fetchPeople, PEOPLE_POLL_MS);
+    return () => {
+      ac.abort();
+      window.clearInterval(id);
+    };
   }, []);
 
   // ?view=garden drives the panel: jump there on mount (deep link), slide
@@ -149,18 +157,7 @@ export function PlazaPage() {
           <GardenPanel days={days} error={daysError} active={view === 1} />
         </div>
 
-        {/* invisible backdrop: any tap outside the month picker closes it
-            (sits under the floating controls, which come later in the DOM) */}
-        {pastOpen && (
-          <button
-            type="button"
-            aria-label="Close month picker"
-            className="absolute inset-0 z-20 cursor-default"
-            onClick={() => setPastOpen(false)}
-          />
-        )}
-
-        {/* floating controls (mic + whistle + Past + clean), per the mockup */}
+        {/* floating controls (mic + whistle + clean), per the mockup */}
         <div className="absolute right-3 bottom-9 z-20 flex flex-col items-end gap-2">
           {/* SAV-40 first pass — placement is provisional, team may reposition */}
           <MicCapture />
@@ -176,20 +173,6 @@ export function PlazaPage() {
           >
             <Icon icon={GiWhistle} size={26} />
           </button>
-          {/* "Past" opens the look-back month picker (waterprism: distinct
-              from the plaza↔garden swipe — that stays on arrows/swiping) */}
-          <div className="relative">
-            <button
-              type="button"
-              aria-label="Past — look back on a month"
-              aria-expanded={pastOpen}
-              className="pixel-btn touch-target px-5 py-2.5"
-              onClick={() => setPastOpen((v) => !v)}
-            >
-              <span className="font-pixel text-[12px]">Past</span>
-            </button>
-            {pastOpen && <MonthPicker days={days} error={daysError} />}
-          </div>
           {/* clean the save — confirm-gated wipe of everyone + every moment */}
           <button
             type="button"
@@ -406,21 +389,28 @@ function PlazaPanel({
     let w = plot.clientWidth || 1;
     let h = plot.clientHeight || 1;
 
-    // (Re)build sim only when the crowd itself changes — re-runs from
-    // selection/whistle keep everyone's current position.
+    // Merge the crowd by id (NOT by array position/order): /people is
+    // sorted by last_seen desc server-side, so a poll (§ people-fetch above)
+    // reorders on ANY sighting, new or repeat. Reusing existing Wanderer
+    // objects here means only a genuinely new arrival spawns fresh — everyone
+    // already on the plot keeps wandering undisturbed instead of teleporting
+    // back to their spawn point every poll.
     const ids = placed.map(({ p }) => p.local_id);
-    if (
-      simRef.current.length !== ids.length ||
-      simRef.current.some((s, i) => s.id !== ids[i])
-    ) {
-      simRef.current = placed.map(({ p, sx, sy }) =>
-        createWanderer(
+    const sameCrowd =
+      simRef.current.length === ids.length &&
+      simRef.current.every((s) => ids.includes(s.id));
+    if (!sameCrowd) {
+      const prevById = new Map(simRef.current.map((s) => [s.id, s]));
+      simRef.current = placed.map(({ p, sx, sy }) => {
+        const existing = prevById.get(p.local_id);
+        if (existing) return existing;
+        return createWanderer(
           p.local_id,
           (sx / 100) * w,
           (sy / 100) * h,
           seededRng(p.local_id),
-        ),
-      );
+        );
+      });
     }
     const sim = simRef.current;
     for (const s of sim) {
@@ -708,9 +698,10 @@ function GardenPanel({
   active: boolean;
 }) {
   const navigate = useNavigate();
+  const [todayIsoStr] = useState(() => todayIso());
   const [cursor, setCursor] = useState(() => ({
-    year: Number(TODAY_ISO.slice(0, 4)),
-    month: Number(TODAY_ISO.slice(5, 7)),
+    year: Number(todayIsoStr.slice(0, 4)),
+    month: Number(todayIsoStr.slice(5, 7)),
   }));
   const [selected, setSelected] = useState<{
     iso: string;
@@ -834,7 +825,7 @@ function GardenPanel({
                     aria-label={`Day ${cell.day}`}
                     className={[
                       "relative flex items-end justify-center border border-black/10 pb-0.5",
-                      cell.iso === TODAY_ISO
+                      cell.iso === todayIsoStr
                         ? "outline-2 outline-offset-[-2px] outline-[#f9f360]"
                         : "",
                     ].join(" ")}
@@ -869,66 +860,6 @@ function GardenPanel({
         </div>
       </div>
     </section>
-  );
-}
-
-/* ---- the Past button's month picker --------------------------------------- */
-
-/**
- * Cozy popup over the Past button listing every month that has journaled
- * days (from `/days`, newest first). Picking one opens `/past/:month` —
- * the month-in-review summary.
- */
-function MonthPicker({
-  days,
-  error,
-}: {
-  days: ApiDay[] | null;
-  error: string | null;
-}) {
-  const navigate = useNavigate();
-  const months = useMemo(() => distinctMonths(days ?? []), [days]);
-
-  return (
-    <div
-      role="menu"
-      aria-label="Pick a month to look back on"
-      className="pixel-bubble absolute right-0 bottom-full z-30 mb-2 flex max-h-60 w-48 flex-col overflow-y-auto p-1.5 text-left"
-      onClick={(e) => e.stopPropagation()}
-    >
-      <p className="font-pixel px-2.5 pt-1.5 pb-1 text-[8px] tracking-wide opacity-60">
-        Look back on…
-      </p>
-      {error && (
-        <p className="px-2.5 py-2 text-xs leading-snug opacity-70">
-          Backend asleep… is the API up?
-        </p>
-      )}
-      {!error && !days && (
-        <p className="animate-pulse px-2.5 py-2 text-xs opacity-70">
-          Loading months…
-        </p>
-      )}
-      {!error && days && months.length === 0 && (
-        <p className="px-2.5 py-2 text-xs leading-snug opacity-70">
-          No months yet — your story starts today!
-        </p>
-      )}
-      {months.map(({ month, days: n }) => (
-        <button
-          key={month}
-          type="button"
-          role="menuitem"
-          className="touch-target flex items-baseline justify-between gap-2 px-2.5 py-2 text-left transition-colors hover:bg-black/5"
-          onClick={() => navigate(`/past/${month}`)}
-        >
-          <span className="text-sm font-bold">{monthLabel(month)}</span>
-          <span className="text-xs whitespace-nowrap opacity-60">
-            {n} {n === 1 ? "day" : "days"}
-          </span>
-        </button>
-      ))}
-    </div>
   );
 }
 

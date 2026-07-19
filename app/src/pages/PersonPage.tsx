@@ -4,13 +4,23 @@ import { Chip } from "@heroui/react";
 import {
   PiCaretLeft,
   PiCaretRight,
+  PiCheck,
+  PiPencilSimple,
   PiStarFill,
   PiUserCircleDashed,
+  PiX,
 } from "react-icons/pi";
 import { Icon } from "@/components/Icon";
 import { PixelBottomNav, PixelHeader } from "@/components/PixelChrome";
+import { useToast } from "@/lib/toast";
 import { PixelSprite } from "@/lib/pixel-sprite";
-import { api, ApiError, displayName, type ApiPersonDetail } from "@/lib/api";
+import {
+  api,
+  ApiError,
+  displayName,
+  renamePerson,
+  type ApiPersonDetail,
+} from "@/lib/api";
 import { formatClock, relativeSeen } from "@/lib/scene-utils";
 
 function fmtDay(iso: string): string {
@@ -38,9 +48,15 @@ function PersonChrome({ children }: { children: ReactNode }) {
 export function PersonPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const toast = useToast();
 
   const [person, setPerson] = useState<ApiPersonDetail | null>(null);
   const [status, setStatus] = useState<Status>("loading");
+  // Inline rename (next to the name heading) — draft text lives separately
+  // from `person` so a failed save doesn't clobber the last-good name.
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
+  const [savingName, setSavingName] = useState(false);
 
   useEffect(() => {
     if (!id) {
@@ -121,6 +137,35 @@ export function PersonPage() {
       return acc;
     }, []);
 
+  const startEditingName = () => {
+    setNameDraft(person.name ?? "");
+    setEditingName(true);
+  };
+
+  const cancelEditingName = () => {
+    setEditingName(false);
+  };
+
+  // Trim client-side, but an empty result is a legitimate save (clears the
+  // name back to "Neighbor XXX" — see `displayName`), not a validation error.
+  const saveName = async () => {
+    setSavingName(true);
+    try {
+      const updated = await renamePerson(person.local_id, nameDraft.trim());
+      setPerson((p) => (p ? { ...p, name: updated.name } : p));
+      setEditingName(false);
+    } catch (e) {
+      const why =
+        e instanceof ApiError
+          ? `the backend said HTTP ${e.status}`
+          : "the backend can't be reached";
+      toast.show("error", `Couldn't rename — ${why}.`);
+      // Stay in edit mode so the draft isn't lost — the user can retry.
+    } finally {
+      setSavingName(false);
+    }
+  };
+
   return (
     <PersonChrome>
       <section
@@ -149,13 +194,65 @@ export function PersonPage() {
               id="person-heading"
               className="font-pixel flex flex-wrap items-center gap-2 text-[13px] leading-6 break-words"
             >
-              {name}
-              {person.favorite && (
-                <Icon
-                  icon={PiStarFill}
-                  label="favorite"
-                  className="text-[var(--accent)]"
-                />
+              {editingName ? (
+                <span className="flex flex-1 items-center gap-1.5">
+                  <input
+                    type="text"
+                    value={nameDraft}
+                    onChange={(e) => setNameDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        void saveName();
+                      } else if (e.key === "Escape") {
+                        e.preventDefault();
+                        cancelEditingName();
+                      }
+                    }}
+                    disabled={savingName}
+                    autoFocus
+                    aria-label="Name"
+                    placeholder="Name"
+                    className="min-w-0 flex-1 border-2 border-[var(--border)] bg-[var(--field-background)] px-2 py-1 font-sans text-sm text-[var(--field-foreground)] outline-none focus:border-[var(--accent)] disabled:opacity-60"
+                  />
+                  <button
+                    type="button"
+                    aria-label="Save name"
+                    disabled={savingName}
+                    onClick={() => void saveName()}
+                    className="pixel-btn touch-target flex flex-none items-center justify-center disabled:opacity-60"
+                  >
+                    <Icon icon={PiCheck} size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Cancel"
+                    disabled={savingName}
+                    onClick={cancelEditingName}
+                    className="pixel-btn touch-target flex flex-none items-center justify-center disabled:opacity-60"
+                  >
+                    <Icon icon={PiX} size={14} />
+                  </button>
+                </span>
+              ) : (
+                <>
+                  {name}
+                  {person.favorite && (
+                    <Icon
+                      icon={PiStarFill}
+                      label="favorite"
+                      className="text-[var(--accent)]"
+                    />
+                  )}
+                  <button
+                    type="button"
+                    aria-label="Rename"
+                    onClick={startEditingName}
+                    className="pixel-btn touch-target flex flex-none items-center justify-center"
+                  >
+                    <Icon icon={PiPencilSimple} size={14} />
+                  </button>
+                </>
               )}
             </h1>
             <p className="mt-1 text-sm text-[var(--muted)]">

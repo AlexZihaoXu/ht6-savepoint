@@ -23,14 +23,14 @@ requires-python = ">=3.12,<3.13"
 # README documents (.venv for diarize.py, .venv-stream for align.py).
 # ---------------------------------------------------------------------------
 dependencies = [
-    "torch==2.2.2",
-    "torchaudio==2.2.2",
-    "numpy==1.26.4",
-    "scipy==1.11.4",
+    "torch>=2.8,<2.9",
+    "torchaudio>=2.8,<2.9",
+    "numpy>=2.0",
+    "scipy>=1.11",
     "faster-whisper==1.0.3",
     "speechbrain==1.0.2",
     "pyannote.audio>=4.0,<5",
-    "soundfile==0.12.1",
+    "soundfile>=0.13.1",
 ]
 
 [dependency-groups]

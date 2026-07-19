@@ -21,12 +21,6 @@ const PlazaPage = lazy(() =>
 const DayScenePage = lazy(() =>
   import("@/pages/DayScenePage").then((m) => ({ default: m.DayScenePage })),
 );
-const PastMonthPage = lazy(() =>
-  import("@/pages/PastMonthPage").then((m) => ({ default: m.PastMonthPage })),
-);
-const CustomizePage = lazy(() =>
-  import("@/pages/CustomizePage").then((m) => ({ default: m.CustomizePage })),
-);
 const RecordPage = lazy(() =>
   import("@/pages/RecordPage").then((m) => ({ default: m.RecordPage })),
 );
@@ -64,8 +58,6 @@ export function AppShell() {
     location.pathname.startsWith("/plaza") ||
     location.pathname.startsWith("/scene") ||
     location.pathname.startsWith("/people") ||
-    location.pathname.startsWith("/past") ||
-    location.pathname.startsWith("/customize") ||
     location.pathname.startsWith("/record");
 
   // New screen → start reading from the top (the window is the scroller).
@@ -95,8 +87,6 @@ export function AppShell() {
             <Route path="/scene/:date" element={page(DayScenePage, true)} />
             <Route path="/people" element={page(PeoplePage, true)} />
             <Route path="/people/:id" element={page(PersonPage, true)} />
-            <Route path="/past/:month" element={page(PastMonthPage, true)} />
-            <Route path="/customize" element={page(CustomizePage, true)} />
             <Route path="/record" element={page(RecordPage, true)} />
             <Route path="*" element={<Navigate to="/plaza" replace />} />
           </Routes>

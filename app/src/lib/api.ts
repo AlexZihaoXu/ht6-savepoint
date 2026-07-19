@@ -132,8 +132,8 @@ async function getJSON<T>(path: string, signal?: AbortSignal): Promise<T> {
 
 /** What `POST /ingest/audio/clip` hands back after diarizing the clip. */
 export interface AudioIngestResult {
-  events: unknown[];
-  days: unknown[];
+  events: ApiEvent[];
+  days: ApiDay[];
 }
 
 /**
@@ -237,6 +237,28 @@ export async function assignSpeaker(
   });
   if (!res.ok) throw new ApiError(res.status, path);
   return (await res.json()) as SpeakerAssignmentResult;
+}
+
+/* ---- rename person (edit the name on a person's profile) ------------------ */
+
+/**
+ * Rename a person (or clear their name back to `null` — send `""`/whitespace):
+ * `PATCH /people/{local_id}`, returning the updated Person.
+ */
+export async function renamePerson(
+  localId: string,
+  name: string,
+  signal?: AbortSignal,
+): Promise<ApiPerson> {
+  const path = `/people/${encodeURIComponent(localId)}`;
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+    signal,
+  });
+  if (!res.ok) throw new ApiError(res.status, path);
+  return (await res.json()) as ApiPerson;
 }
 
 /* ---- clean slate (admin data reset) --------------------------------------- */

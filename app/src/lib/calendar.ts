@@ -15,6 +15,12 @@ export function isoOf(year: number, month: number, day: number): string {
   return `${year}-${pad(month)}-${pad(day)}`;
 }
 
+/** Today's date as an ISO "YYYY-MM-DD" (UTC, matching this module's dates). */
+export function todayIso(): string {
+  const now = new Date();
+  return isoOf(now.getUTCFullYear(), now.getUTCMonth() + 1, now.getUTCDate());
+}
+
 /** The month laid out as full Sunday-first weeks (rows of 7 cells). */
 export function monthGrid(year: number, month: number): MonthCell[][] {
   const firstDow = new Date(Date.UTC(year, month - 1, 1)).getUTCDay();
@@ -48,37 +54,6 @@ const MONTHS = [
 
 export function monthName(month: number): string {
   return MONTHS[month - 1] ?? "";
-}
-
-/** A month that has journaled days: its "YYYY-MM" key + how many days. */
-export interface MonthEntry {
-  month: string;
-  days: number;
-}
-
-/**
- * The distinct "YYYY-MM" months across a list of dated records (e.g. `/days`),
- * newest first, each with its day count — feeds the Past button's month picker.
- * Records whose date doesn't start with "YYYY-MM" are skipped.
- */
-export function distinctMonths(dated: Array<{ date: string }>): MonthEntry[] {
-  const counts = new Map<string, number>();
-  for (const { date } of dated) {
-    if (!/^\d{4}-\d{2}(-|$)/.test(date)) continue;
-    const key = date.slice(0, 7);
-    counts.set(key, (counts.get(key) ?? 0) + 1);
-  }
-  return [...counts.entries()]
-    .sort(([a], [b]) => b.localeCompare(a))
-    .map(([month, days]) => ({ month, days }));
-}
-
-/** "2026-07" → "July 2026" (empty string for anything unparseable). */
-export function monthLabel(month: string): string {
-  const m = /^(\d{4})-(\d{2})$/.exec(month);
-  if (!m) return "";
-  const name = monthName(Number(m[2]));
-  return name ? `${name} ${Number(m[1])}` : "";
 }
 
 /** Step a (year, month) cursor by +-1 month. */

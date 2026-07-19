@@ -6,8 +6,9 @@
  * `POST /speech/preview` and the returned segments REPLACE the list.
  *
  * Stopping uploads the full clip to `POST /ingest/audio/clip` (the persisted
- * path, NTP-anchored at `startedAt`), navigates back, and reports through the
- * app toast. Upload failure keeps the clip in memory and offers a retry.
+ * path, NTP-anchored at `startedAt`) and, on success, jumps straight into
+ * today's dialogue scene scrubbed to the moment just recorded. Upload failure
+ * keeps the clip in memory and offers a retry.
  *
  * All browser-media access is guarded (`micSupported`) so the page renders in
  * jsdom; the state machine itself lives in `lib/record.ts` where it's tested.
@@ -103,12 +104,21 @@ export function RecordPage() {
     }
   };
 
-  /** Upload the finished clip; on success leave the screen + toast. */
+  /** Upload the finished clip; on success jump straight into today's scene. */
   const saveClip = async (blob: Blob) => {
     try {
-      await ingestAudioClip(blob, startedAtRef.current);
-      toast.show("success", "Recording saved — check today in the journal");
-      goBack();
+      const result = await ingestAudioClip(blob, startedAtRef.current);
+      toast.show("success", "Recording analyzed — here's your day");
+      const latestTs = result.events
+        .map((e) => e.ts)
+        .sort()
+        .at(-1);
+      navigate(
+        latestTs
+          ? `/scene/today?t=${encodeURIComponent(latestTs)}`
+          : "/scene/today",
+        { replace: true },
+      );
     } catch (e) {
       const why =
         e instanceof ApiError

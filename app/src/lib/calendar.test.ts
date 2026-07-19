@@ -1,12 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  addMonth,
-  distinctMonths,
-  isoOf,
-  monthGrid,
-  monthLabel,
-  monthName,
-} from "./calendar";
+import { addMonth, isoOf, monthGrid, monthName, todayIso } from "./calendar";
 
 describe("calendar", () => {
   it("lays out July 2026 as Sunday-first weeks", () => {
@@ -31,32 +24,8 @@ describe("calendar", () => {
     expect(monthName(7)).toBe("July");
   });
 
-  it("collects distinct months newest-first with day counts", () => {
-    const days = [
-      { date: "2026-07-18" },
-      { date: "2026-07-17" },
-      { date: "2026-06-30" },
-      { date: "2026-07-02" },
-      { date: "2025-12-25" },
-    ];
-    expect(distinctMonths(days)).toEqual([
-      { month: "2026-07", days: 3 },
-      { month: "2026-06", days: 1 },
-      { month: "2025-12", days: 1 },
-    ]);
-  });
-
-  it("skips malformed dates and handles empty input", () => {
-    expect(distinctMonths([])).toEqual([]);
-    expect(
-      distinctMonths([{ date: "garbage" }, { date: "2026-07-01" }]),
-    ).toEqual([{ month: "2026-07", days: 1 }]);
-  });
-
-  it("labels YYYY-MM months for humans", () => {
-    expect(monthLabel("2026-07")).toBe("July 2026");
-    expect(monthLabel("2025-12")).toBe("December 2025");
-    expect(monthLabel("2026-13")).toBe("");
-    expect(monthLabel("not-a-month")).toBe("");
+  it("returns today as a UTC YYYY-MM-DD string", () => {
+    expect(todayIso()).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(todayIso()).toBe(new Date().toISOString().slice(0, 10));
   });
 });
