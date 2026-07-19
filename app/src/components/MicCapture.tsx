@@ -2,12 +2,12 @@
  * Floating "record a moment" FAB — the app's primary action, so it's the
  * biggest, most prominent control in the plaza. It used to record inline
  * (SAV-40); the dedicated /record screen — live separated-speech preview +
- * save — now owns capture, so this button just takes you there. A camera
- * glyph (waterprism: the capture button is the headline feature).
+ * save — now owns capture, so this button just takes you there. A microphone
+ * glyph, since this starts an audio recording, not a photo/video capture.
  */
 
 import { useNavigate } from "react-router-dom";
-import { PiCamera } from "react-icons/pi";
+import { PiMicrophone } from "react-icons/pi";
 import { Icon } from "./Icon";
 
 export function MicCapture() {
@@ -24,7 +24,7 @@ export function MicCapture() {
         navigate("/record");
       }}
     >
-      <Icon icon={PiCamera} size={32} />
+      <Icon icon={PiMicrophone} size={32} />
     </button>
   );
 }
