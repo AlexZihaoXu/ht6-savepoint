@@ -9,6 +9,10 @@ SAVEPOINT_EDGE_BACKEND selects hardware vs. simulation:
 Backend modules are imported lazily, inside _build_backend(), specifically
 so `SAVEPOINT_EDGE_BACKEND=sim` (and importing this module for tests) never
 requires picamera2/gpiozero/onnxruntime to be installed.
+
+SAVEPOINT_EDGE_DEBUG_PORT (unset by default) opts into a live MJPEG debug
+view (camera + SCRFD boxes) served from this same process on that port —
+see debug_server.py. Works with either backend, including sim.
 """
 
 from __future__ import annotations
@@ -16,6 +20,7 @@ from __future__ import annotations
 import os
 import signal
 import sys
+import threading
 import time
 from types import FrameType
 
@@ -97,6 +102,20 @@ def _build_backend() -> tuple[Camera, MuteSwitch, FaceDetector]:
     return SimCamera(), SimMuteSwitch(), SimFaceDetector()
 
 
+def _maybe_start_debug_server(camera: Camera, detector: FaceDetector, lock: threading.Lock) -> None:
+    """SAVEPOINT_EDGE_DEBUG_PORT (unset by default) opts into a live MJPEG
+    debug view on that port, sharing this process's own camera + detector
+    (see debug_server.py's docstring for why it can't just be a second
+    standalone process on real hardware)."""
+    spec = os.environ.get("SAVEPOINT_EDGE_DEBUG_PORT", "")
+    if not spec:
+        return
+    from savepoint_edge.debug_server import start_debug_server
+
+    start_debug_server(camera, detector, lock, int(spec))
+    print(f"[edge] debug view on http://0.0.0.0:{spec}/", file=sys.stderr)
+
+
 def _build_sink_from_env() -> EventSink:
     """SAVEPOINT_EDGE_SINK selects where events go:
     (unset) / "stdout"   -> one JSON line per event on stdout (default)
@@ -129,6 +148,10 @@ def main() -> int:
 
     sink = _build_sink_from_env()
     identity_gallery = IdentityGallery()
+    # Guards every camera.capture_frame()+detector.detect() call, including
+    # the optional debug server's — see _maybe_start_debug_server().
+    camera_lock = threading.Lock()
+    _maybe_start_debug_server(camera, detector, camera_lock)
 
     # try/finally, not just the loop: an exception escaping the loop body
     # (a real bug, not a sink failure — sinks already catch their own) must
@@ -145,13 +168,15 @@ def main() -> int:
                 continue
             mute.set_recording_led(True)
 
-            frame = camera.capture_frame()
+            with camera_lock:
+                frame = camera.capture_frame()
+                faces = [] if frame is None else detector.detect(frame)
             if frame is None:
                 print("[edge] capture_frame() returned no frame", file=sys.stderr)
                 time.sleep(_TICK_S)
                 continue
 
-            for face in detector.detect(frame):
+            for face in faces:
                 bbox = (face.x, face.y, face.w, face.h)
                 resolution = identity_gallery.resolve(
                     face.embedding, bbox, frame.timestamp_ms
