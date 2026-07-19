@@ -2,27 +2,20 @@
  * Main page — ONE continuous pixel world you swipe between (scroll-snap):
  *   panel 1: the character plaza — everyone from `/people` wandering a plot;
  *   panel 2: the calendar garden — `/days` as a month of growing plants.
- * Matches waterprism's mockup: wooden Savepoint header, whistle + Past
- * floating controls, and the [ Today ][ journal ][ people ] bottom bar.
+ * Chrome is intentionally minimal: the wooden Savepoint header (the logo is
+ * the way home) plus two floating controls — record (mic) and people.
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useReducedMotion } from "framer-motion";
-import { GiWhistle } from "react-icons/gi";
-import { PiCaretLeft, PiCaretRight } from "react-icons/pi";
+import { PiCaretLeft, PiCaretRight, PiUserList } from "react-icons/pi";
 import { Icon } from "@/components/Icon";
 import { MicCapture } from "@/components/MicCapture";
-import { PixelBottomNav, PixelHeader } from "@/components/PixelChrome";
+import { PixelHeader } from "@/components/PixelChrome";
 import { PixelSprite } from "@/lib/pixel-sprite";
 import { api, displayName, type ApiDay, type ApiPerson } from "@/lib/api";
-import {
-  addMonth,
-  distinctMonths,
-  monthGrid,
-  monthLabel,
-  monthName,
-} from "@/lib/calendar";
+import { addMonth, monthGrid, monthName } from "@/lib/calendar";
 import {
   FenceRow,
   GroundFlower,
@@ -45,6 +38,7 @@ import {
 import { TODAY_ISO } from "@/lib/seed";
 
 export function PlazaPage() {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const scrollerRef = useRef<HTMLDivElement>(null);
 
@@ -56,9 +50,6 @@ export function PlazaPage() {
   const [view, setView] = useState<0 | 1>(
     searchParams.get("view") === "garden" ? 1 : 0,
   );
-  const [lined, setLined] = useState(false);
-  // The Past button's month picker — a look-back popup, NOT the garden swipe.
-  const [pastOpen, setPastOpen] = useState(false);
 
   useEffect(() => {
     const ac = new AbortController();
@@ -114,53 +105,26 @@ export function PlazaPage() {
           <PlazaPanel
             people={people}
             error={peopleError}
-            lined={lined}
+            lined={false}
             active={view === 0}
           />
           <GardenPanel days={days} error={daysError} active={view === 1} />
         </div>
 
-        {/* invisible backdrop: any tap outside the month picker closes it
-            (sits under the floating controls, which come later in the DOM) */}
-        {pastOpen && (
-          <button
-            type="button"
-            aria-label="Close month picker"
-            className="absolute inset-0 z-20 cursor-default"
-            onClick={() => setPastOpen(false)}
-          />
-        )}
-
-        {/* floating controls (mic + whistle + Past), per the mockup */}
-        <div className="absolute right-3 bottom-9 z-20 flex flex-col items-end gap-2">
-          {/* SAV-40 first pass — placement is provisional, team may reposition */}
+        {/* floating controls — the two primary actions (record + people) */}
+        <div className="absolute right-3 bottom-6 z-20 flex flex-col items-end gap-2">
           <MicCapture />
           <button
             type="button"
-            aria-label={lined ? "Free roam" : "Whistle — line everyone up"}
-            aria-pressed={lined}
+            aria-label="People"
             className="pixel-btn flex h-12 w-14 items-center justify-center"
-            onClick={() => {
-              setLined((v) => !v);
-              gotoPanel(0);
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate("/people");
             }}
           >
-            <Icon icon={GiWhistle} size={26} />
+            <Icon icon={PiUserList} size={26} />
           </button>
-          {/* "Past" opens the look-back month picker (waterprism: distinct
-              from the plaza↔garden swipe — that stays on arrows/swiping) */}
-          <div className="relative">
-            <button
-              type="button"
-              aria-label="Past — look back on a month"
-              aria-expanded={pastOpen}
-              className="pixel-btn touch-target px-5 py-2.5"
-              onClick={() => setPastOpen((v) => !v)}
-            >
-              <span className="font-pixel text-[12px]">Past</span>
-            </button>
-            {pastOpen && <MonthPicker days={days} error={daysError} />}
-          </div>
         </div>
 
         {/* swipe affordance — tap-to-move for anyone who doesn't realize the
@@ -204,8 +168,6 @@ export function PlazaPage() {
           ))}
         </div>
       </div>
-
-      <PixelBottomNav />
     </div>
   );
 }
@@ -772,66 +734,6 @@ function GardenPanel({
         </div>
       </div>
     </section>
-  );
-}
-
-/* ---- the Past button's month picker --------------------------------------- */
-
-/**
- * Cozy popup over the Past button listing every month that has journaled
- * days (from `/days`, newest first). Picking one opens `/past/:month` —
- * the month-in-review summary.
- */
-function MonthPicker({
-  days,
-  error,
-}: {
-  days: ApiDay[] | null;
-  error: string | null;
-}) {
-  const navigate = useNavigate();
-  const months = useMemo(() => distinctMonths(days ?? []), [days]);
-
-  return (
-    <div
-      role="menu"
-      aria-label="Pick a month to look back on"
-      className="pixel-bubble absolute right-0 bottom-full z-30 mb-2 flex max-h-60 w-48 flex-col overflow-y-auto p-1.5 text-left"
-      onClick={(e) => e.stopPropagation()}
-    >
-      <p className="font-pixel px-2.5 pt-1.5 pb-1 text-[8px] tracking-wide opacity-60">
-        Look back on…
-      </p>
-      {error && (
-        <p className="px-2.5 py-2 text-xs leading-snug opacity-70">
-          Backend asleep… is the API up?
-        </p>
-      )}
-      {!error && !days && (
-        <p className="animate-pulse px-2.5 py-2 text-xs opacity-70">
-          Loading months…
-        </p>
-      )}
-      {!error && days && months.length === 0 && (
-        <p className="px-2.5 py-2 text-xs leading-snug opacity-70">
-          No months yet — your story starts today!
-        </p>
-      )}
-      {months.map(({ month, days: n }) => (
-        <button
-          key={month}
-          type="button"
-          role="menuitem"
-          className="touch-target flex items-baseline justify-between gap-2 px-2.5 py-2 text-left transition-colors hover:bg-black/5"
-          onClick={() => navigate(`/past/${month}`)}
-        >
-          <span className="text-sm font-bold">{monthLabel(month)}</span>
-          <span className="text-xs whitespace-nowrap opacity-60">
-            {n} {n === 1 ? "day" : "days"}
-          </span>
-        </button>
-      ))}
-    </div>
   );
 }
 

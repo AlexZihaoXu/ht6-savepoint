@@ -1,27 +1,19 @@
 /**
  * Chrome for the immersive pixel screens (plaza / garden / day scene):
- * a wooden header with the bracketed Savepoint logotype + hamburger menu,
- * and the mockup's bottom bar — [ Today ] [ journal ] [ people ].
+ * a wooden header with the bracketed Savepoint logotype (the logo doubles as
+ * the "home" button — it links back to the plaza), plus a slim People bar for
+ * the list screens. The old hamburger menu + [ Today ][ journal ] controls
+ * were removed per design.
  */
 
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import {
-  PiList,
-  PiMoonStars,
-  PiNotePencil,
-  PiSun,
-  PiUserList,
-} from "react-icons/pi";
+import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
+import { PiUserList } from "react-icons/pi";
 import { Icon } from "./Icon";
-import { getCurrentTheme, toggleTheme, type ThemeMode } from "@/lib/theme";
 
 export function PixelHeader() {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [mode, setMode] = useState<ThemeMode>(() => getCurrentTheme());
-
   return (
-    <header className="wood-bar relative z-40 flex h-14 flex-none items-center justify-between px-3">
+    <header className="wood-bar relative z-40 flex h-14 flex-none items-center px-3">
       <Link
         to="/plaza"
         aria-label="Savepoint — plaza"
@@ -43,43 +35,6 @@ export function PixelHeader() {
           Savepoint
         </span>
       </Link>
-
-      <button
-        type="button"
-        aria-label="Menu"
-        aria-expanded={menuOpen}
-        className="touch-target flex items-center justify-center px-1"
-        onClick={() => setMenuOpen((v) => !v)}
-      >
-        <Icon icon={PiList} size={26} />
-      </button>
-
-      {menuOpen && (
-        <div className="pixel-bubble absolute top-full right-2 z-50 mt-1 flex w-44 flex-col p-1 text-sm">
-          <button
-            type="button"
-            className="flex items-center gap-2 px-3 py-2.5 text-left font-medium"
-            onClick={() => setMode(toggleTheme())}
-          >
-            <Icon icon={mode === "dark" ? PiSun : PiMoonStars} />
-            {mode === "dark" ? "Day time" : "Night time"}
-          </button>
-          <Link
-            to="/people"
-            className="px-3 py-2.5 font-medium"
-            onClick={() => setMenuOpen(false)}
-          >
-            People list
-          </Link>
-          <Link
-            to="/customize"
-            className="px-3 py-2.5 font-medium"
-            onClick={() => setMenuOpen(false)}
-          >
-            Your character
-          </Link>
-        </div>
-      )}
     </header>
   );
 }
@@ -89,23 +44,8 @@ export function PixelBottomNav() {
   return (
     <nav
       aria-label="Primary"
-      className="pixel-bar z-40 flex flex-none items-stretch gap-2 px-3 pt-2 pb-[max(0.6rem,env(safe-area-inset-bottom))]"
+      className="pixel-bar z-40 flex flex-none items-stretch justify-end gap-2 px-3 pt-2 pb-[max(0.6rem,env(safe-area-inset-bottom))]"
     >
-      <button
-        type="button"
-        className="pixel-btn pixel-btn-primary touch-target flex-1 px-4 py-2.5"
-        onClick={() => navigate("/scene/today")}
-      >
-        <span className="font-pixel text-[13px]">Today</span>
-      </button>
-      <button
-        type="button"
-        aria-label="Journal — the garden of days"
-        className="pixel-btn touch-target flex w-14 items-center justify-center"
-        onClick={() => navigate("/plaza?view=garden")}
-      >
-        <Icon icon={PiNotePencil} size={22} />
-      </button>
       <button
         type="button"
         aria-label="People"
