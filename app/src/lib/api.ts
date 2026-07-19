@@ -239,6 +239,27 @@ export async function assignSpeaker(
   return (await res.json()) as SpeakerAssignmentResult;
 }
 
+/* ---- clean slate (admin data reset) --------------------------------------- */
+
+/** What `POST /admin/reset` reports: how many docs were deleted per collection. */
+export interface ResetResult {
+  people: number;
+  events: number;
+  days: number;
+  recaps: number;
+}
+
+/**
+ * Wipe every collection (people, events, days, recaps) for a clean-slate demo.
+ * Destructive + irreversible — always gate this behind a confirmation.
+ */
+export async function resetData(signal?: AbortSignal): Promise<ResetResult> {
+  const path = "/admin/reset";
+  const res = await fetch(`${API_BASE}${path}`, { method: "POST", signal });
+  if (!res.ok) throw new ApiError(res.status, path);
+  return (await res.json()) as ResetResult;
+}
+
 export const api = {
   people: (signal?: AbortSignal) => getJSON<ApiPerson[]>("/people", signal),
   person: (localId: string, signal?: AbortSignal) =>

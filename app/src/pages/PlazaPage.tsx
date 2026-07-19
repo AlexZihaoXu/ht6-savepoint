@@ -10,12 +10,18 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useReducedMotion } from "framer-motion";
 import { GiWhistle } from "react-icons/gi";
-import { PiCaretLeft, PiCaretRight } from "react-icons/pi";
+import { PiCaretLeft, PiCaretRight, PiTrash } from "react-icons/pi";
 import { Icon } from "@/components/Icon";
 import { MicCapture } from "@/components/MicCapture";
 import { PixelBottomNav, PixelHeader } from "@/components/PixelChrome";
 import { PixelSprite } from "@/lib/pixel-sprite";
-import { api, displayName, type ApiDay, type ApiPerson } from "@/lib/api";
+import {
+  api,
+  displayName,
+  resetData,
+  type ApiDay,
+  type ApiPerson,
+} from "@/lib/api";
 import {
   addMonth,
   distinctMonths,
@@ -59,6 +65,10 @@ export function PlazaPage() {
   const [lined, setLined] = useState(false);
   // The Past button's month picker — a look-back popup, NOT the garden swipe.
   const [pastOpen, setPastOpen] = useState(false);
+  // "Clean the save" — the confirm-gated wipe of all People + moments.
+  const [cleanOpen, setCleanOpen] = useState(false);
+  const [cleaning, setCleaning] = useState(false);
+  const [cleanError, setCleanError] = useState<string | null>(null);
 
   useEffect(() => {
     const ac = new AbortController();
@@ -98,6 +108,25 @@ export function PlazaPage() {
     if (idx !== view) setView(idx);
   };
 
+  // Confirm-gated clean-slate wipe (POST /admin/reset). On success the plaza
+  // and garden reflect empty at once, no reload.
+  const doClean = async () => {
+    setCleaning(true);
+    setCleanError(null);
+    try {
+      await resetData();
+      setPeople([]);
+      setDays([]);
+      setPeopleError(null);
+      setDaysError(null);
+      setCleanOpen(false);
+    } catch (e) {
+      setCleanError(String(e));
+    } finally {
+      setCleaning(false);
+    }
+  };
+
   return (
     <div className="flex h-[100svh] flex-col overflow-hidden">
       <PixelHeader />
@@ -131,7 +160,7 @@ export function PlazaPage() {
           />
         )}
 
-        {/* floating controls (mic + whistle + Past), per the mockup */}
+        {/* floating controls (mic + whistle + Past + clean), per the mockup */}
         <div className="absolute right-3 bottom-9 z-20 flex flex-col items-end gap-2">
           {/* SAV-40 first pass — placement is provisional, team may reposition */}
           <MicCapture />
@@ -161,7 +190,75 @@ export function PlazaPage() {
             </button>
             {pastOpen && <MonthPicker days={days} error={daysError} />}
           </div>
+          {/* clean the save — confirm-gated wipe of everyone + every moment */}
+          <button
+            type="button"
+            aria-label="Clean the save — wipe everyone and every moment"
+            className="pixel-btn flex h-12 w-14 items-center justify-center"
+            onClick={() => {
+              setCleanError(null);
+              setCleanOpen(true);
+            }}
+          >
+            <Icon icon={PiTrash} size={22} />
+          </button>
         </div>
+
+        {/* "Clean the save" confirm dialog — full-screen overlay */}
+        {cleanOpen && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-6"
+            onClick={() => {
+              if (!cleaning) {
+                setCleanOpen(false);
+                setCleanError(null);
+              }
+            }}
+          >
+            <div
+              role="alertdialog"
+              aria-label="Clean the save"
+              aria-modal="true"
+              className="pixel-bubble w-72 max-w-full p-4 text-left"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <p className="font-pixel text-[12px] leading-relaxed">
+                Clean the save?
+              </p>
+              <p className="mt-2 text-xs leading-snug opacity-80">
+                This erases <b>everyone</b> and <b>every moment</b> from the
+                database — the plaza and garden start empty. This can’t be
+                undone.
+              </p>
+              {cleanError && (
+                <p className="mt-2 text-xs leading-snug text-[#a03c37]">
+                  Couldn’t clean — is the backend awake?
+                </p>
+              )}
+              <div className="mt-3 flex justify-end gap-2">
+                <button
+                  type="button"
+                  className="pixel-btn font-pixel px-3 py-1.5 text-[10px]"
+                  disabled={cleaning}
+                  onClick={() => {
+                    setCleanOpen(false);
+                    setCleanError(null);
+                  }}
+                >
+                  cancel
+                </button>
+                <button
+                  type="button"
+                  className="pixel-btn font-pixel px-3 py-1.5 text-[10px] text-[#a03c37]"
+                  disabled={cleaning}
+                  onClick={doClean}
+                >
+                  {cleaning ? "cleaning…" : "clean"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* swipe affordance — tap-to-move for anyone who doesn't realize the
             world swipes (the arrow points at the neighboring panel; swiping
