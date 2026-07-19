@@ -2,17 +2,21 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from savepoint_server.api import api_router
 from savepoint_server.core.config import Settings, get_settings
 from savepoint_server.db.mongo import close_client, ensure_indexes, get_db
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -50,6 +54,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @app.exception_handler(Exception)
+    async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+        """Ensure an unhandled exception's response still carries CORS headers.
+
+        Starlette's default fallback for a truly unhandled exception
+        (ServerErrorMiddleware, wired in automatically OUTSIDE every
+        user-added middleware including CORSMiddleware above) returns its
+        response without ever passing back through CORSMiddleware — so a
+        cross-origin browser request sees no Access-Control-Allow-Origin on
+        that 500 and reports the request as failed outright ("can't reach
+        the server"), not as a real HTTP 500 the frontend could show. An
+        explicit handler runs inside the middleware stack instead, so its
+        JSONResponse gets CORS-processed normally like any other response.
+        """
+        logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
+        return JSONResponse(status_code=500, content={"detail": "Internal server error."})
 
     app.include_router(api_router)
 
