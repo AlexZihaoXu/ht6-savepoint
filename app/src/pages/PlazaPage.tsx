@@ -350,9 +350,11 @@ function PlazaPanel({
   onOpenProfile: (localId: string) => void;
 }) {
   const reduce = useReducedMotion();
-  const [selected, setSelected] = useState<
-    { id: string; xPct: number; yPct: number } | null
-  >(null);
+  const [selected, setSelected] = useState<{
+    id: string;
+    xPct: number;
+    yPct: number;
+  } | null>(null);
 
   const plotRef = useRef<HTMLDivElement>(null);
   const actorEls = useRef(new Map<string, HTMLDivElement>());
