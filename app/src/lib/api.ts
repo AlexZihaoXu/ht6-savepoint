@@ -277,26 +277,56 @@ export async function assignSpeaker(
   return (await res.json()) as SpeakerAssignmentResult;
 }
 
-/* ---- rename person (edit the name on a person's profile) ------------------ */
+/* ---- edit a person (name / notes / tags on a person's profile) ------------ */
+
+/** Partial update for `PATCH /people/{local_id}` — omit a key to leave it as-is. */
+export interface PersonPatch {
+  /** New name; `""`/whitespace clears it back to `null`. */
+  name?: string | null;
+  /** New notes; `""`/whitespace clears them back to `null`. */
+  notes?: string | null;
+  /** Full replacement tag list (normalized server-side). */
+  tags?: string[];
+}
+
+/**
+ * Partially update a person: `PATCH /people/{local_id}` with ONLY the keys
+ * present in `patch`. Any omitted field is left untouched server-side (the
+ * backend keys off the request's `model_fields_set`), so a notes-only patch
+ * can't wipe the name and vice versa. Returns the updated Person.
+ */
+export async function updatePerson(
+  localId: string,
+  patch: PersonPatch,
+  signal?: AbortSignal,
+): Promise<ApiPerson> {
+  const path = `/people/${encodeURIComponent(localId)}`;
+  // Send only the keys the caller explicitly provided so omitted fields aren't
+  // touched server-side.
+  const body: PersonPatch = {};
+  if (patch.name !== undefined) body.name = patch.name;
+  if (patch.notes !== undefined) body.notes = patch.notes;
+  if (patch.tags !== undefined) body.tags = patch.tags;
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    signal,
+  });
+  if (!res.ok) throw new ApiError(res.status, path);
+  return (await res.json()) as ApiPerson;
+}
 
 /**
  * Rename a person (or clear their name back to `null` — send `""`/whitespace):
- * `PATCH /people/{local_id}`, returning the updated Person.
+ * a thin wrapper over {@link updatePerson}, returning the updated Person.
  */
 export async function renamePerson(
   localId: string,
   name: string,
   signal?: AbortSignal,
 ): Promise<ApiPerson> {
-  const path = `/people/${encodeURIComponent(localId)}`;
-  const res = await fetch(`${API_BASE}${path}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name }),
-    signal,
-  });
-  if (!res.ok) throw new ApiError(res.status, path);
-  return (await res.json()) as ApiPerson;
+  return updatePerson(localId, { name }, signal);
 }
 
 /* ---- clean slate (admin data reset) --------------------------------------- */
