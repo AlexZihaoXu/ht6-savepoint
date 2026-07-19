@@ -2,7 +2,10 @@
 
 With the default :class:`~savepoint_server.services.speech.StubTranscriber` this
 runs end to end in dev and CI without torch. Selecting the real pipeline is a
-config switch (``SAVEPOINT_TRANSCRIBER=real``); the endpoint code is identical.
+config switch (``SAVEPOINT_TRANSCRIBER=real``); ``/transcribe`` and
+``/ingest/audio/clip``'s endpoint code is identical either way. ``/preview``
+is the one exception — see its own docstring — since it's unaffordable to run
+the real pipeline on every few-second live poll.
 """
 
 from __future__ import annotations
@@ -17,6 +20,7 @@ from pydantic import BaseModel, Field
 from savepoint_server.db import Repositories, get_repositories
 from savepoint_server.models import Transcript
 from savepoint_server.services.speech import (
+    RealTranscriber,
     Transcriber,
     get_transcriber,
     transcribe_and_store,
@@ -103,6 +107,15 @@ async def preview(
     repeatedly on the same (or a growing) clip and just render the segments. Unlike
     ``/speech/transcribe`` and ``/ingest/audio/clip`` it never touches Mongo.
 
+    With :class:`RealTranscriber` configured, every poll is skipped outright
+    (segments come back empty) instead of run: that pipeline reloads its models
+    from disk on every call — tens of seconds — and a growing *partial* clip
+    diarizes far less reliably than the complete recording, so running it here
+    would either stall the live poll behind the previous call or surface text
+    that doesn't match what was actually said. The one accurate pass still
+    happens once, on the full clip, at ``/ingest/audio/clip`` when recording
+    stops.
+
     Robustness: an empty upload is a clean 400, but any transcription/decoding
     failure is swallowed — logged and returned as ``{"segments": []}`` with 200 —
     so a flaky recording can never surface as a 500 to the recorder UI.
@@ -110,6 +123,8 @@ async def preview(
     data = await audio.read()
     if not data:
         raise HTTPException(status_code=400, detail="Empty audio upload.")
+    if isinstance(transcriber, RealTranscriber):
+        return PreviewResponse(segments=[])
     try:
         transcript = transcriber.transcribe(data)
     except Exception:

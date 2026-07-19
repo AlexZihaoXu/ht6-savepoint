@@ -20,6 +20,7 @@ from savepoint_server.main import app
 from savepoint_server.models import EventType, Transcript
 from savepoint_server.services.speech import (
     AudioInput,
+    RealTranscriber,
     StubTranscriber,
     event_from_segment,
     get_transcriber,
@@ -186,6 +187,43 @@ async def test_preview_happy_path_returns_segments() -> None:
     assert [s["end"] for s in segments] == [seg.end for seg in expected.segments]
     # Every segment carries exactly the contract keys.
     assert all(set(s) == {"speaker", "start", "end", "text"} for s in segments)
+
+
+class _RealTranscriberSpy(RealTranscriber):
+    """A RealTranscriber whose transcribe() raises if ever actually called.
+
+    Proves /preview skips the real pipeline outright rather than running it (and
+    swallowing a slow/failed call) — a live poll can't afford tens of seconds of
+    model reload per call, and a growing partial clip diarizes unreliably anyway.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(
+            pipeline_dir="/nonexistent",
+            diarize_python="/nonexistent/python",
+            align_python="/nonexistent/python",
+            hf_token=None,
+        )
+
+    def transcribe(self, audio: AudioInput) -> Transcript:
+        raise AssertionError("RealTranscriber.transcribe() must never run from /preview")
+
+
+async def test_preview_skips_real_transcriber_outright() -> None:
+    """With RealTranscriber configured, /preview returns empty WITHOUT running it."""
+    app.dependency_overrides[get_speech_transcriber] = _RealTranscriberSpy
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+            resp = await client.post(
+                "/speech/preview",
+                files={"audio": ("clip.webm", b"fake audio bytes", "audio/webm")},
+            )
+    finally:
+        app.dependency_overrides.pop(get_speech_transcriber, None)
+
+    assert resp.status_code == 200
+    assert resp.json() == {"segments": []}
 
 
 async def test_preview_rejects_empty_upload_with_400() -> None:
