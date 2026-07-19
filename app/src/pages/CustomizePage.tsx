@@ -71,7 +71,7 @@ export function CustomizePage() {
       <div className="pixel-panel mx-3 mt-3 flex-none">
         <div className="flex items-center justify-center gap-6 px-2 py-1">
           <div className="flex flex-col items-center">
-            <CustomAvatar parts={parts} scale={2} />
+            <CustomAvatar parts={parts} scale={3} />
             <span className="pixel-name font-pixel mt-1 text-[8px]">[You]</span>
           </div>
           <div className="flex flex-col gap-2.5">
@@ -111,7 +111,7 @@ export function CustomizePage() {
                       : "border-[var(--separator)] active:bg-[var(--surface-tertiary)]"
                   }`}
                 >
-                  <PartThumb slot={slot} index={i} scale={2} />
+                  <PartThumb slot={slot} index={i} scale={3} />
                   {parts[slot] === i && (
                     <span
                       aria-hidden
@@ -149,7 +149,7 @@ export function CustomizePage() {
   );
 }
 
-/** ‹ n/16 › stepper for one slot — wraps at the ends. */
+/** ‹ n/count › stepper for one slot — wraps at the ends. */
 function SlotStepper({
   slot,
   index,

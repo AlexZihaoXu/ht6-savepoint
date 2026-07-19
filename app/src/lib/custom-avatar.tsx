@@ -37,7 +37,8 @@ function layerStyle(r: SourceRect, scale: number): CSSProperties {
 
 /**
  * The assembled head+body+legs character, feet on the box's bottom edge.
- * Box = CANVAS_W×CANVAS_H at `scale`; tall garments may overhang 1px below.
+ * Box = CANVAS_W×CANVAS_H at `scale`; layers are centered horizontally
+ * (the v2 sheet's cells alternate 18/19px wide).
  */
 export function CustomAvatar({
   parts,
@@ -67,7 +68,11 @@ export function CustomAvatar({
         <span
           key={l.slot}
           aria-hidden
-          style={{ ...layerStyle(l, scale), top: l.y * scale }}
+          style={{
+            ...layerStyle(l, scale),
+            left: l.x * scale,
+            top: l.y * scale,
+          }}
         />
       ))}
     </span>

@@ -378,12 +378,12 @@ const STAGE_SIZE = 140;
 /** Crisp integer blow-up of the sprite tile on stage (92 → 184px). */
 const STAGE_PIXEL_SCALE = 2;
 /**
- * The custom "You" avatar's stage scale: its 32×96 canvas holds a ~90px
- * character, so 1.5× stands it ~135px tall — matching the ~140px PixelLab
- * partner beside it. Half-integer scale stays device-pixel exact on the
- * ≥2× phone screens this ships on.
+ * The custom "You" avatar's stage scale: the v2 sheet's 20×52 canvas holds
+ * a ~48px character, so 2.5× stands it ~120px tall — matching the ~140px
+ * PixelLab partner beside it. Half-integer scale stays device-pixel exact
+ * on the ≥2× phone screens this ships on.
  */
-const YOU_STAGE_SCALE = 1.5;
+const YOU_STAGE_SCALE = 2.5;
 /** The characters' feet/shins tuck behind the dialogue box. */
 const STAGE_CLIP = 28;
 

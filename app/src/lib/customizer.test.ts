@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   AVATAR_KEY,
   CANVAS_H,
+  CANVAS_W,
   characterLayers,
   clearAvatar,
   DEFAULT_PARTS,
@@ -18,22 +19,37 @@ import {
 } from "./customizer";
 
 describe("customizer atlas math", () => {
+  it("exposes the v2 sheet's distinct part counts (dupes skipped)", () => {
+    expect(PART_COUNTS).toEqual({ head: 32, body: 28, legs: 28 });
+  });
+
   it("assembles the strip-A starter combo at the measured offsets", () => {
-    // legs feet(34) on row 95 → legsY 61, waist 65; body bottom hangs 2px
-    // over the waist → bodyY 21; chin(29) lands 3px below shoulder(13) → 8.
+    // legs feet(18) on row 51 → legsY 33, waist 33; body waist-cut(16)
+    // hangs 2px over the waist → bodyY 19; chin(18) lands 3px below
+    // shoulder(0) → headY 4. 18px-wide cells center at x=1.
     expect(characterLayers({ head: 0, body: 0, legs: 0 })).toEqual([
-      { slot: "legs", sx: 0, sy: 174, sw: 32, sh: 36, y: 61 },
-      { slot: "body", sx: 0, sy: 81, sw: 32, sh: 47, y: 21 },
-      { slot: "head", sx: 0, sy: 6, sw: 32, sh: 39, y: 8 },
+      { slot: "legs", sx: 0, sy: 153, sw: 18, sh: 19, x: 1, y: 33 },
+      { slot: "body", sx: 0, sy: 110, sw: 18, sh: 17, x: 1, y: 19 },
+      { slot: "head", sx: 0, sy: 0, sw: 18, sh: 20, x: 1, y: 4 },
     ]);
   });
 
-  it("assembles a strip-B combo (indices 8+ map to the second strip)", () => {
-    expect(characterLayers({ head: 9, body: 8, legs: 9 })).toEqual([
-      { slot: "legs", sx: 32, sy: 214, sw: 32, sh: 36, y: 60 },
-      { slot: "body", sx: 0, sy: 131, sw: 32, sh: 36, y: 27 },
-      { slot: "head", sx: 32, sy: 45, sw: 32, sh: 32, y: 5 },
+  it("assembles a cross-strip combo (head C / body B / legs B)", () => {
+    // head 26 = strip C col 0 (sy 40, sh 21, chin 19) → headY 3;
+    // body 14 = shirts strip col 0 (sy 128, sh 19, waist 16) → bodyY 19.
+    expect(characterLayers({ head: 26, body: 14, legs: 14 })).toEqual([
+      { slot: "legs", sx: 0, sy: 173, sw: 18, sh: 19, x: 1, y: 33 },
+      { slot: "body", sx: 0, sy: 128, sw: 18, sh: 19, x: 1, y: 19 },
+      { slot: "head", sx: 0, sy: 40, sw: 18, sh: 21, x: 1, y: 3 },
     ]);
+  });
+
+  it("maps columns onto the fractional 14-col pitch (18/19px cells)", () => {
+    // col 1 spans x 18–36 (19px); col 6 starts at round(6·256/14) = 110.
+    expect(partRect("head", 1)).toEqual({ sx: 18, sy: 0, sw: 19, sh: 20 });
+    expect(partRect("body", 6)).toEqual({ sx: 110, sy: 110, sw: 18, sh: 17 });
+    // head 20 = strip B's 7th kept col (col 6 — B skips nothing until 7).
+    expect(partRect("head", 20)).toEqual({ sx: 110, sy: 20, sw: 18, sh: 20 });
   });
 
   it("keeps every part cell inside the 256×256 sheet", () => {
@@ -49,13 +65,15 @@ describe("customizer atlas math", () => {
     }
   });
 
-  it("keeps every combo on the canvas (1px legs-A overhang allowed)", () => {
+  it("keeps every combo fully on the canvas", () => {
     for (let head = 0; head < PART_COUNTS.head; head++)
       for (let body = 0; body < PART_COUNTS.body; body += 5)
         for (let legs = 0; legs < PART_COUNTS.legs; legs += 3) {
           for (const l of characterLayers({ head, body, legs })) {
             expect(l.y).toBeGreaterThanOrEqual(0);
-            expect(l.y + l.sh).toBeLessThanOrEqual(CANVAS_H + 1);
+            expect(l.y + l.sh).toBeLessThanOrEqual(CANVAS_H);
+            expect(l.x).toBeGreaterThanOrEqual(0);
+            expect(l.x + l.sw).toBeLessThanOrEqual(CANVAS_W);
           }
         }
   });
@@ -71,17 +89,17 @@ describe("customizer atlas math", () => {
   });
 
   it("wraps stepper moves and out-of-range indices", () => {
-    expect(normalizePart("head", 16)).toBe(0);
-    expect(normalizePart("head", -1)).toBe(15);
-    expect(normalizePart("legs", 35)).toBe(3);
-    expect(stepPart({ head: 15, body: 0, legs: 0 }, "head", 1)).toEqual({
+    expect(normalizePart("head", 32)).toBe(0);
+    expect(normalizePart("head", -1)).toBe(31);
+    expect(normalizePart("legs", 35)).toBe(7);
+    expect(stepPart({ head: 31, body: 0, legs: 0 }, "head", 1)).toEqual({
       head: 0,
       body: 0,
       legs: 0,
     });
     expect(stepPart({ head: 0, body: 0, legs: 0 }, "body", -1)).toEqual({
       head: 0,
-      body: 15,
+      body: 27,
       legs: 0,
     });
   });
@@ -113,9 +131,9 @@ describe("customizer persistence", () => {
   it("wraps out-of-range saved indices instead of dropping the save", () => {
     window.localStorage.setItem(
       AVATAR_KEY,
-      JSON.stringify({ head: 20, body: -2, legs: 5 }),
+      JSON.stringify({ head: 40, body: -2, legs: 5 }),
     );
-    expect(loadAvatar()).toEqual({ head: 4, body: 14, legs: 5 });
+    expect(loadAvatar()).toEqual({ head: 8, body: 26, legs: 5 });
   });
 
   it("clears the saved character", () => {
