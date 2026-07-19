@@ -29,7 +29,7 @@ import { Icon } from "@/components/Icon";
 import { PixelHeader } from "@/components/PixelChrome";
 import { useToast } from "@/lib/toast";
 import { ApiError, ingestAudioClip, previewTranscribe } from "@/lib/api";
-import { formatElapsed, micSupported } from "@/lib/mic";
+import { formatElapsed, micSupported, pickAudioMime } from "@/lib/mic";
 import {
   RECORD_INITIAL,
   recordReducer,
@@ -152,10 +152,15 @@ export function RecordPage() {
       return;
     }
 
-    const recorder = new MediaRecorder(stream);
+    // Pick a codec the browser can actually produce — Safari/iOS records mp4,
+    // not webm — so the clip's type (and thus the upload filename) is honest.
+    const mime = pickAudioMime();
+    const recorder = mime
+      ? new MediaRecorder(stream, { mimeType: mime })
+      : new MediaRecorder(stream);
     chunksRef.current = [];
     clipRef.current = null;
-    mimeRef.current = recorder.mimeType || "audio/webm";
+    mimeRef.current = recorder.mimeType || mime || "audio/webm";
     // Wall-clock anchor for the server's segment timestamps — capture at
     // start, not upload time.
     startedAtRef.current = new Date();

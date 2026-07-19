@@ -9,6 +9,8 @@
  * real-data path that replaces `seed.ts` as the redesign lands.
  */
 
+import { audioExt } from "./mic";
+
 export const API_BASE = (
   import.meta.env.VITE_API_BASE ?? "http://127.0.0.1:8000"
 ).replace(/\/$/, "");
@@ -143,7 +145,7 @@ export interface AudioIngestResult {
  */
 export function buildAudioClipForm(blob: Blob, startedAt: Date): FormData {
   const form = new FormData();
-  form.append("audio", blob, "clip.webm");
+  form.append("audio", blob, `clip.${audioExt(blob.type)}`);
   form.append("started_at", startedAt.toISOString());
   return form;
 }
@@ -192,7 +194,7 @@ export async function previewTranscribe(
 ): Promise<PreviewTranscribeResult> {
   const path = "/speech/preview";
   const form = new FormData();
-  form.append("audio", blob, "preview.webm");
+  form.append("audio", blob, `preview.${audioExt(blob.type)}`);
   const res = await fetch(`${API_BASE}${path}`, {
     method: "POST",
     body: form,
