@@ -25,6 +25,7 @@ Which one runs is chosen by config (:func:`get_transcriber`).
 from __future__ import annotations
 
 import json
+import logging
 import subprocess
 import tempfile
 from datetime import UTC, date, datetime, timedelta
@@ -35,6 +36,8 @@ from typing import Protocol
 from savepoint_server.core.config import Settings, get_settings
 from savepoint_server.db.repositories import Repositories
 from savepoint_server.models import Event, EventType, Transcript, TranscriptSegment
+
+logger = logging.getLogger(__name__)
 
 # Audio can be given as a filesystem path or as raw bytes (e.g. an upload body).
 AudioInput = str | Path | bytes
@@ -398,6 +401,17 @@ async def transcribe_and_store(
 
     transcriber = transcriber or get_transcriber()
     transcript = transcriber.transcribe(audio)
+    # Logged BEFORE voice-matching/storage specifically so a report like "only
+    # the last line made it in" can be checked against what the pipeline
+    # itself actually returned, rather than guessing whether a turn was lost
+    # in diarization/ASR (upstream, external to this repo) vs. somewhere in
+    # this function's own storage loop below (which stores every segment
+    # 1:1, no filtering).
+    logger.info(
+        "transcribe_and_store: %d segment(s): %s",
+        len(transcript.segments),
+        [(s.speaker, round(s.start, 1), round(s.end, 1), s.text) for s in transcript.segments],
+    )
     settings = get_settings()
     transcript = await match_voice_to_you(
         transcript, transcriber, repos, settings.voice_match_threshold
