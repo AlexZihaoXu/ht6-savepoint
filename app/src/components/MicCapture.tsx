@@ -17,7 +17,7 @@ export function MicCapture() {
     <button
       type="button"
       aria-label="Record a moment"
-      className="pixel-btn pixel-btn-primary flex h-16 w-16 items-center justify-center"
+      className="pixel-btn pixel-btn-record flex h-16 w-16 items-center justify-center"
       onClick={(e) => {
         // Stray taps shouldn't also close plaza speech bubbles behind the FAB.
         e.stopPropagation();

@@ -83,6 +83,14 @@
   border-image: url("/assets/sheet/btn-blue.png") 9 9 12 9 fill stretch;
   color: #222033;
 }
+/* Record action (the plaza FAB) — same tile art, red instead of blue, so the
+   app's one record-a-moment control reads as "recording" at a glance. */
+.pixel-btn-record,
+.dark .pixel-btn-record {
+  border-width: 9px 9px 12px;
+  border-image: url("/assets/sheet/btn-red.png") 9 9 12 9 fill stretch;
+  color: #3c1a1a;
+}
 
 /* Flat, SINGLE-layer icon button (modal close / filter) — a smooth rounded
    tile in the warm bar palette, one clean layer (not the .pixel-btn stacked
