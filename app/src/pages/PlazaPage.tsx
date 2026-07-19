@@ -10,19 +10,30 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useReducedMotion } from "framer-motion";
 import { GiWhistle } from "react-icons/gi";
-import { PiCaretDown, PiCaretLeft, PiCaretRight, PiTrash } from "react-icons/pi";
+import {
+  PiCaretDown,
+  PiCaretLeft,
+  PiCaretRight,
+  PiCheck,
+  PiPencilSimple,
+  PiTrash,
+  PiX,
+} from "react-icons/pi";
 import { Icon } from "@/components/Icon";
 import { MicCapture } from "@/components/MicCapture";
 import { PixelBottomNav, PixelHeader } from "@/components/PixelChrome";
 import { PixelSprite } from "@/lib/pixel-sprite";
 import {
   api,
+  ApiError,
   displayName,
+  renamePerson,
   resetData,
   type ApiDay,
   type ApiMonthSummary,
   type ApiPerson,
 } from "@/lib/api";
+import { useToast } from "@/lib/toast";
 import { addMonth, monthGrid, monthName, todayIso } from "@/lib/calendar";
 import {
   FenceRow,
@@ -136,6 +147,13 @@ export function PlazaPage() {
     }
   };
 
+  // Reflect an inline rename immediately so the floating name tag + bubble
+  // update without waiting for the 4s /people poll (which then confirms it).
+  const applyRename = (localId: string, name: string | null) =>
+    setPeople((ps) =>
+      ps ? ps.map((p) => (p.local_id === localId ? { ...p, name } : p)) : ps,
+    );
+
   return (
     <div className="flex h-[100svh] flex-col overflow-hidden">
       <PixelHeader />
@@ -154,6 +172,7 @@ export function PlazaPage() {
             error={peopleError}
             lined={lined}
             active={view === 0}
+            onRenamed={applyRename}
           />
           <GardenPanel days={days} error={daysError} active={view === 1} />
         </div>
@@ -325,12 +344,15 @@ function PlazaPanel({
   error,
   lined,
   active,
+  onRenamed,
 }: {
   people: ApiPerson[] | null;
   error: string | null;
   lined: boolean;
   /** Swiped off-screen panels are inert — no tab stops, no stray taps. */
   active: boolean;
+  /** Push an inline rename back up so the panel's people list re-renders. */
+  onRenamed: (localId: string, name: string | null) => void;
 }) {
   const navigate = useNavigate();
   const reduce = useReducedMotion();
@@ -690,6 +712,7 @@ function PlazaPanel({
                   person={p}
                   x={selected.xPct}
                   onOpen={() => navigate(`/people/${p.local_id}`)}
+                  onRenamed={onRenamed}
                 />
               )}
             </div>
@@ -1012,19 +1035,106 @@ function PersonBubble({
   person,
   x,
   onOpen,
+  onRenamed,
 }: {
   person: ApiPerson;
   x: number;
   onOpen: () => void;
+  onRenamed: (localId: string, name: string | null) => void;
 }) {
+  const toast = useToast();
   const note = person.notes?.trim();
+  // Draft lives apart from `person` so a failed save keeps the last-good name.
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const startEdit = () => {
+    setDraft(person.name ?? ""); // raw name → unnamed faces start blank
+    setEditing(true);
+  };
+
+  // An empty result is a valid save — it clears the name back to "Neighbor XXX"
+  // (see displayName) and drops the floating tag, not a validation error.
+  const save = async () => {
+    setSaving(true);
+    try {
+      const updated = await renamePerson(person.local_id, draft.trim());
+      onRenamed(person.local_id, updated.name);
+      setEditing(false);
+    } catch (e) {
+      const why =
+        e instanceof ApiError
+          ? `the backend said HTTP ${e.status}`
+          : "the backend can't be reached";
+      toast.show("error", `Couldn't rename — ${why}.`);
+      // Stay in edit mode so the draft isn't lost — the user can retry.
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div
       className="pixel-bubble absolute bottom-full left-1/2 z-30 mb-16 w-48 px-3 py-2.5 text-left"
       style={{ transform: `translateX(${bubbleShift(x)})` }}
       onClick={(e) => e.stopPropagation()}
     >
-      <p className="text-sm leading-tight font-bold">{displayName(person)}</p>
+      {editing ? (
+        <div className="flex items-center gap-1">
+          <input
+            type="text"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void save();
+              } else if (e.key === "Escape") {
+                e.preventDefault();
+                setEditing(false);
+              }
+            }}
+            disabled={saving}
+            autoFocus
+            aria-label="Name"
+            placeholder="Name"
+            className="min-w-0 flex-1 border-2 border-[var(--border)] bg-[var(--field-background)] px-1.5 py-1 font-sans text-sm text-[var(--field-foreground)] outline-none focus:border-[var(--accent)] disabled:opacity-60"
+          />
+          <button
+            type="button"
+            aria-label="Save name"
+            disabled={saving}
+            onClick={() => void save()}
+            className="pixel-btn flex flex-none items-center justify-center p-1 disabled:opacity-60"
+          >
+            <Icon icon={PiCheck} size={14} />
+          </button>
+          <button
+            type="button"
+            aria-label="Cancel"
+            disabled={saving}
+            onClick={() => setEditing(false)}
+            className="pixel-btn flex flex-none items-center justify-center p-1 disabled:opacity-60"
+          >
+            <Icon icon={PiX} size={14} />
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-1.5">
+          <p className="min-w-0 flex-1 truncate text-sm leading-tight font-bold">
+            {displayName(person)}
+          </p>
+          <button
+            type="button"
+            aria-label="Rename"
+            onClick={startEdit}
+            className="pixel-btn flex flex-none items-center justify-center p-1"
+          >
+            <Icon icon={PiPencilSimple} size={13} />
+          </button>
+        </div>
+      )}
       <p className="text-xs opacity-60">
         seen {relativeSeen(person.last_seen)}
       </p>
