@@ -19,7 +19,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
-from savepoint_server.api.read import _build_day_view
+from savepoint_server.api.read import _build_day_view, get_demo_history_enabled_dep
 from savepoint_server.db import Repositories, get_repositories
 from savepoint_server.models import DayView
 from savepoint_server.services.ingest import assign_speaker_for_day
@@ -67,6 +67,7 @@ async def assign_speaker(
     date: str,
     body: SpeakerAssignment,
     repos: Annotated[Repositories, Depends(get_repos)],
+    demo_enabled: Annotated[bool, Depends(get_demo_history_enabled_dep)],
 ) -> SpeakerAssignmentResult:
     """Bind ``speaker_label`` to a Person for a day, re-pointing that day's SPOKE events.
 
@@ -86,5 +87,5 @@ async def assign_speaker(
         speaker_label=body.speaker_label,
         person_local_id=body.person_local_id,
         reassigned=reassigned,
-        day=await _build_day_view(day, repos),
+        day=await _build_day_view(day, repos, demo_enabled=demo_enabled),
     )
