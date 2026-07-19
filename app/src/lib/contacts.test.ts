@@ -3,6 +3,7 @@ import type { ApiPerson } from "./api";
 import {
   filterPeople,
   groupContacts,
+  isRecentlySeen,
   RECENT_MS,
   sectionLetter,
   sortByRecent,
@@ -73,6 +74,22 @@ describe("filterPeople", () => {
       last_seen: new Date(now - RECENT_MS).toISOString(),
     });
     expect(filterPeople([edge], "recents", now)).toEqual([]);
+  });
+});
+
+describe("isRecentlySeen", () => {
+  const now = Date.parse("2026-07-18T12:00:00Z");
+
+  it("is true within the recency window, false outside it", () => {
+    expect(isRecentlySeen("2026-07-17T12:00:00Z", now)).toBe(true);
+    expect(isRecentlySeen("2026-07-10T12:00:00Z", now)).toBe(false);
+  });
+
+  it("is false for a null last-seen and at the exact boundary", () => {
+    expect(isRecentlySeen(null, now)).toBe(false);
+    expect(isRecentlySeen(new Date(now - RECENT_MS).toISOString(), now)).toBe(
+      false,
+    );
   });
 });
 

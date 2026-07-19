@@ -31,7 +31,7 @@ import {
   updatePerson,
   type ApiPersonDetail,
 } from "@/lib/api";
-import { formatClock, relativeSeen } from "@/lib/scene-utils";
+import { formatClock, noteLines, relativeSeen } from "@/lib/scene-utils";
 
 function fmtDay(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", {
@@ -292,8 +292,10 @@ export function PersonModal({
         aria-labelledby="person-modal-heading"
         className="flex flex-col gap-5"
       >
-        <div className="flex items-center gap-4">
-          <span className="sprite-bob">
+        {/* Header row: sprite left · name + AI description middle · rename
+            pencil far right (waterprism's profile layout). */}
+        <div className="flex items-start gap-4">
+          <span className="sprite-bob flex-none">
             <PixelSprite
               localId={person.local_id}
               sprite={person.sprite}
@@ -301,87 +303,90 @@ export function PersonModal({
               size={84}
             />
           </span>
-          <div className="min-w-0">
-            <h2
-              id="person-modal-heading"
-              className="font-pixel flex flex-wrap items-center gap-2 text-[13px] leading-6 break-words"
-            >
-              {editingName ? (
-                <span className="flex flex-1 items-center gap-1.5">
-                  <input
-                    type="text"
-                    value={nameDraft}
-                    onChange={(e) => setNameDraft(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        void saveName();
-                      } else if (e.key === "Escape") {
-                        e.preventDefault();
-                        cancelEditingName();
-                      }
-                    }}
-                    disabled={savingName}
-                    autoFocus
-                    aria-label="Name"
-                    placeholder="Name"
-                    className="min-w-0 flex-1 border-2 border-[var(--border)] bg-[var(--field-background)] px-2 py-1 font-sans text-sm text-[var(--field-foreground)] outline-none focus:border-[var(--accent)] disabled:opacity-60"
-                  />
-                  <button
-                    type="button"
-                    aria-label="Save name"
-                    disabled={savingName}
-                    onClick={() => void saveName()}
-                    className="pixel-btn touch-target flex flex-none items-center justify-center disabled:opacity-60"
-                  >
-                    <Icon icon={PiCheck} size={14} />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="Cancel"
-                    disabled={savingName}
-                    onClick={cancelEditingName}
-                    className="pixel-btn touch-target flex flex-none items-center justify-center disabled:opacity-60"
-                  >
-                    <Icon icon={PiX} size={14} />
-                  </button>
-                </span>
-              ) : (
-                <>
-                  {name}
-                  {person.favorite && (
-                    <Icon
-                      icon={PiStarFill}
-                      label="favorite"
-                      className="text-[var(--accent)]"
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start gap-2">
+              <h2
+                id="person-modal-heading"
+                className="font-pixel flex min-w-0 flex-1 flex-wrap items-center gap-2 text-[13px] leading-6 break-words"
+              >
+                {editingName ? (
+                  <span className="flex flex-1 items-center gap-1.5">
+                    <input
+                      type="text"
+                      value={nameDraft}
+                      onChange={(e) => setNameDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          void saveName();
+                        } else if (e.key === "Escape") {
+                          e.preventDefault();
+                          cancelEditingName();
+                        }
+                      }}
+                      disabled={savingName}
+                      autoFocus
+                      aria-label="Name"
+                      placeholder="Name"
+                      className="min-w-0 flex-1 border-2 border-[var(--border)] bg-[var(--field-background)] px-2 py-1 font-sans text-sm text-[var(--field-foreground)] outline-none focus:border-[var(--accent)] disabled:opacity-60"
                     />
-                  )}
-                  <button
-                    type="button"
-                    aria-label="Rename"
-                    onClick={startEditingName}
-                    className="pixel-btn touch-target flex flex-none items-center justify-center"
-                  >
-                    <Icon icon={PiPencilSimple} size={14} />
-                  </button>
-                </>
+                    <button
+                      type="button"
+                      aria-label="Save name"
+                      disabled={savingName}
+                      onClick={() => void saveName()}
+                      className="pixel-btn touch-target flex flex-none items-center justify-center disabled:opacity-60"
+                    >
+                      <Icon icon={PiCheck} size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Cancel"
+                      disabled={savingName}
+                      onClick={cancelEditingName}
+                      className="pixel-btn touch-target flex flex-none items-center justify-center disabled:opacity-60"
+                    >
+                      <Icon icon={PiX} size={14} />
+                    </button>
+                  </span>
+                ) : (
+                  <>
+                    {name}
+                    {person.favorite && (
+                      <Icon
+                        icon={PiStarFill}
+                        label="favorite"
+                        className="text-[var(--accent)]"
+                      />
+                    )}
+                  </>
+                )}
+              </h2>
+              {!editingName && (
+                <button
+                  type="button"
+                  aria-label="Rename"
+                  onClick={startEditingName}
+                  className="pixel-btn touch-target flex flex-none items-center justify-center"
+                >
+                  <Icon icon={PiPencilSimple} size={14} />
+                </button>
               )}
-            </h2>
-            <p className="mt-1 text-sm text-[var(--muted)]">
-              Seen {relativeSeen(person.last_seen)}
-              {person.first_seen
-                ? ` · first met ${fmtDay(person.first_seen)}`
-                : ""}
-            </p>
+            </div>
+            {/* AI-generated character description — read-only, ~1–2 lines. */}
+            {person.bio?.trim() && (
+              <p className="mt-1.5 line-clamp-2 text-sm leading-snug text-[var(--muted)] italic">
+                {person.bio.trim()}
+              </p>
+            )}
           </div>
         </div>
 
-        {/* Generated character flavor — distinct from the Notes card below. */}
-        {person.bio?.trim() && (
-          <p className="border-l-2 border-[var(--accent)] pl-3 text-sm leading-relaxed text-[var(--muted)] italic">
-            {person.bio.trim()}
-          </p>
-        )}
+        {/* seen / first-met line */}
+        <p className="-mt-2 text-sm text-[var(--muted)]">
+          Seen {relativeSeen(person.last_seen)}
+          {person.first_seen ? ` · first met ${fmtDay(person.first_seen)}` : ""}
+        </p>
 
         {/* Tags — editable: remove a chip via its ×, add one via the input. */}
         <div className="flex flex-wrap items-center gap-2">
@@ -490,10 +495,28 @@ export function PersonModal({
               </div>
             </div>
           ) : (
-            <p className="mt-2 text-sm leading-relaxed">
-              {person.notes?.trim() ||
-                "No notes yet — tap the pencil to add one."}
-            </p>
+            (() => {
+              const jots = noteLines(person.notes);
+              return jots.length > 0 ? (
+                <ul className="mt-2 flex flex-col gap-1">
+                  {jots.map((line, i) => (
+                    <li key={i} className="flex gap-2 text-sm leading-relaxed">
+                      <span
+                        aria-hidden
+                        className="flex-none text-[var(--accent)]"
+                      >
+                        •
+                      </span>
+                      <span className="min-w-0">{line}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-2 text-sm leading-relaxed text-[var(--muted)]">
+                  No notes yet — tap the pencil to add one.
+                </p>
+              );
+            })()
           )}
         </div>
 
@@ -502,7 +525,7 @@ export function PersonModal({
           <p className="mt-1 text-xs opacity-70">
             Tap a row to jump into that chat
           </p>
-          <div className="mt-2 flex flex-col">
+          <div className="mt-2 flex flex-col gap-2">
             {recentDays.length === 0 && (
               <p className="text-sm opacity-70">
                 Nothing recorded together yet.
@@ -515,13 +538,22 @@ export function PersonModal({
                 // the scrubber opens at the row's timestamp, mid-conversation,
                 // not at the start of the day.
                 to={`/scene/${d.day}?t=${encodeURIComponent(d.first)}`}
-                className="touch-target flex items-center justify-between border-b-2 border-[#d9a066]/40 px-1 py-2 text-sm transition-colors last:border-b-0 hover:bg-[#eec39a]/50"
+                className="touch-target flex items-center justify-between gap-3 rounded-lg border-2 border-[#d9a066]/40 bg-[#eec39a]/20 px-3 py-2.5 transition-colors hover:bg-[#eec39a]/50"
               >
-                <span>
-                  {fmtDay(d.day + "T00:00:00Z")} · {formatClock(d.first)} ·{" "}
-                  {d.count} {d.count === 1 ? "moment" : "moments"}
-                </span>
-                <Icon icon={PiCaretRight} className="opacity-60" />
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">
+                    {fmtDay(d.day + "T00:00:00Z")}
+                  </p>
+                  <p className="text-xs text-[var(--muted)]">
+                    {formatClock(d.first)}
+                  </p>
+                </div>
+                <div className="flex flex-none items-center gap-1.5">
+                  <span className="text-xs text-[var(--muted)]">
+                    {d.count} {d.count === 1 ? "moment" : "moments"}
+                  </span>
+                  <Icon icon={PiCaretRight} className="opacity-60" />
+                </div>
               </Link>
             ))}
           </div>

@@ -49,6 +49,30 @@ function renderModal(onClose = vi.fn(), onRenamed = vi.fn()) {
   );
 }
 
+describe("PersonModal — notes as dot-jots", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("renders each notes line as its own bullet item", async () => {
+    const withNotes: ApiPersonDetail = {
+      ...PERSON,
+      notes: "met at the market\nlikes cats",
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse(withNotes)),
+    );
+
+    renderModal();
+
+    await screen.findByRole("heading", { level: 2 });
+    expect(screen.getByText("met at the market").tagName).toBe("SPAN");
+    const items = screen
+      .getAllByRole("listitem")
+      .filter((li) => /market|cats/.test(li.textContent ?? ""));
+    expect(items).toHaveLength(2);
+  });
+});
+
 describe("PersonModal — rename", () => {
   afterEach(() => vi.unstubAllGlobals());
 

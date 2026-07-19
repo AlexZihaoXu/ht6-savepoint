@@ -6,6 +6,7 @@ import {
   isUnnamedSpeaker,
   LIVE_TALK_WINDOW_MS,
   nearestEventTs,
+  noteLines,
   partnerAt,
   talkingToId,
   YOU_AVATAR,
@@ -28,6 +29,20 @@ describe("scene helpers", () => {
     expect(formatClock("2026-07-18T08:00:00Z")).toBe("8:00AM");
     expect(formatClock("2026-07-18T22:30:00Z")).toBe("10:30PM");
     expect(formatClock("2026-07-18T17:30:00Z", false)).toBe("5:30");
+  });
+});
+
+describe("noteLines (person profile dot-jots)", () => {
+  it("splits notes into trimmed, non-empty lines", () => {
+    expect(noteLines("likes tea\n\n  climbs on weekends \n")).toEqual([
+      "likes tea",
+      "climbs on weekends",
+    ]);
+  });
+
+  it("returns an empty list for null/blank notes", () => {
+    expect(noteLines(null)).toEqual([]);
+    expect(noteLines("   \n  ")).toEqual([]);
   });
 });
 

@@ -164,6 +164,17 @@ export function nameFor(
   return p ? displayName(p) : id;
 }
 
+/**
+ * Split notes into trimmed, non-empty lines — each becomes a • dot-jot in the
+ * person profile's Notes panel (waterprism: show notes as bullet points).
+ */
+export function noteLines(notes: string | null | undefined): string[] {
+  return (notes ?? "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
 /** "today" / "yesterday" / "n days ago" for a last-seen timestamp. */
 export function relativeSeen(iso: string | null): string {
   if (!iso) return "a while ago";
