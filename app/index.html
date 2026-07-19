@@ -38,6 +38,44 @@
       })();
     </script>
 
+    <!-- Reliable top safe-area inset for the immersive header.
+         WebKit reports env(safe-area-inset-top) as 0px in PORTRAIT even on
+         notch / Dynamic Island iPhones (long-standing Safari bug), so a
+         full-screen standalone header ends up sitting under the island.
+         Probe the real resolved value; when it comes back ~0 on a standalone
+         iPhone, fall back to a Dynamic-Island-sized inset. Exposed as --sat,
+         which the wooden header pads by (see components/PixelChrome). -->
+    <script>
+      (function () {
+        function setSafeTop() {
+          try {
+            var probe = document.createElement("div");
+            probe.style.cssText =
+              "position:fixed;top:0;left:0;width:0;height:env(safe-area-inset-top);visibility:hidden;pointer-events:none;";
+            document.documentElement.appendChild(probe);
+            var inset = probe.getBoundingClientRect().height;
+            probe.remove();
+            var standalone =
+              (window.matchMedia &&
+                window.matchMedia("(display-mode: standalone)").matches) ||
+              window.navigator.standalone === true;
+            var iphone = /iPhone|iPod/.test(window.navigator.userAgent);
+            // env() bug: 0 on a full-screen iPhone that clearly has a top inset.
+            if (inset < 20 && standalone && iphone) inset = 59;
+            document.documentElement.style.setProperty("--sat", inset + "px");
+          } catch (e) {
+            /* leave the CSS env() default in place */
+          }
+        }
+        setSafeTop();
+        window.addEventListener("load", setSafeTop);
+        window.addEventListener("resize", setSafeTop);
+        window.addEventListener("orientationchange", setSafeTop);
+        if (window.visualViewport)
+          window.visualViewport.addEventListener("resize", setSafeTop);
+      })();
+    </script>
+
     <!-- PWA / mobile web app -->
     <meta name="color-scheme" content="light dark" />
     <!-- Media-scoped theme-color first: browsers pick the first matching tag,

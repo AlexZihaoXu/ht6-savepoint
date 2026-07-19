@@ -22,7 +22,7 @@ export function PixelHeader() {
   const [mode, setMode] = useState<ThemeMode>(() => getCurrentTheme());
 
   return (
-    <header className="wood-bar relative z-40 flex h-[calc(3.5rem+env(safe-area-inset-top))] flex-none items-center justify-between px-3 pt-[env(safe-area-inset-top)]">
+    <header className="wood-bar relative z-40 flex h-[calc(3.5rem_+_var(--sat))] flex-none items-center justify-between px-3 pt-[var(--sat)]">
       <Link
         to="/plaza"
         aria-label="Savepoint — plaza"

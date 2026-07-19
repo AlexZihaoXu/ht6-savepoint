@@ -90,6 +90,10 @@
 }
 
 :root {
+  /* Top safe-area inset for the immersive header. Defaults to the CSS env()
+     value; index.html's probe overrides it with a resolved px value (and a
+     Dynamic-Island fallback) to work around WebKit reporting 0 in portrait. */
+  --sat: env(safe-area-inset-top);
   --pixel-btn-fg: #45283c;
   --pixel-bar-bg: #efe3c8;
   --pixel-bar-border: #d8c7a4;
