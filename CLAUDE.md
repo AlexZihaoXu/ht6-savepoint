@@ -23,10 +23,10 @@ the subproject first.
 
 | Path        | Stack                                              | Status                          |
 | ----------- | -------------------------------------------------- | ------------------------------- |
-| `app/`      | React 19 + TS + HeroUI v3 + Tailwind v4 (Vite), pnpm | M0 scaffold on seed data; **UI redesign in progress** (character plaza / garden / cinematic day view — DESIGN §10) |
+| `app/`      | React 19 + TS + HeroUI v3 + Tailwind v4 (Vite), pnpm | **Redesign feature-complete on branch `feat/plaza-prototype`** (plaza + garden + cinematic day view + People/Past on the live read API — DESIGN §10); awaiting merge to `main` |
 | `server/`   | FastAPI + MongoDB (Motor), Python 3.12, uv         | **M1–M3 done** — `/ingest` + read API + vision + speech + **daily recap** (gemma) |
 | `pipeline/` | Speech: pyannote → SepFormer → faster-whisper, uv  | Working, validated offline      |
-| `edge/`     | Pi 5 capture, Raspberry Pi OS + Python, uv         | Sim mode working; hardware backend unverified |
+| `edge/`     | Pi 5 capture, Raspberry Pi OS + Python, uv         | Sim mode working; **linux backend (SCRFD→ArcFace face-rec) implemented + deployed on the Pi** (PR #18); on-hardware e2e smoke = SAV-59 (human) |
 
 ## Commands
 
@@ -54,8 +54,11 @@ uv run ruff check .            # lint
 uv run mypy src                # strict type-check
 ```
 The ASGI app is `savepoint_server.main:app` (README/DEV/server-README all agree). Live
-endpoints: `/health`, `/vision/analyze`, `/speech/transcribe`, `/ingest` (write) and
-`/today`, `/day/{date}`, `/day/{date}/recap`, `/people`, `/people/{id}`, `/days` (read).
+endpoints — **write:** `/ingest`, `/ingest/video` (Pi EdgeEvents), `/ingest/audio` +
+`/ingest/audio/clip` (app mic → server diarize), `/day/{date}/assign-speaker` (tap-to-name),
+`/vision/analyze`, `/speech/transcribe`; **read:** `/today`, `/day/{date}`, `/days`,
+`/people`, `/people/{id}`, `/month/{YYYY-MM}/summary`; **LLM:** `/day/{date}/recap`,
+`/people/{id}/bio`; plus `/health`.
 
 ### pipeline/ (uv, Python 3.12) — heavy ML, mostly run by hand
 ```bash
@@ -70,11 +73,13 @@ HF_TOKEN=hf_xxx python align.py clip.wav --diar diar.json --out out.json # step 
 
 ## Architecture (the big picture)
 
-Two tiers (DESIGN §4). **Edge tier** (`edge/`) captures IO on the Pi and can *optionally* run
-face detect on-device: camera → deterministic **parametric sprite params** (never raw video);
-USB mic → speaker embedding; a **hardware GPIO mute** button + LED (`gpiozero`). **App/cloud
-tier** (`server/` + `app/`) does the binding, storage, and non-real-time storytelling: bind
-utterance→character, store, summarize, replay.
+Two tiers (DESIGN §4). **Edge tier** (`edge/` on the Pi) captures the **camera** and can
+*optionally* run face detect on-device: camera → deterministic **parametric sprite params +
+ts** (never raw video); a **hardware GPIO mute** button + LED (`gpiozero`) that cuts the
+camera. The **microphone is app/phone-side**, not on the Pi. **App/cloud tier**
+(`server/` + `app/`) does the **timeline alignment** (Pi frames ⟷ app audio by `ts`),
+binding, storage, and non-real-time storytelling: bind utterance→character, store,
+summarize, replay.
 
 Data flow: Pi emits derived events (sprite params, embeddings, transcript text — no raw faces) →
 `server/` upserts `people`, appends `events`, and at day-end an LLM writes a `recap` → `app/`
@@ -123,8 +128,9 @@ SAVEPOINT_EDGE_BACKEND=linux uv run savepoint-edge
 - No QNX anywhere — an earlier QNX/C++ design was scrapped (QNX's own docs call its Pi 5 camera
   support "experimental" and it has no real ONNX Runtime port). `edge/README.md` explains why.
 - `SAVEPOINT_EDGE_SINK` picks where events go: `stdout` (default) / `file:<path>` / `http://...`.
-- `LinuxFaceDetector.detect()` deliberately raises `NotImplementedError` — no exported face model
-  ships with this repo, and guessing SCRFD's output layout would silently produce garbage.
+- `LinuxFaceDetector.detect()` runs real **SCRFD** (detection ONNX) → **ArcFace**
+  (`w600k_mbf` embedding) via ONNX Runtime (PR #18); point `SAVEPOINT_EDGE_FACE_MODEL` /
+  `SAVEPOINT_EDGE_FACE_EMBED_MODEL` at the `.onnx` files (not committed to the repo).
 
 ### pipeline/ specifics
 - `align.py` and `diarize.py` are **vendored verbatim** from an upstream demo and are **exempt from

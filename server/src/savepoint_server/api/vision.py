@@ -7,10 +7,10 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, File, UploadFile
+from fastapi import APIRouter, File, HTTPException, UploadFile
 
 from savepoint_server.models.sprite import SpriteParams
-from savepoint_server.services.vision import frame_to_sprite_params
+from savepoint_server.services.vision import ImageDecodeError, frame_to_sprite_params
 
 router = APIRouter(prefix="/vision", tags=["vision"])
 
@@ -22,4 +22,7 @@ FrameUpload = Annotated[UploadFile, File(description="Camera frame image.")]
 async def analyze(file: FrameUpload) -> SpriteParams:
     """Analyse an uploaded camera frame and return deterministic sprite params."""
     image_bytes = await file.read()
-    return frame_to_sprite_params(image_bytes)
+    try:
+        return frame_to_sprite_params(image_bytes)
+    except ImageDecodeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

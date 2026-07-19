@@ -8,10 +8,22 @@ them in the environment.
 from __future__ import annotations
 
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def _default_sprites_dir() -> str:
+    """Return the default persistent sprite-cache dir: ``<repo>/server/.sprites``.
+
+    This file lives at ``server/src/savepoint_server/core/config.py``, so the
+    ``server/`` root is four parents up. Kept as a factory (not a literal) so the
+    path resolves correctly regardless of the process CWD, and stays overridable via
+    ``SAVEPOINT_SPRITES_DIR``.
+    """
+    return str(Path(__file__).resolve().parents[3] / ".sprites")
 
 
 class Settings(BaseSettings):
@@ -37,6 +49,9 @@ class Settings(BaseSettings):
     # --- LLM recap/bio backends (DESIGN §11) ---
     # Self-hosted Gemma OpenAI-compatible endpoint (Alex's box). When calling it,
     # pass chat_template_kwargs {"enable_thinking": false} or content comes back empty.
+    # NOTE: this default is a placeholder — point SAVEPOINT_GEMMA_BASE_URL at a REAL LLM
+    # host (the default :8000 collides with the API's own port and won't serve chats). If
+    # it's unreachable the recap endpoint degrades gracefully to a canned recap, not a 500.
     gemma_base_url: str = "http://127.0.0.1:8000/v1"
     # Bearer token for the Gemma endpoint (env SAVEPOINT_GEMMA_API_KEY); None = no auth.
     gemma_api_key: str | None = None
@@ -45,11 +60,49 @@ class Settings(BaseSettings):
     # via SAVEPOINT_GEMMA_MODEL to match whatever `--served-model-name` it exposes.
     gemma_model: str = "gemma"
     gemini_api_key: str | None = None
+    # Model id for Gemini's generateContent REST API (used by transcript_refine below).
+    gemini_model: str = "gemini-2.0-flash"
     backboard_api_key: str | None = None
+    # FreeSolo Flash fine-tuned adapter (see server/finetune/): a small model SFT-trained
+    # specifically on SavePoint's day-events -> recap task via the FreeSolo Flash
+    # platform (Hack the 6ix prize track). OpenAI-compatible; unlike Gemma it needs no
+    # chat_template_kwargs. base_url/model are tied to a specific `flash deploy` run —
+    # see server/finetune/smoke_test.py and `flash deployments --json` if redeployed.
+    freesolo_base_url: str = "https://clado-ai--freesolo-lora-serving.modal.run/v1"
+    freesolo_api_key: str | None = None
+    freesolo_model: str = "flash-1784385924-84f2f8d7"
     # Which backend get_llm_client builds for recaps/bios. "gemma" (self-hosted,
-    # default) is the only one wired today; gemini/backboard/freesolo land in
-    # SAV-51/52 and any OpenAI-compatible endpoint swaps in here.
+    # default) is the only one wired today; gemini/backboard land in SAV-51/52 and
+    # any OpenAI-compatible endpoint swaps in here.
     recap_backend: Literal["gemma", "gemini", "backboard", "freesolo"] = "gemma"
+
+    # --- Transcript refinement (SAV-56/58) ---
+    # OPTIONAL, non-blocking LLM cleanup of diarized transcript text on the
+    # audio-ingest path via an ordered engine chain (first valid result wins). "none"
+    # (default) makes NO LLM call and leaves ingest byte-identical to today. In every
+    # mode the cleanup is best-effort and can NEVER block or 500 ingest — any failure/
+    # timeout/mismatch across ALL engines falls back to the raw transcript (see
+    # services/transcript_refine.py). Modes:
+    #   "none"   -> no refinement (default).
+    #   "gemini" -> Gemini first (needs gemini_api_key), then Gemma as a quota-free
+    #               fallback when a real gemma_base_url is set. If neither is
+    #               configured, refinement is disabled.
+    #   "gemma"  -> Gemma only (needs a real gemma_base_url, i.e. moved off the
+    #               placeholder default). No quota, so no Gemini key required.
+    transcript_refine: Literal["none", "gemini", "gemma"] = "none"
+
+    # --- PixelLab AI sprite generation (SAV-61) ---
+    # An external AI pixel-art service (https://api.pixellab.ai) that turns a
+    # person's avatar_params into a per-person sprite sheet (4 directions + an east
+    # walk animation), cached under ``sprites_dir`` and served from ``/sprites``.
+    # DEFAULT OFF: with no key and ``pixellab_enabled=False`` the ingest paths never
+    # construct a client and behavior is byte-identical to today. Real generation
+    # costs credits and is run by hand (scripts/gen_sprites.py), never in CI/tests.
+    pixellab_api_key: str | None = None
+    pixellab_enabled: bool = False
+    # Persistent, gitignored dir (server/.sprites) where generated PNGs live and are
+    # mounted at ``/sprites/{local_id}/{file}``. Override with SAVEPOINT_SPRITES_DIR.
+    sprites_dir: str = Field(default_factory=_default_sprites_dir)
 
     # --- Speech pipeline (SAV-32) ---
     # Which transcriber the speech service uses. "stub" (default) is CI-safe and

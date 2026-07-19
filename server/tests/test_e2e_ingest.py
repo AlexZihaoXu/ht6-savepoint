@@ -212,3 +212,50 @@ async def test_ingest_endpoint_defaults_day_id_to_today(repos: Repositories) -> 
     assert resp.status_code == 200
     assert resp.json()["day"]["_id"] == today
     assert await repos.events.count({"day_id": today}) == 3
+
+
+async def _post_ingest(
+    repos: Repositories,
+    *,
+    frame: tuple[str, bytes, str],
+    data: dict[str, str] | None = None,
+) -> int:
+    """POST /ingest with the given frame upload + form data; return the status code."""
+    app.dependency_overrides[get_repos] = lambda: repos
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+            resp = await client.post(
+                "/ingest",
+                files={"frame": frame, "audio": ("clip.wav", b"fake audio bytes", "audio/wav")},
+                data=data or {},
+            )
+    finally:
+        app.dependency_overrides.pop(get_repos, None)
+    return resp.status_code
+
+
+async def test_ingest_endpoint_rejects_non_image_frame_with_400(repos: Repositories) -> None:
+    """A text frame is not a decodable image -> clean 400, not a 500."""
+    status = await _post_ingest(
+        repos, frame=("notes.txt", b"this is not an image", "text/plain"), data={"day_id": DAY_ID}
+    )
+    assert status == 400
+
+
+async def test_ingest_endpoint_rejects_empty_frame_with_400(repos: Repositories) -> None:
+    """An empty frame upload can't be decoded -> clean 400, not a 500."""
+    status = await _post_ingest(
+        repos, frame=("empty.png", b"", "image/png"), data={"day_id": DAY_ID}
+    )
+    assert status == 400
+
+
+async def test_ingest_endpoint_rejects_bad_day_id_with_400(repos: Repositories) -> None:
+    """A malformed day_id is validated up front -> clean 400, not a 500."""
+    frame = _solid_png((150, 120, 100))
+    for bad in ("today", "2026-13-40", "18/07/2026"):
+        status = await _post_ingest(
+            repos, frame=("frame.png", frame, "image/png"), data={"day_id": bad}
+        )
+        assert status == 400, bad

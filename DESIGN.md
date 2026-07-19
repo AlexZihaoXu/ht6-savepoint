@@ -63,49 +63,58 @@ relevant if audio stays off-device — see §6).
 Two clean tiers. The **edge tier** (Pi 5) captures IO and can *optionally* run inference
 on-device; the **app/cloud tier** does the binding, storage, and non-real-time storytelling.
 
+The **camera lives on the Pi**; the **microphone lives on the app/phone**. They are two
+independent, unsynchronised sources — the **server aligns them by timestamp** (see §6).
+
 ```mermaid
 flowchart TB
-    subgraph PI["Raspberry Pi 5 (regular Linux) — capture + optional on-device"]
+    subgraph PI["Raspberry Pi 5 (regular Linux) — CAMERA capture + optional on-device"]
         CAM[Camera] --> FACE["Face + attribute detection<br/>(OpenCV / ONNX — server today, optional on-Pi)"]
-        MIC[USB mic] --> VAD["VAD + utterance segmentation"]
-        FACE --> SPR["Parametric sprite params"]
-        VAD --> EMB["Speaker embedding / diarization"]
-        MUTE["HW mute switch (GPIO) + LED"] --> GUARD{{"Hardware-enforced<br/>capture kill"}}
+        FACE --> SPR["Parametric sprite params + ts"]
+        MUTE["HW mute switch (GPIO) + LED"] --> GUARD{{"Hardware-enforced<br/>camera kill"}}
         GUARD -. blocks .- CAM
-        GUARD -. blocks .- MIC
     end
 
-    subgraph SRV["Server — bind + store + summarize (cloud OK)"]
-        BIND["Bind utterance → speaking character"]
-        STT["Speech-to-Text (Whisper)"]
-        DB[("MongoDB Atlas<br/>people · events · recaps")]
-        SUM["Gemini / Backboard<br/>daily & monthly recaps"]
-    end
-
-    subgraph APP["SavePoint app — PWA (web + phone)"]
-        SCENE["Character scene"]
+    subgraph APP["SavePoint app — PWA (web + phone) — MIC capture"]
+        MIC["Phone mic → audio + ts"]
+        SCENE["Character plaza"]
         GARDEN["Garden calendar"]
-        DAY["Day view (timeline + dialogue)"]
-        PRESAGE["Presage (phone cam) → sprite mood (optional)"]
+        DAY["Day view (scrubber + dialogue)"]
     end
 
-    SPR -->|sprite params, no raw video| SRV
-    EMB -->|embedding + ts| BIND
-    VAD -->|audio/segments| STT
-    STT --> BIND
+    subgraph SRV["Server — align + bind + store + summarize (cloud OK)"]
+        DIAR["Diarization + STT<br/>(pyannote → SepFormer → whisper)"]
+        ALIGN["Timeline align<br/>(Pi frames ⟷ app audio by ts)"]
+        BIND["Bind utterance → speaking character"]
+        DB[("MongoDB<br/>people · events · days · recaps")]
+        SUM["gemma / Gemini / Backboard<br/>daily recaps"]
+    end
+
+    SPR -->|sprite params + ts, no raw video| ALIGN
+    MIC -->|audio + ts, no raw video| DIAR
+    DIAR --> ALIGN
+    ALIGN --> BIND
     BIND --> DB
     DB --> SUM
     DB --> APP
-    PRESAGE -.-> DB
 ```
 
 **Key boundaries**
-- **Only derived data leaves the device:** sprite parameters, speaker embeddings,
-  timestamps, transcript text — not raw photos or video.
-- Inference (face detect + diarization) runs **server-side today**; it can *optionally*
-  move on-device on the Pi for a stronger privacy + hardware story.
-- The **hardware mute** physically cuts camera + mic — it can never record when muted,
-  and a visible LED shows recording state. Consent-friendly and demoable.
+- **Two independent capture sources:** the **Pi camera** and the **app/phone mic** run on
+  separate clocks; the **server aligns them by timestamp** to bind who-spoke to who-was-seen.
+- **Decoupled JSON ingest (SAV-40):** the two sources land via two JSON-only endpoints —
+  `POST /ingest/video` (the Pi's `list[EdgeEvent]`: `local_id` + `avatar_params` + face
+  embedding + `ts_unix_ms`) and `POST /ingest/audio` (the app's diarized `Speaker N`
+  segments with absolute ISO timestamps) — each carrying **absolute NTP-synced timestamps**
+  so they land on one shared day timeline. The original combined `POST /ingest` (one frame +
+  one audio clip) stays for the single-request demo path.
+- **Only derived data leaves each device:** sprite parameters / avatar params + embeddings +
+  timestamps from the Pi, transcript text + timestamps from the app — **no raw photos, video,
+  or audio** ever crosses the wire on any ingest path.
+- Inference (face detect + diarization) runs **server-side today**; face detect can
+  *optionally* move on-device on the Pi for a stronger privacy + hardware story.
+- The **hardware mute** on the Pi physically cuts the **camera** (LED shows state); the app
+  controls its own mic capture. Consent-friendly and demoable.
 
 ---
 
@@ -116,7 +125,7 @@ flowchart TB
 | Compute | **Raspberry Pi 5** | Runs a **regular Raspberry Pi OS (Linux)** image; official BCM2712 support. |
 | OS | **Raspberry Pi OS (Linux)** | Regular image — **no QNX / RTOS.** |
 | Camera | Pi Camera Module 3 (22-pin) | Same connector as Pi Zero 2 W. |
-| Mic | **USB mic / ReSpeaker** on the Pi | *Recommended* — co-locates audio+video on one clock (see §6). |
+| Mic | **On the app/phone, not the Pi** | Audio is captured app-side; the server timeline-aligns it with the Pi camera (see §6). Both devices should share a clock (NTP) so timestamps line up. |
 | Privacy | **GPIO push-button + LED** | Hardware mute cuts capture; LED shows recording state. |
 | AI runtime *(optional)* | ONNX Runtime / OpenCV on the Pi | Only for the optional on-device inference path; not required for the core loop. |
 
@@ -140,12 +149,26 @@ The server stores each utterance as a **SPOKE `Event`** with a `Speaker N` label
 fixture — the CI default, no torch) and `RealTranscriber` (the vendored pipeline via a
 subprocess, needs `HF_TOKEN`; `SAVEPOINT_TRANSCRIBER=real`).
 
-> **Identity binding is a separate seam.** Blind diarization gives *anonymous* `Speaker N`
-> labels; tying a speaker to the *right* Person sprite (so a line attaches to the correct
-> character) is still an open mechanic — options: active-speaker (person in frame = current
-> speaker), voice-embedding match to a known Person, or tap-to-assign. Tracked as an open
-> decision (§15). The old ECAPA voice-enrollment + `/label` prototype is **shelved** — this
-> diarization pipeline replaced it.
+> **Two-source timeline alignment (decoupled ingest — built, SAV-40).** Audio comes from the
+> **app/phone mic**, video from the **Pi camera** — two independent clocks. The server
+> **aligns them by timestamp**: an utterance at time *t* is bound to whoever the camera saw
+> around *t*. This needs comparable clocks (NTP) on both devices. The ingest path is now
+> **decoupled** into two JSON-only endpoints that land on one shared day timeline, alongside
+> the combined `/ingest` (see §4): the Pi posts `POST /ingest/video` (a list of edge
+> `EdgeEvent`s — `local_id` + `avatar_params` + face embedding + `ts_unix_ms`) and the app
+> posts `POST /ingest/audio` (diarized `Speaker N` segments with absolute ISO timestamps).
+> **No raw media crosses the wire** — only derived data. Alignment is implicit-by-timestamp:
+> both streams write ts-stamped events to the same day, joined by the day view + tap-to-name.
+
+> **Identity binding — tap-to-name (decided, SAV-39).** Blind diarization gives *anonymous*
+> `Speaker N` labels; the chosen way to tie a speaker to the *right* Person sprite is
+> **tap-to-name**: after a day, the user assigns a `Speaker N` label to a real Person via
+> `POST /day/{date}/assign-speaker`, which re-points that day's SPOKE events onto the Person
+> (idempotent). Once bound, the day-view join resolves those events to the real character
+> instead of a bare `Speaker N`. (Active-speaker-in-frame and voice-embedding matching remain
+> possible future automation; the stored face embedding on `people` enables the latter.) The
+> old ECAPA voice-enrollment + `/label` prototype is **shelved** — this diarization pipeline
+> replaced it.
 
 ### Accuracy tooling
 `pipeline/score.py` (a stdlib-only, CI-safe scorer — SAV-38): scores predicted segments
@@ -193,8 +216,8 @@ LLMs (gemma/Gemini/Backboard) may write a character's **bio/flavor text**, never
 ## 9. Data model (MongoDB Atlas)
 
 ```
-people   { _id, localId, name?, avatarParams, voiceEmbedding?, tags[], favorite,
-           firstSeen, lastSeen, notes }
+people   { _id, localId, name?, avatarParams, voiceEmbedding?, faceEmbedding?, tags[],
+           favorite, firstSeen, lastSeen, notes }
 events   { _id, ts, personId, type: "seen" | "spoke", text?, emotion?, place?, dayId }
 days     { _id, date, moodColor?, journalNotes?, plantStage, plantType? }
 recaps   { _id, date, scope: "day" | "month" | "year", narrative, highlights[] }
@@ -206,8 +229,18 @@ demand (`POST /day/{date}/recap`, live on gemma). Store derived data only; keep 
 on-device where feasible.
 
 **Notes (current implementation):**
-- `events.personId` currently holds the diarized **`Speaker N`** label, not yet a resolved
-  Person `localId` — see the identity-binding seam in §6.
+- **Ingest paths:** three write endpoints land the same `people`/`events`/`days` shapes —
+  the combined `POST /ingest` (frame + audio) and the **decoupled** `POST /ingest/video`
+  (Pi `list[EdgeEvent]`) + `POST /ingest/audio` (app diarized segments), all aligned by
+  absolute timestamp (§4, §6). `faceEmbedding` is the 512-d edge face-attribute embedding
+  stored from `EdgeEvent`s so future detections can nearest-neighbour match a face to a
+  known Person (the "match by embedding, else new localId" half of the flow above).
+- `events.personId` on a **`spoke`** event holds the diarized **`Speaker N`** label until
+  it is bound to a real Person via **tap-to-name** (`POST /day/{date}/assign-speaker`, §6),
+  which re-points that day's matching SPOKE events onto the Person's `localId`; `seen`
+  events already carry the resolved `localId`. Binding is a per-day rewrite over the events
+  present at call time — a later audio re-ingest appends fresh raw-label events, so re-run
+  the assignment (it is idempotent) to re-bind them.
 - `plantStage` is computed from a day's activity (SAV-54) and now seeds an **auto-suggested
   plant**; the garden plant is ultimately **user-chosen** (`plantType`, per the frontend
   redesign) with that suggestion as the default.
@@ -310,8 +343,8 @@ Submit to every track legitimately satisfied — each is judged independently.
 
 ## 13. Tech stack
 
-- **Edge:** Pi 5 on a **regular Raspberry Pi OS (Linux)** image; camera + USB mic;
-  *optional* on-device OpenCV / ONNX face detect + GPIO mute + LED. **No QNX.**
+- **Edge:** Pi 5 on a **regular Raspberry Pi OS (Linux)** image; **camera only** (mic is
+  app-side); *optional* on-device OpenCV / ONNX face detect + GPIO mute + LED. **No QNX.**
 - **Speech:** vendored diarization → transcription pipeline (`Speaker N: text`), behind a
   `Transcriber` protocol (stub for CI, real pipeline via subprocess).
 - **Backend:** **FastAPI + uv** + **MongoDB**; frame+audio ingest Pi→server; recaps via
@@ -340,11 +373,16 @@ Submit to every track legitimately satisfied — each is judged independently.
 ## 15. Open decisions
 1. **Recap/bio LLM backend — settled on gemma for now** (implemented, live). Sub-question:
    invest in the **FreeSolo prize** (adapter training underway) or stay on gemma?
-2. **Speaker → Person binding** (§6): active-speaker (in-frame), voice-embedding match, or
-   tap-to-assign — how a diarized `Speaker N` line attaches to the right character sprite.
+2. **Speaker → Person binding — decided: tap-to-name** (§6, SAV-39, built).
+   `POST /day/{date}/assign-speaker` binds a `Speaker N` label to a real Person and
+   re-points that day's SPOKE events. Active-speaker-in-frame and voice/face-embedding
+   auto-matching remain optional future automation (the stored `faceEmbedding` enables it).
 3. **Who builds the redesigned frontend:** waterprism owns design; the dev-agent wires
    `app/` to the live API (a prototype is being stood up) — confirm ownership split.
-4. **USB mic on the Pi vs. phone audio** (recommend Pi mic — dissolves cross-device sync).
+4. **Cross-device sync (decided + built):** mic = app/phone, camera = Pi, **server aligns by
+   timestamp**. The `/ingest` path is now **decoupled** into `POST /ingest/video` (Pi
+   `EdgeEvent`s) + `POST /ingest/audio` (app segments), joined server-side by `ts` (§4, §6,
+   SAV-40). Open: the concrete clock-sync scheme (NTP profile) across the two devices.
 5. Which screens are the hero screens (proposed: Character plaza + Day view).
 6. **How far to push the optional on-device / Pi hardware polish** given remaining time.
 

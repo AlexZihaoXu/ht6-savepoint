@@ -20,10 +20,11 @@ import time
 from types import FrameType
 
 from savepoint_edge.hal import Camera, EventSink, FaceDetector, MuteSwitch
+from savepoint_edge.identity_gallery import IdentityGallery
 from savepoint_edge.sinks.file_sink import FileSink
 from savepoint_edge.sinks.http_sink import HttpSink
 from savepoint_edge.sinks.stdout_sink import StdoutSink
-from savepoint_edge.sprite_params import compute_avatar_params, compute_local_id
+from savepoint_edge.sprite_params import compute_avatar_params
 from savepoint_edge.types import EdgeEvent
 
 _TICK_S = 0.5
@@ -64,6 +65,7 @@ def _build_backend() -> tuple[Camera, MuteSwitch, FaceDetector]:
 
         print("[edge] running LINUX backend (real hardware)", file=sys.stderr)
         model_path = os.environ.get("SAVEPOINT_EDGE_FACE_MODEL", "")
+        embed_model_path = os.environ.get("SAVEPOINT_EDGE_FACE_EMBED_MODEL", "")
 
         # Built one at a time with rollback on partial failure: e.g. if the
         # camera and mute switch both claim hardware successfully but the
@@ -76,7 +78,7 @@ def _build_backend() -> tuple[Camera, MuteSwitch, FaceDetector]:
             built.append(camera)
             mute = LinuxMuteSwitch()
             built.append(mute)
-            detector = LinuxFaceDetector(model_path)
+            detector = LinuxFaceDetector(model_path, embed_model_path)
             return camera, mute, detector
         except Exception:
             for obj in reversed(built):
@@ -99,7 +101,8 @@ def _build_sink_from_env() -> EventSink:
     """SAVEPOINT_EDGE_SINK selects where events go:
     (unset) / "stdout"   -> one JSON line per event on stdout (default)
     "file:<path>"        -> append newline-delimited JSON to <path>
-    "http://host:port/…" -> POST each event's JSON as the request body
+    "http://.../ingest/video" -> POST each event as a one-element JSON array
+                            to the server's list[EdgeEvent] endpoint
     """
     spec = os.environ.get("SAVEPOINT_EDGE_SINK", "stdout")
 
@@ -125,6 +128,7 @@ def main() -> int:
         return 1
 
     sink = _build_sink_from_env()
+    identity_gallery = IdentityGallery()
 
     # try/finally, not just the loop: an exception escaping the loop body
     # (a real bug, not a sink failure — sinks already catch their own) must
@@ -148,9 +152,22 @@ def main() -> int:
                 continue
 
             for face in detector.detect(frame):
+                bbox = (face.x, face.y, face.w, face.h)
+                resolution = identity_gallery.resolve(
+                    face.embedding, bbox, frame.timestamp_ms
+                )
+                # Only upload a person once their presence is confirmed —
+                # i.e. exactly on the tick they cross the persistence bar
+                # (IdentityGallery). A momentary flicker (a one-frame false
+                # positive, or someone crossing the far background for an
+                # instant) never reaches that bar and so never emits; a
+                # sustained presence emits exactly once. Everything else in
+                # the loop (LED, mute) still runs regardless.
+                if not resolution.newly_confirmed:
+                    continue
                 event = EdgeEvent(
                     ts_unix_ms=frame.timestamp_ms,
-                    local_id=compute_local_id(face.embedding),
+                    local_id=resolution.local_id,
                     type="seen",
                     avatar_params=compute_avatar_params(face.embedding),
                     face_embedding=face.embedding,

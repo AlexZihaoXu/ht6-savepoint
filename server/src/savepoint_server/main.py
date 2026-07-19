@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from savepoint_server.api import api_router
 from savepoint_server.core.config import Settings, get_settings
@@ -41,12 +43,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
-        allow_credentials=True,
+        # The API uses no cookies/credentials, and `allow_credentials=True` is an invalid
+        # (and browser-rejected) combination with the wildcard `allow_origins=["*"]` the
+        # demo needs, so keep credentials off and origins open.
+        allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],
     )
 
     app.include_router(api_router)
+
+    # Serve generated PixelLab sprite PNGs (SAV-61) at /sprites/{local_id}/{file}.
+    # The dir is created if missing (StaticFiles requires it to exist at mount time)
+    # and is where scripts/gen_sprites.py + the fire-and-forget ingest hook write.
+    sprites_path = Path(settings.sprites_dir)
+    sprites_path.mkdir(parents=True, exist_ok=True)
+    app.mount("/sprites", StaticFiles(directory=str(sprites_path)), name="sprites")
 
     @app.get("/", tags=["meta"])
     async def root() -> dict[str, str]:

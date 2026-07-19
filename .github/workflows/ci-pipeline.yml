@@ -42,8 +42,10 @@ jobs:
 
       # Build a throwaway venv with ONLY ruff + pytest. We never `uv sync` the project
       # here, so none of the heavy model dependencies (torch/whisper/pyannote) get pulled.
+      # Pin to the exact versions in pipeline/pyproject.toml's dev group so CI matches a
+      # local `uv sync` and lint/test results are reproducible.
       - name: Install lightweight tools (ruff + pytest only)
-        run: uv venv .ci-venv && uv pip install --python .ci-venv/bin/python ruff pytest
+        run: uv venv .ci-venv && uv pip install --python .ci-venv/bin/python ruff==0.6.9 pytest==8.3.3
 
       - name: Lint (ruff — no project deps needed)
         run: .ci-venv/bin/ruff check .

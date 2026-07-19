@@ -40,8 +40,8 @@ def test_testcase_schema(json_path: Path) -> None:
             assert field in turn, f"{json_path.name} turn {i}: missing '{field}'"
 
         start, end = turn["start"], turn["end"]
-        assert isinstance(start, (int, float)), f"{json_path.name} turn {i}: 'start' not numeric"
-        assert isinstance(end, (int, float)), f"{json_path.name} turn {i}: 'end' not numeric"
+        assert isinstance(start, int | float), f"{json_path.name} turn {i}: 'start' not numeric"
+        assert isinstance(end, int | float), f"{json_path.name} turn {i}: 'end' not numeric"
         assert end >= start, f"{json_path.name} turn {i}: end {end} < start {start}"
 
         speaker = turn["speaker"]
