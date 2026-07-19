@@ -27,7 +27,11 @@ test("stopping a recording navigates into today's dialogue scene", async ({
     .click();
 
   // saveClip() → POST /ingest/audio/clip → navigate("/scene/today?t=...").
-  await page.waitForURL(/\/scene\/today/, { timeout: 20_000 });
+  // Generous timeout: with SAVEPOINT_TRANSCRIBER=real, each call is a fresh
+  // subprocess that reloads pyannote/whisper/SepFormer from disk (no warm
+  // model cache across requests), so even a few seconds of audio can take
+  // well over a minute end to end.
+  await page.waitForURL(/\/scene\/today/, { timeout: 150_000 });
 
   // The dialogue box renders once the day's events load — assert real text,
   // not just the route (a raw "Speaker N" placeholder is expected and fine;

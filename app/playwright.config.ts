@@ -22,6 +22,10 @@ export default defineConfig({
   fullyParallel: false,
   retries: 0,
   reporter: "list",
+  // Default 30s is too short once SAVEPOINT_TRANSCRIBER=real: each
+  // transcription is a fresh subprocess reloading pyannote/whisper from
+  // disk, so record-to-scene.spec.ts can genuinely take well over a minute.
+  timeout: 180_000,
   use: {
     baseURL: `http://127.0.0.1:${APP_PORT}`,
     trace: "retain-on-failure",

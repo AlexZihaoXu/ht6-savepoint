@@ -116,6 +116,17 @@ class Settings(BaseSettings):
     # L2-normalized) — see identity_gallery.py's own citation for why 0.30.
     person_match_similarity_threshold: float = 0.30
 
+    # --- Demo history (services/demo_history.py) ---
+    # DEFAULT OFF, same idiom as pixellab_enabled above: with this False the read
+    # API's demo-fallback branches are never even consulted and behavior is
+    # byte-identical to before this existed — a fresh/empty DB (every CI run,
+    # every teammate's first `uv run pytest`) must NOT grow a cast of fake people
+    # just because Mongo has nothing yet. Flip to True only for an actual demo
+    # run, where it hardcodes an in-code ~week of past days/people (never written
+    # to Mongo — see that module) so the garden/day-view/people screens have
+    # something to show beyond whatever the camera captured today.
+    demo_history_enabled: bool = False
+
     # --- Speech pipeline (SAV-32) ---
     # Which transcriber the speech service uses. "stub" (default) is CI-safe and
     # needs no torch; "real" shells out to jiucheng's vendored pipeline.
@@ -129,6 +140,11 @@ class Settings(BaseSettings):
     speech_whisper_model: str = "small.en"
     # Hugging Face token for the gated pyannote models (RealTranscriber only).
     hf_token: str | None = None
+    # ffmpeg binary RealTranscriber normalizes uploads through before handing
+    # them to either pipeline stage (browser recordings arrive as WebM/Opus,
+    # not WAV) — plain "ffmpeg" resolves via PATH; override for a
+    # machine-specific build the system ffmpeg can't otherwise provide.
+    speech_ffmpeg_path: str = "ffmpeg"
 
 
 @lru_cache(maxsize=1)

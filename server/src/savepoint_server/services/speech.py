@@ -40,6 +40,26 @@ from savepoint_server.models import Event, EventType, Transcript, TranscriptSegm
 AudioInput = str | Path | bytes
 
 
+def _sniff_audio_extension(data: bytes) -> str:
+    """Guess a filesystem extension from an audio blob's magic bytes.
+
+    Covers what actually shows up here: WAV (curl/file uploads) and WebM
+    (the browser's ``MediaRecorder``, which is Opus-in-WebM by default in
+    Chromium). Falls back to ``.wav`` for anything unrecognized.
+    """
+    if data[:4] == b"RIFF" and data[8:12] == b"WAVE":
+        return ".wav"
+    if data[:4] == b"\x1a\x45\xdf\xa3":  # EBML header (WebM/Matroska)
+        return ".webm"
+    if data[:4] == b"OggS":
+        return ".ogg"
+    if data[4:8] == b"ftyp":  # MP4/M4A family
+        return ".m4a"
+    if data[:3] == b"ID3" or data[:2] in (b"\xff\xfb", b"\xff\xf3", b"\xff\xf2"):
+        return ".mp3"
+    return ".wav"
+
+
 class Transcriber(Protocol):
     """Turns an audio recording into an ordered diarized :class:`Transcript`."""
 
@@ -122,17 +142,21 @@ class RealTranscriber:
         align_python: str | Path,
         hf_token: str | None,
         whisper_model: str = "small.en",
+        ffmpeg_path: str = "ffmpeg",
     ) -> None:
         self._pipeline_dir = Path(pipeline_dir)
         self._diarize_python = str(diarize_python)
         self._align_python = str(align_python)
         self._hf_token = hf_token
         self._whisper_model = whisper_model
+        self._ffmpeg_path = ffmpeg_path
 
     def transcribe(self, audio: AudioInput) -> Transcript:
         with tempfile.TemporaryDirectory(prefix="savepoint-speech-") as tmp:
             tmp_dir = Path(tmp)
-            audio_path = self._resolve_audio(audio, tmp_dir)
+            raw_path = self._resolve_audio(audio, tmp_dir)
+            audio_path = tmp_dir / "input.wav"
+            self._normalize_to_wav(raw_path, audio_path)
             diar_json = tmp_dir / "diarization.json"
             transcript_json = tmp_dir / "transcript.json"
 
@@ -155,12 +179,39 @@ class RealTranscriber:
             )
 
     def _resolve_audio(self, audio: AudioInput, tmp_dir: Path) -> Path:
-        """Return a filesystem path for ``audio``, writing bytes to a temp file."""
+        """Return a filesystem path for ``audio``, writing bytes to a temp file.
+
+        The extension is sniffed from the audio's magic bytes rather than
+        assumed to be WAV, purely so ffmpeg's own format probing (see
+        ``_normalize_to_wav``) has a correct hint — the browser's
+        ``MediaRecorder`` (the app's mic capture) hands back WebM/Opus bytes,
+        not WAV.
+        """
         if isinstance(audio, bytes):
-            path = tmp_dir / "input.wav"
+            path = tmp_dir / f"raw{_sniff_audio_extension(audio)}"
             path.write_bytes(audio)
             return path
         return Path(audio)
+
+    def _normalize_to_wav(self, src: Path, dst: Path) -> None:
+        """Transcode ``src`` to a clean 16kHz mono WAV via ffmpeg.
+
+        Both pipeline stages need this: diarize.py's torchcodec-based reader
+        can decode WebM/Opus but the container doesn't reliably expose a
+        duration (breaks deep inside pyannote's audio I/O), and align.py's
+        old torchaudio (soundfile backend) can't read WebM/Opus at all.
+        Normalizing once up front sidesteps both.
+        """
+        result = subprocess.run(
+            [self._ffmpeg_path, "-y", "-i", str(src), "-ar", "16000", "-ac", "1", str(dst)],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            raise SpeechPipelineError(
+                f"ffmpeg audio normalization failed (exit {result.returncode}): "
+                f"{result.stderr.strip()}"
+            )
 
     def _env(self) -> dict[str, str]:
         import os
@@ -174,8 +225,19 @@ class RealTranscriber:
         return {**os.environ, "HF_TOKEN": token}
 
     def _run_diarize(self, audio_path: Path, out_json: Path) -> None:
+        # Explicit --device cpu: diarize.py's "auto" (its default) would pick
+        # MPS on Apple Silicon, which is unvalidated for pyannote's ops here —
+        # CPU is what's actually been confirmed working.
         self._run(
-            [self._diarize_python, "diarize.py", str(audio_path), "-o", str(out_json)],
+            [
+                self._diarize_python,
+                "diarize.py",
+                str(audio_path),
+                "-o",
+                str(out_json),
+                "--device",
+                "cpu",
+            ],
             stage="diarize",
         )
 
@@ -235,6 +297,7 @@ def get_transcriber(settings: Settings | None = None) -> Transcriber:
             align_python=align_python,
             hf_token=settings.hf_token,
             whisper_model=settings.speech_whisper_model,
+            ffmpeg_path=settings.speech_ffmpeg_path,
         )
     return StubTranscriber()
 
