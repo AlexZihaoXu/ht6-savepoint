@@ -29,6 +29,7 @@ from savepoint_server.db import Repositories
 from savepoint_server.main import app
 from savepoint_server.models import Event, EventType, Person, Transcript, TranscriptSegment
 from savepoint_server.models.person import AvatarParams
+from savepoint_server.services.ingest import auto_match_speakers_to_seen_people
 from savepoint_server.services.speech import AudioInput
 
 DAY = "2026-07-18"
@@ -419,7 +420,11 @@ async def test_assign_speaker_bad_date_400(repos: Repositories) -> None:
 
 
 async def test_decoupled_streams_align_on_shared_day(repos: Repositories) -> None:
-    """Pi video + app audio land on one day; tap-to-name unifies who-said-what."""
+    """Pi video + app audio land on one day and auto-align (DESIGN §4's
+    timeline alignment): alex was seen close in time to "Speaker 1"'s only
+    utterance, so /ingest/audio resolves it automatically — no manual
+    tap-to-name needed. A redundant manual assign-speaker call afterward is
+    just idempotent (0 left to reassign), still safe to call."""
     async with _client(repos) as client:
         await client.post("/ingest/video", json=[_edge_event("alex", BASE, place="cafe")])
         await client.post(
@@ -432,24 +437,18 @@ async def test_decoupled_streams_align_on_shared_day(repos: Repositories) -> Non
                 ]
             },
         )
-        # Before binding: the day view shows only the SEEN person (alex), the SPOKE
-        # line is still an unresolved "Speaker 1".
-        pre = (await client.get(f"/day/{DAY}")).json()
-        assert [p["local_id"] for p in pre["people"]] == ["alex"]
-        assert {e["type"] for e in pre["events"]} == {"seen", "spoke"}
+        # Both streams already resolve to alex — no "Speaker 1" left at all.
+        aligned = (await client.get(f"/day/{DAY}")).json()
+        assert [p["local_id"] for p in aligned["people"]] == ["alex"]
+        spoke = [e for e in aligned["events"] if e["type"] == "spoke"]
+        assert spoke and all(e["person_id"] == "alex" for e in spoke)
 
+        # Tap-to-name still works, it just has nothing left to do here.
         assign = await client.post(
             f"/day/{DAY}/assign-speaker",
             json={"speaker_label": "Speaker 1", "person_local_id": "alex"},
         )
-        assert assign.json()["reassigned"] == 1
-
-        post = (await client.get(f"/day/{DAY}")).json()
-
-    # After binding: both the seen and the spoke events resolve to alex.
-    assert [p["local_id"] for p in post["people"]] == ["alex"]
-    spoke = [e for e in post["events"] if e["type"] == "spoke"]
-    assert spoke and all(e["person_id"] == "alex" for e in spoke)
+        assert assign.json()["reassigned"] == 0
 
 
 # --------------------------------------------------------------------------- #
@@ -558,3 +557,96 @@ async def test_ingest_audio_clip_empty_upload_400(repos: Repositories) -> None:
         )
     assert resp.status_code == 400
     assert await repos.events.count() == 0
+
+
+# --------------------------------------------------------------------------- #
+# Timeline alignment: auto_match_speakers_to_seen_people (DESIGN §4)
+# --------------------------------------------------------------------------- #
+
+
+def _seen(person_id: str, day_id: str, ts: datetime) -> Event:
+    """A stored SEEN event (helper for the timeline-alignment tests)."""
+    return Event(ts=ts, person_id=person_id, type=EventType.SEEN, day_id=day_id)
+
+
+async def test_auto_match_binds_the_only_person_seen_nearby(repos: Repositories) -> None:
+    """One real person consistently seen near an unresolved label's utterances
+    -> auto-bound, same as a manual tap-to-name would have done."""
+    await repos.people.upsert(_person("alex"))
+    await repos.events.insert(_seen("alex", DAY, BASE))
+    await repos.events.insert(_seen("alex", DAY, BASE + timedelta(minutes=1)))
+    await repos.events.insert(_spoke("Speaker 1", DAY, BASE + timedelta(seconds=10), "hi"))
+    await repos.events.insert(
+        _spoke("Speaker 1", DAY, BASE + timedelta(minutes=1, seconds=5), "again")
+    )
+
+    matched = await auto_match_speakers_to_seen_people(DAY, repos, window_s=60.0)
+
+    assert matched == {"Speaker 1": "alex"}
+    spoke_events = [e for e in await repos.events.list_for_day(DAY) if e.type is EventType.SPOKE]
+    assert {e.person_id for e in spoke_events} == {"alex"}
+
+
+async def test_auto_match_skips_you_and_already_resolved_labels(repos: Repositories) -> None:
+    """ "you" (voice-matched already) and a label already a real Person are
+    left alone -- nothing to resolve, no accidental double-processing."""
+    await repos.people.upsert(_person("alex"))
+    await repos.events.insert(_seen("alex", DAY, BASE))
+    await repos.events.insert(_spoke("you", DAY, BASE, "already resolved"))
+    await repos.events.insert(_spoke("alex", DAY, BASE, "already a real person"))
+
+    matched = await auto_match_speakers_to_seen_people(DAY, repos, window_s=60.0)
+
+    assert matched == {}
+
+
+async def test_auto_match_leaves_ambiguous_labels_alone(repos: Repositories) -> None:
+    """Two different real people seen near the same unresolved label's
+    utterances -> ambiguous, left for manual tap-to-name rather than
+    guessing wrong."""
+    await repos.people.upsert(_person("alex"))
+    await repos.people.upsert(_person("sam"))
+    await repos.events.insert(_seen("alex", DAY, BASE))
+    await repos.events.insert(_seen("sam", DAY, BASE + timedelta(minutes=2)))
+    await repos.events.insert(_spoke("Speaker 1", DAY, BASE + timedelta(seconds=5), "hi"))
+    await repos.events.insert(
+        _spoke("Speaker 1", DAY, BASE + timedelta(minutes=2, seconds=5), "again")
+    )
+
+    matched = await auto_match_speakers_to_seen_people(DAY, repos, window_s=60.0)
+
+    assert matched == {}
+    spoke_events = [e for e in await repos.events.list_for_day(DAY) if e.type is EventType.SPOKE]
+    assert {e.person_id for e in spoke_events} == {"Speaker 1"}
+
+
+async def test_auto_match_ignores_sightings_outside_the_window(repos: Repositories) -> None:
+    """A person seen well outside window_s of every utterance never votes,
+    so a label with nobody plausibly nearby simply stays unresolved."""
+    await repos.people.upsert(_person("alex"))
+    await repos.events.insert(_seen("alex", DAY, BASE))
+    await repos.events.insert(_spoke("Speaker 1", DAY, BASE + timedelta(minutes=10), "hi"))
+
+    matched = await auto_match_speakers_to_seen_people(DAY, repos, window_s=60.0)
+
+    assert matched == {}
+
+
+async def test_ingest_audio_response_reflects_the_auto_match(repos: Repositories) -> None:
+    """End to end over the real endpoint: seed a SEEN event first, then POST
+    /ingest/audio with a nearby-in-time raw label -- the HTTP response's
+    events already carry the resolved Person, not the stale raw label the
+    in-memory copy was built from before matching ran."""
+    await repos.people.upsert(_person("alex"))
+    await repos.events.insert(_seen("alex", DAY, BASE))
+
+    payload = {"segments": [_segment("Speaker 1", BASE, BASE + timedelta(seconds=3), "hello")]}
+    async with _client(repos) as client:
+        resp = await client.post("/ingest/audio", json=payload)
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert [e["person_id"] for e in body["events"]] == ["alex"]
+
+    stored = await repos.events.list_for_day(DAY)
+    assert [e.person_id for e in stored if e.type is EventType.SPOKE] == ["alex"]

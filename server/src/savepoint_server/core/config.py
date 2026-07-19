@@ -146,6 +146,14 @@ class Settings(BaseSettings):
     # machine-specific build the system ffmpeg can't otherwise provide.
     speech_ffmpeg_path: str = "ffmpeg"
 
+    # --- Timeline alignment: bind an utterance to a seen Person (DESIGN §4) ---
+    # How close (seconds) a SPOKE utterance and a camera SEEN sighting need to
+    # be to count as "you were looking at them when they said that" —
+    # services/ingest.py's auto_match_speakers_to_seen_people. Same idea as
+    # (but a separate, independently-tunable knob from) the plaza's live
+    # "who am I facing right now" window on the frontend.
+    speaker_seen_match_window_s: float = 60.0
+
     # --- Wearer voice enrollment (SAV-?) ---
     # Cosine-similarity threshold for auto-matching a diarized "Speaker N" label
     # to the enrolled wearer voiceprint (services/voice.py's match_voice_to_you).

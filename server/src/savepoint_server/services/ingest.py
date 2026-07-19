@@ -29,6 +29,7 @@ from datetime import UTC, date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from savepoint_server.core.config import get_settings
 from savepoint_server.db.repositories import Repositories
 from savepoint_server.models import (
     Day,
@@ -555,6 +556,19 @@ async def ingest_audio_segments(
             )
         )
 
+    # Timeline alignment (DESIGN §4): try to auto-bind whatever raw labels
+    # are left to whoever the camera was looking at, per day, before the
+    # final rollup — matched labels are patched into the in-memory `events`
+    # below so the response reflects the real Person, not the now-stale
+    # label it was inserted under a moment ago.
+    window_s = get_settings().speaker_seen_match_window_s
+    for day_id in sorted(day_ids):
+        matched = await auto_match_speakers_to_seen_people(day_id, repos, window_s=window_s)
+        if matched:
+            for event in events:
+                if event.day_id == day_id and event.person_id in matched:
+                    event.person_id = matched[event.person_id]
+
     days = [await refresh_day(day_id, repos) for day_id in sorted(day_ids)]
     return AudioIngestResult(events=events, days=days)
 
@@ -588,3 +602,73 @@ async def assign_speaker_for_day(
     if reassigned:
         await refresh_day(day_id, repos)
     return reassigned
+
+
+# --------------------------------------------------------------------------- #
+# Timeline alignment: auto-bind a speaker label from who the camera was
+# looking at (DESIGN §4 — "the app/cloud tier does the timeline alignment
+# (Pi frames <-> app audio by ts)... bind utterance -> character")
+# --------------------------------------------------------------------------- #
+
+
+def _nearest_seen_person(seen: list[Event], ts: datetime, window_s: float) -> str | None:
+    """The SEEN event's person_id closest in time to `ts`, if within window_s seconds."""
+    best: tuple[float, str] | None = None
+    for e in seen:
+        delta = abs((e.ts - ts).total_seconds())
+        if delta > window_s:
+            continue
+        if best is None or delta < best[0]:
+            best = (delta, e.person_id)
+    return best[1] if best else None
+
+
+async def auto_match_speakers_to_seen_people(
+    day_id: str, repos: Repositories, *, window_s: float
+) -> dict[str, str]:
+    """Auto-bind remaining raw "Speaker N" labels to whoever the camera was
+    looking at when they were talking — the audio/video timeline alignment
+    DESIGN §4 describes, running automatically instead of waiting on manual
+    tap-to-name.
+
+    For every SPOKE label that day with no real Person doc yet (skips "you",
+    already handled by voice matching, and anything already a real Person),
+    each of that label's utterances votes for whichever real person has a
+    SEEN event within `window_s` seconds (nearest one wins the vote; an
+    utterance with nobody nearby simply doesn't vote). The label is bound
+    only when every vote agrees on exactly one candidate — any utterance
+    pointing at a second, different person makes it ambiguous and the label
+    is left alone for manual tap-to-name instead of guessing wrong.
+
+    Reuses assign_speaker_for_day for the actual rewrite (same idempotency +
+    day-rollup guarantees tap-to-name already has). Returns {label:
+    matched_person_id} for every label actually bound, so a caller holding
+    its own in-memory copy of the just-inserted events (stamped with the raw
+    labels, now stale) can patch them instead of re-querying.
+    """
+    events = await repos.events.list_for_day(day_id)
+    seen = [e for e in events if e.type is EventType.SEEN]
+    spoke = [e for e in events if e.type is EventType.SPOKE]
+
+    labels = {e.person_id for e in spoke} - {"you"}
+    bound: dict[str, str] = {}
+    for label in sorted(labels):
+        if await repos.people.get_by_local_id(label) is not None:
+            continue  # already a real Person — nothing to resolve
+        candidates: set[str] = set()
+        for event in spoke:
+            if event.person_id != label:
+                continue
+            match = _nearest_seen_person(seen, event.ts, window_s)
+            if match is not None:
+                candidates.add(match)
+            if len(candidates) > 1:
+                break  # already ambiguous, no need to keep scanning
+        if len(candidates) != 1:
+            continue
+        (matched_person_id,) = candidates
+        if await assign_speaker_for_day(
+            day_id, speaker_label=label, person_local_id=matched_person_id, repos=repos
+        ):
+            bound[label] = matched_person_id
+    return bound

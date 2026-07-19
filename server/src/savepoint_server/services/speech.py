@@ -384,11 +384,16 @@ async def transcribe_and_store(
     own speech as ``"you"`` if a voiceprint is enrolled and matches
     (:func:`~savepoint_server.services.voice.match_voice_to_you`), maps every
     :class:`TranscriptSegment` to a SPOKE :class:`Event` under ``day_id``, inserts
-    them via :class:`EventsRepository`, and returns the stored events (with ids) in
-    transcript order.
+    them via :class:`EventsRepository`, tries to auto-bind whatever raw labels
+    are left to whoever the camera was looking at that day
+    (:func:`~savepoint_server.services.ingest.auto_match_speakers_to_seen_people`
+    — DESIGN §4's timeline alignment), and returns the stored events (with ids,
+    reflecting any such match) in transcript order.
     """
-    # Deferred import: services.voice imports RealTranscriber from this module,
-    # so a top-level import here would be circular.
+    # Deferred imports: both modules import RealTranscriber/Transcriber from
+    # this one (services.ingest already imports transcribe_and_store at
+    # module level), so top-level imports here would be circular.
+    from savepoint_server.services.ingest import auto_match_speakers_to_seen_people
     from savepoint_server.services.voice import match_voice_to_you
 
     transcriber = transcriber or get_transcriber()
@@ -401,4 +406,12 @@ async def transcribe_and_store(
     for segment in transcript.segments:
         event = await repos.events.insert(event_from_segment(segment, day_id=day_id))
         stored.append(event)
+
+    matched = await auto_match_speakers_to_seen_people(
+        day_id, repos, window_s=settings.speaker_seen_match_window_s
+    )
+    if matched:
+        for event in stored:
+            if event.person_id in matched:
+                event.person_id = matched[event.person_id]
     return stored
