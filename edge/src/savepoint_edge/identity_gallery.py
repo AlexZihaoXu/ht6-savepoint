@@ -10,14 +10,24 @@ A) Give the same physical face a stable local_id across frames, instead of
    frame makes one person flicker between ids tick to tick. resolve()
    matches each detection to an existing track in two passes:
 
-   1. **Spatial continuity first**: if the detection's bbox overlaps
-      (IoU >= _IOU_THRESHOLD) a track seen within the last _MAX_TRACK_AGE_MS,
-      reuse that track's id outright — no embedding check. A face turning to
-      profile mid-track produces an embedding that can legitimately fall
-      below any "same person" cosine threshold (ArcFace-family models are
-      trained overwhelmingly on frontal faces), yet it obviously hasn't
-      teleported — only turned. Box continuity is a cheap,
-      embedding-independent signal for exactly that case.
+   1. **Spatial continuity first**: if the detection's bbox is a continuation
+      of a track seen within the last _MAX_TRACK_AGE_MS, reuse that track's
+      id outright — no embedding check. Two independent, either-is-enough
+      signals decide "continuation": IoU >= _IOU_THRESHOLD (boxes overlap),
+      or the two boxes' *centers* are close relative to their size
+      (_center_distance_ratio() <= _CENTER_DISTANCE_THRESHOLD). A face
+      turning to profile mid-track produces an embedding that can
+      legitimately fall below any "same person" cosine threshold
+      (ArcFace-family models are trained overwhelmingly on frontal faces),
+      yet it obviously hasn't teleported — only turned, which a real SCRFD
+      box reflects not just as a *shift* but often a *reshape* (narrower,
+      sometimes smaller) as less of the face is visible face-on. IoU
+      penalizes a size/aspect change harshly even at an unchanged position
+      — a profile box fully inside the last frontal box can still score a
+      low IoU — so center distance is the more direct read of "did the
+      head move," independent of how its silhouette changed. Position
+      (both signals) is embedding-independent, which is what makes it
+      useful here at all.
    2. **Cosine similarity fallback**: nothing overlaps (reappearing after
       leaving frame, or the first sighting) -> match by embedding similarity.
    3. Else mint a fresh local_id.
@@ -36,11 +46,14 @@ B) Decide when a track has been present *long enough to be worth uploading*
    track forms and re-confirms — correctly logging that you saw them again.
 
 Trade-off worth naming: spatial matching alone can't tell apart two
-different people who overlap at similar frame positions across ticks (rare
+different people who stand at similar frame positions across ticks (rare
 in the small scenes this targets) — accepted because the failure it fixes
 (one person fragmenting into many ids on every head turn) was the reported,
-reproducing problem, while the failure it risks (two overlapping strangers
+reproducing problem, while the failure it risks (two nearby strangers
 merged) was never observed and matters far less to "who was around today".
+Adding center-distance as a second continuity signal (alongside IoU)
+widens that same trade-off slightly further, on purpose, for the same
+reason: it catches turns severe enough to also tank IoU.
 
 Deliberately in-memory / per-process only — the "session-scoped" half of
 PLAN.md's cut-line #4. Cross-session/cross-day identity is server-side, by
@@ -90,6 +103,20 @@ _SIMILARITY_THRESHOLD = float(os.environ.get("SAVEPOINT_EDGE_SIMILARITY_THRESHOL
 # threshold above.
 _IOU_THRESHOLD = float(os.environ.get("SAVEPOINT_EDGE_IOU_THRESHOLD", "0.15"))
 
+# Second, independent spatial-continuity signal (see class docstring §A.1):
+# center-to-center distance between the new detection and a track's last
+# box, normalized by their average diagonal so it's scale-free (a small
+# shift on a small face box counts the same as a small shift on a large
+# one). A real head turn can shrink/reshape the detected box enough to
+# tank IoU even though the head itself barely moved — this catches that
+# case directly instead of via ever-looser IoU tolerance. 0.5 = the boxes'
+# centers are within about half an average box-diagonal of each other.
+# Env-tunable (SAVEPOINT_EDGE_CENTER_DISTANCE_THRESHOLD) for the same
+# field-tuning reason as the two thresholds above.
+_CENTER_DISTANCE_THRESHOLD = float(
+    os.environ.get("SAVEPOINT_EDGE_CENTER_DISTANCE_THRESHOLD", "0.5")
+)
+
 # How long a track survives with no matching detection before it stops
 # counting for spatial continuity (it can still be re-matched by embedding
 # after this, just not "for free" via position alone). 3s comfortably
@@ -102,9 +129,12 @@ _MAX_TRACK_AGE_MS = 3000
 # confirmed and its (single) event is allowed to upload. The frame-count
 # guard kills a 1-2 frame flicker even if two stray sightings happen to
 # straddle the time window; the time guard makes "long enough" mean real
-# seconds, independent of frame rate. Presence time is env-tunable.
+# seconds, independent of frame rate. Raised from an initial 1s: someone
+# just passing through frame for a second isn't "who you actually spent
+# time with today" (see class docstring's framing) — 3s is closer to
+# "actually stopped and was there." Presence time is env-tunable.
 _MIN_SIGHTINGS = 3
-_MIN_PRESENCE_MS = int(os.environ.get("SAVEPOINT_EDGE_MIN_PRESENCE_MS", "1000"))
+_MIN_PRESENCE_MS = int(os.environ.get("SAVEPOINT_EDGE_MIN_PRESENCE_MS", "3000"))
 
 
 @dataclass
@@ -145,6 +175,21 @@ def _iou(a: tuple[float, float, float, float], b: tuple[float, float, float, flo
     return inter / union if union > 0.0 else 0.0
 
 
+def _center_distance_ratio(
+    a: tuple[float, float, float, float], b: tuple[float, float, float, float]
+) -> float:
+    """Center-to-center distance between two (x, y, w, h) boxes, normalized
+    by their average diagonal. Complements _iou(): robust to a box that
+    reshaped (e.g. narrowed on a head turn) without actually moving, which
+    IoU alone penalizes as if it were a different position entirely."""
+    acx, acy = a[0] + a[2] / 2.0, a[1] + a[3] / 2.0
+    bcx, bcy = b[0] + b[2] / 2.0, b[1] + b[3] / 2.0
+    scale = (math.hypot(a[2], a[3]) + math.hypot(b[2], b[3])) / 2.0
+    if scale <= 0.0:
+        return math.inf
+    return math.hypot(acx - bcx, acy - bcy) / scale
+
+
 @dataclass
 class _Track:
     local_id: str
@@ -161,12 +206,14 @@ class IdentityGallery:
         self,
         similarity_threshold: float = _SIMILARITY_THRESHOLD,
         iou_threshold: float = _IOU_THRESHOLD,
+        center_distance_threshold: float = _CENTER_DISTANCE_THRESHOLD,
         max_track_age_ms: int = _MAX_TRACK_AGE_MS,
         min_presence_ms: int = _MIN_PRESENCE_MS,
         min_sightings: int = _MIN_SIGHTINGS,
     ) -> None:
         self._threshold = similarity_threshold
         self._iou_threshold = iou_threshold
+        self._center_distance_threshold = center_distance_threshold
         self._max_track_age_ms = max_track_age_ms
         self._min_presence_ms = min_presence_ms
         self._min_sightings = min_sightings
@@ -188,12 +235,20 @@ class IdentityGallery:
         ]
         self._tracks = live_tracks
 
-        spatial_match = max(
+        # Rank by center distance (ascending — nearest wins): unlike IoU,
+        # it stays meaningful even when a head turn reshapes the box enough
+        # to tank overlap, so it's the more reliable ordering signal when
+        # candidates disagree. Either signal clearing its own threshold is
+        # enough to confirm continuity (see class docstring §A.1).
+        spatial_match = min(
             (t for t in live_tracks),
-            key=lambda t: _iou(bbox, t.bbox),
+            key=lambda t: _center_distance_ratio(bbox, t.bbox),
             default=None,
         )
-        if spatial_match is not None and _iou(bbox, spatial_match.bbox) >= self._iou_threshold:
+        if spatial_match is not None and (
+            _iou(bbox, spatial_match.bbox) >= self._iou_threshold
+            or _center_distance_ratio(bbox, spatial_match.bbox) <= self._center_distance_threshold
+        ):
             return self._touch(spatial_match, embedding, bbox, timestamp_ms)
 
         embedding_match = max(

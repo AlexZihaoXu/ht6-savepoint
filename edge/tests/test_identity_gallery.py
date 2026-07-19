@@ -71,6 +71,18 @@ def test_pronounced_head_turn_still_reuses_id_via_spatial_continuity():
     assert frontal == turned
 
 
+def test_shrunk_box_reuses_id_via_center_distance_even_when_iou_fails():
+    # A severe turn can shrink/reshape the box enough that IoU (~0.1) misses
+    # even the lowered 0.15 threshold, while the box hasn't actually moved —
+    # center distance (~0.31) catches it. Embedding (cos sim ~0.07) is well
+    # below threshold too, so this only passes via the new signal.
+    g = _gallery()
+    frontal = g.resolve(_vector(0.11), _HERE, 0).local_id
+    shrunk_bbox = (0.44, 0.42, 0.06, 0.10)
+    shrunk = g.resolve(_vector(0.3), shrunk_bbox, 100).local_id
+    assert frontal == shrunk
+
+
 def test_non_overlapping_bbox_falls_back_to_embedding_matching():
     g = _gallery()
     a = g.resolve(_vector(0.11), _HERE, 0).local_id
