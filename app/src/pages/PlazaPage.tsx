@@ -10,7 +10,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useReducedMotion } from "framer-motion";
 import { GiWhistle } from "react-icons/gi";
-import { PiCaretLeft, PiCaretRight, PiTrash } from "react-icons/pi";
+import { PiCaretDown, PiCaretLeft, PiCaretRight, PiTrash } from "react-icons/pi";
 import { Icon } from "@/components/Icon";
 import { MicCapture } from "@/components/MicCapture";
 import { PixelBottomNav, PixelHeader } from "@/components/PixelChrome";
@@ -20,6 +20,7 @@ import {
   displayName,
   resetData,
   type ApiDay,
+  type ApiMonthSummary,
   type ApiPerson,
 } from "@/lib/api";
 import { addMonth, monthGrid, monthName, todayIso } from "@/lib/calendar";
@@ -742,12 +743,44 @@ function GardenPanel({
 
   const selectedDay = selected ? byIso.get(selected.iso) : undefined;
 
+  // Month-in-review summary for the always-present strip below the calendar.
+  const monthKey = `${cursor.year}-${String(cursor.month).padStart(2, "0")}`;
+  const [summary, setSummary] = useState<ApiMonthSummary | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [monthMenuOpen, setMonthMenuOpen] = useState(false);
+
+  useEffect(() => {
+    const ac = new AbortController();
+    setSummary(null);
+    setSummaryLoading(true);
+    api.monthSummary(monthKey, ac.signal).then(
+      (s) => {
+        setSummary(s);
+        setSummaryLoading(false);
+      },
+      () => {
+        if (!ac.signal.aborted) setSummaryLoading(false);
+      },
+    );
+    return () => ac.abort();
+  }, [monthKey]);
+
+  // Distinct months that have journaled days (newest first) — the picker list.
+  const monthsWithData = useMemo(() => {
+    const set = new Set((days ?? []).map((d) => d.date.slice(0, 7)));
+    set.add(monthKey); // always offer the current cursor month
+    return [...set].sort().reverse();
+  }, [days, monthKey]);
+
   return (
     <section
       aria-label="Garden — your days as plants"
       inert={!active}
       className="relative isolate h-full w-full shrink-0 snap-start overflow-hidden"
-      onClick={() => setSelected(null)}
+      onClick={() => {
+        setSelected(null);
+        setMonthMenuOpen(false);
+      }}
     >
       <FenceRow className="absolute top-2 left-0 w-full" />
       <Tree className="absolute -top-1 left-2 h-20 w-auto" />
@@ -763,7 +796,7 @@ function GardenPanel({
         className="absolute bottom-[5%] left-[24%] h-4 w-auto"
       />
 
-      <div className="dirt-plot absolute inset-x-[4%] top-[13%] bottom-[13%] flex flex-col">
+      <div className="dirt-plot absolute inset-x-[4%] top-[13%] bottom-[30%] flex flex-col">
         {/* month header */}
         <div className="flex items-center justify-between px-1 pt-1">
           <button
@@ -778,9 +811,49 @@ function GardenPanel({
           >
             <Icon icon={PiCaretLeft} size={20} />
           </button>
-          <h2 className="pixel-name font-pixel text-lg">
-            {monthName(cursor.month)}
-          </h2>
+          <div className="relative">
+            <button
+              type="button"
+              aria-label="Pick a month"
+              aria-expanded={monthMenuOpen}
+              className="pixel-name font-pixel touch-target flex items-center gap-1 px-2 text-lg"
+              onClick={(e) => {
+                e.stopPropagation();
+                setMonthMenuOpen((v) => !v);
+              }}
+            >
+              {monthName(cursor.month)}
+              <Icon icon={PiCaretDown} size={14} />
+            </button>
+            {monthMenuOpen && (
+              <div
+                role="menu"
+                aria-label="Jump to a month"
+                className="pixel-bubble absolute top-full left-1/2 z-30 mt-1 flex max-h-52 w-40 -translate-x-1/2 flex-col overflow-y-auto p-1 text-left"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {monthsWithData.map((m) => {
+                  const y = Number(m.slice(0, 4));
+                  const mo = Number(m.slice(5, 7));
+                  return (
+                    <button
+                      key={m}
+                      type="button"
+                      role="menuitem"
+                      className="touch-target px-2.5 py-2 text-left text-sm transition-colors hover:bg-black/5"
+                      onClick={() => {
+                        setSelected(null);
+                        setCursor({ year: y, month: mo });
+                        setMonthMenuOpen(false);
+                      }}
+                    >
+                      {monthName(mo)} {y}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
           <button
             type="button"
             aria-label="Next month"
@@ -872,6 +945,48 @@ function GardenPanel({
             />
           )}
         </div>
+      </div>
+
+      {/* month-in-review summary — always present below the calendar, scrolls */}
+      <div className="dirt-plot absolute inset-x-[4%] top-[72%] bottom-[8%] flex flex-col overflow-hidden p-2.5">
+        {summaryLoading && !summary ? (
+          <p className="font-pixel text-[9px] text-white/60">Loading month…</p>
+        ) : summary && summary.days_journaled > 0 ? (
+          <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto text-white/90">
+            <p className="font-pixel text-[10px] leading-relaxed">
+              {summary.days_journaled}{" "}
+              {summary.days_journaled === 1 ? "day" : "days"} ·{" "}
+              {summary.total_events} moments · {summary.people_count}{" "}
+              {summary.people_count === 1 ? "person" : "people"}
+            </p>
+            {summary.top_people.length > 0 && (
+              <p className="mt-1.5 text-xs leading-snug">
+                Saw most:{" "}
+                {summary.top_people
+                  .slice(0, 3)
+                  .map((tp) => displayName(tp.person))
+                  .join(", ")}
+              </p>
+            )}
+            {summary.busiest_day && (
+              <p className="mt-1 text-[11px] opacity-70">
+                Busiest:{" "}
+                {new Date(
+                  `${summary.busiest_day.date}T00:00:00Z`,
+                ).toLocaleDateString("en-US", {
+                  month: "short",
+                  day: "numeric",
+                  timeZone: "UTC",
+                })}{" "}
+                · {summary.busiest_day.events} moments
+              </p>
+            )}
+          </div>
+        ) : (
+          <p className="font-pixel text-[9px] leading-relaxed text-white/55">
+            No moments this month yet — your story fills in as you go.
+          </p>
+        )}
       </div>
     </section>
   );
