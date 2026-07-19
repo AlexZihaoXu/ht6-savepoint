@@ -84,6 +84,20 @@
   color: #222033;
 }
 
+/* Flat, SINGLE-layer icon button — the chunky .pixel-btn tile art is a stacked
+   double-tile, which reads as "two layers" on a small corner control like a
+   modal's close X (or filter). This is one clean tile in the warm bar palette,
+   theme-aware, so it sits calmly in a modal's corner. */
+.pixel-icon-btn {
+  background: var(--pixel-bar-bg);
+  color: var(--pixel-btn-fg);
+  border: 2px solid var(--pixel-bar-border);
+  border-radius: 7px;
+}
+.pixel-icon-btn:active {
+  transform: translateY(1px);
+}
+
 .pixel-bar {
   background: var(--pixel-bar-bg);
   border-top: 2px solid var(--pixel-bar-border);

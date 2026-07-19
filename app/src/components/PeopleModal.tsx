@@ -159,7 +159,7 @@ export function PeopleModal() {
             type="button"
             aria-label="Filter and sort"
             aria-expanded={filtersOpen}
-            className="pixel-btn touch-target relative flex flex-none items-center justify-center"
+            className="pixel-icon-btn touch-target relative flex flex-none items-center justify-center"
             onClick={() => setFiltersOpen((v) => !v)}
           >
             <Icon icon={PiFunnel} size={20} />
@@ -175,7 +175,7 @@ export function PeopleModal() {
             type="button"
             aria-label="Close"
             onClick={closePopup}
-            className="pixel-btn touch-target flex flex-none items-center justify-center"
+            className="pixel-icon-btn touch-target flex flex-none items-center justify-center"
           >
             <Icon icon={PiX} size={16} />
           </button>
