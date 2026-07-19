@@ -21,6 +21,7 @@ import {
 import { Icon } from "./Icon";
 import { PersonModal } from "./PersonModal";
 import { PixelSprite } from "@/lib/pixel-sprite";
+import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 import { api, displayName, type ApiPerson } from "@/lib/api";
 import {
   filterPeople,
@@ -89,16 +90,14 @@ export function PeopleModal() {
     return () => ac.abort();
   }, []);
 
-  // Lock background scroll while open; return focus to the opener on unmount.
+  // Return focus to the opener on unmount.
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null;
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prevOverflow;
-      opener?.focus?.();
-    };
+    return () => opener?.focus?.();
   }, []);
+  // Shared ref-counted body scroll-lock (see hook) — a stacked Person profile
+  // won't leave scroll stuck locked after close.
+  useBodyScrollLock();
 
   useEffect(() => {
     closeRef.current?.focus();

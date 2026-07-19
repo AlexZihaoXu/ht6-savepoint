@@ -21,6 +21,7 @@ import {
   PiX,
 } from "react-icons/pi";
 import { Icon } from "./Icon";
+import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 import { useToast } from "@/lib/toast";
 import { PixelSprite } from "@/lib/pixel-sprite";
 import {
@@ -117,17 +118,15 @@ export function PersonModal({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose, editingName, editingNotes]);
 
-  // Lock background scroll while open and return focus to whatever opened the
-  // modal once it closes (captured before we move focus onto the dialog).
+  // Return focus to whatever opened the modal once it closes (captured before
+  // we move focus onto the dialog).
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null;
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prevOverflow;
-      opener?.focus?.();
-    };
+    return () => opener?.focus?.();
   }, []);
+  // Shared ref-counted body scroll-lock — safe when this modal is stacked over
+  // the People pop-up (avoids a leaked `overflow: hidden` after close).
+  useBodyScrollLock();
 
   // Move focus onto the dialog (its close button) when it opens.
   useEffect(() => {
