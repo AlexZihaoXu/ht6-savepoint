@@ -1,0 +1,77 @@
+# CI — Conventional Commits (SAV-16)
+# Lints every commit in a PR *and* the PR title against the Conventional Commits
+# spec, so history stays clean whether the PR is merge- or squash-merged.
+#
+# Self-contained by design: no third-party action and no npm/commitlint install —
+# just a small POSIX check, so there's nothing to vet or keep updated and it runs
+# in a couple of seconds.
+name: Commitlint
+
+on:
+  pull_request:
+    # `edited` so a fixed PR title re-triggers the check.
+    types: [opened, edited, synchronize, reopened]
+
+concurrency:
+  group: commitlint-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  conventional-commits:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout (full history for the PR commit range)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Lint PR commits + title
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+
+          # type(scope)!: subject  — scope + breaking-"!" optional, subject required.
+          pattern='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([^)]+\))?!?: .+'
+          fail=0
+
+          check() {
+            subject="$1"; kind="$2"
+            # GitHub-generated merge subjects aren't authored — never lint them.
+            if printf '%s' "$subject" | grep -qE '^Merge '; then
+              echo "  skip  ($kind, merge): $subject"
+              return
+            fi
+            if printf '%s' "$subject" | grep -qE "$pattern"; then
+              echo "  ok    ($kind): $subject"
+            else
+              echo "  BAD   ($kind): $subject"
+              fail=1
+            fi
+          }
+
+          echo "== PR title =="
+          check "$PR_TITLE" "pr-title"
+
+          echo "== commits ($BASE_SHA..$HEAD_SHA) =="
+          # Only commits unique to this PR, merges excluded.
+          while IFS= read -r subject; do
+            [ -z "$subject" ] && continue
+            check "$subject" "commit"
+          done < <(git log --no-merges --format='%s' "$BASE_SHA..$HEAD_SHA")
+
+          echo ""
+          if [ "$fail" -ne 0 ]; then
+            echo "❌ Not Conventional Commits."
+            echo "   Format: type(scope)!: description"
+            echo "   Types:  feat fix docs style refactor perf test build ci chore revert"
+            echo "   e.g.    feat(app): add record screen   |   fix(server): 400 on empty upload"
+            exit 1
+          fi
+          echo "✅ All PR commits + the PR title follow Conventional Commits."
