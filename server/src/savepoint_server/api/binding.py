@@ -42,13 +42,21 @@ def _parse_iso_date(value: str) -> date:
         ) from exc
 
 
+#: Special ``person_local_id`` binding a label onto the wearer rather than a
+#: real Person — mirrors the frontend's own "you" convention (scene-utils.ts's
+#: YOU_AVATAR/nameFor). No Person doc for "you" exists or should exist.
+YOU = "you"
+
+
 class SpeakerAssignment(BaseModel):
     """Body for ``POST /day/{date}/assign-speaker`` — bind a label to a Person."""
 
     model_config = ConfigDict(extra="forbid")
 
     speaker_label: str = Field(description="Raw diarization label to bind, e.g. 'Speaker 1'.")
-    person_local_id: str = Field(description="local_id of the real Person to bind it to.")
+    person_local_id: str = Field(
+        description="local_id of the real Person to bind it to, or the literal 'you'."
+    )
 
 
 class SpeakerAssignmentResult(BaseModel):
@@ -69,13 +77,19 @@ async def assign_speaker(
     repos: Annotated[Repositories, Depends(get_repos)],
     demo_enabled: Annotated[bool, Depends(get_demo_history_enabled_dep)],
 ) -> SpeakerAssignmentResult:
-    """Bind ``speaker_label`` to a Person for a day, re-pointing that day's SPOKE events.
+    """Bind ``speaker_label`` to a Person (or "you") for a day, re-pointing that
+    day's SPOKE events.
 
-    Validates the date (400), verifies the target Person exists (404), rewrites the
-    day's matching SPOKE events, and returns the refreshed day view with the count.
+    Validates the date (400); "you" is always a valid target (no Person doc for
+    it exists), anything else must resolve to a real Person (404 otherwise).
+    Rewrites the day's matching SPOKE events and returns the refreshed day view
+    with the count.
     """
     day = _parse_iso_date(date)
-    if await repos.people.get_by_local_id(body.person_local_id) is None:
+    if (
+        body.person_local_id != YOU
+        and await repos.people.get_by_local_id(body.person_local_id) is None
+    ):
         raise HTTPException(status_code=404, detail=f"Person '{body.person_local_id}' not found.")
     reassigned = await assign_speaker_for_day(
         day.isoformat(),

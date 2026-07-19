@@ -666,12 +666,12 @@ function SpeakerPickerSheet({
     return () => ac.abort();
   }, []);
 
-  const pick = async (p: ApiPerson) => {
+  const assignTo = async (id: string) => {
     if (pendingId) return;
     setSaveError(false);
-    setPendingId(p.local_id);
+    setPendingId(id);
     try {
-      const res = await assignSpeaker(date, label, p.local_id);
+      const res = await assignSpeaker(date, label, id);
       onAssigned(res.day);
     } catch {
       // Friendly retry state — the sheet stays open, nothing crashes.
@@ -715,6 +715,29 @@ function SpeakerPickerSheet({
           </p>
         )}
         <ul className="min-h-0 flex-1 overflow-y-auto">
+          {/* the mic is the wearer's own phone — one of the two diarized
+              speakers is always them, so "this is me" is always offered
+              first, above the real people fetched from /people */}
+          <li className="border-b-2 border-[#d9a066]/40 last:border-0">
+            <button
+              type="button"
+              disabled={pendingId !== null}
+              onClick={() => assignTo("you")}
+              className={`flex w-full items-center gap-3 py-1.5 pr-1 text-left text-[#663931] disabled:opacity-60 ${
+                pendingId === "you" ? "animate-pulse" : ""
+              }`}
+            >
+              <ParametricSprite params={YOU_AVATAR} size={40} />
+              <span className="min-w-0 flex-1 truncate text-[15px] font-medium">
+                This is me
+              </span>
+              {pendingId === "you" && (
+                <span className="font-pixel flex-none text-[8px] opacity-70">
+                  naming…
+                </span>
+              )}
+            </button>
+          </li>
           {people?.map((p) => (
             <li
               key={p.local_id}
@@ -723,7 +746,7 @@ function SpeakerPickerSheet({
               <button
                 type="button"
                 disabled={pendingId !== null}
-                onClick={() => pick(p)}
+                onClick={() => assignTo(p.local_id)}
                 className={`flex w-full items-center gap-3 py-1.5 pr-1 text-left text-[#663931] disabled:opacity-60 ${
                   pendingId === p.local_id ? "animate-pulse" : ""
                 }`}

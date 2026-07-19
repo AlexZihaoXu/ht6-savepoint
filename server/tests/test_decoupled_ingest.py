@@ -351,6 +351,29 @@ async def test_assign_speaker_rebinds_and_day_view_resolves(repos: Repositories)
     assert [p["local_id"] for p in view.json()["people"]] == ["alex"]
 
 
+async def test_assign_speaker_binds_to_you_without_a_person_doc(repos: Repositories) -> None:
+    """Binding a label to "you" needs no Person doc — the wearer has none by design."""
+    await repos.events.insert(_spoke("Speaker 1", DAY, BASE, "one"))
+    await repos.events.insert(_spoke("Speaker 2", DAY, BASE + timedelta(minutes=1), "other"))
+
+    async with _client(repos) as client:
+        resp = await client.post(
+            f"/day/{DAY}/assign-speaker",
+            json={"speaker_label": "Speaker 1", "person_local_id": "you"},
+        )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["reassigned"] == 1
+    # "you" resolves to no Person doc, so it's excluded from the day's people
+    # list (same as any other unresolved label) — but the event itself is
+    # rewritten and shows up in the day's events.
+    assert body["day"]["people"] == []
+    you_events = await repos.events.list_for_person("you")
+    assert {e.text for e in you_events} == {"one"}
+    assert await repos.events.count({"person_id": "Speaker 2"}) == 1
+
+
 async def test_assign_speaker_unknown_person_404(repos: Repositories) -> None:
     """Binding to a Person that doesn't exist is a 404; events are untouched."""
     await repos.events.insert(_spoke("Speaker 1", DAY, BASE, "one"))
