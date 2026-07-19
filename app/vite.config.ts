@@ -1,4 +1,4 @@
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { fileURLToPath, URL } from "node:url";
@@ -61,5 +61,9 @@ export default defineConfig({
     environment: "jsdom",
     setupFiles: "./src/test/setup.ts",
     css: true,
+    // Playwright's e2e/ specs (playwright.config.ts) are a separate runner
+    // (`pnpm test:e2e`) — vitest's default include glob would otherwise also
+    // pick up *.spec.ts here and crash trying to run Playwright's test() API.
+    exclude: [...configDefaults.exclude, "e2e/**"],
   },
 });
