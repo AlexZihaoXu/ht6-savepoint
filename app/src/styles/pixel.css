@@ -209,8 +209,7 @@
 /* ---- scene actors -------------------------------------------------------- */
 
 /* Wandering actors: positions are written per animation frame from the
-   wander sim — no left/top transition (it would lag every frame; the
-   whistle line-up sets its own transition inline). */
+   wander sim — no left/top transition (it would lag every frame). */
 .sp-actor-free {
   position: absolute;
 }

@@ -13,6 +13,18 @@ export type PeopleSort = "az" | "recent";
 export const RECENT_MS = 3 * 86400000;
 
 /**
+ * Whether a last-seen timestamp is recent enough to surface (within the last
+ * few days). Drives the People pop-up's far-right "seen …" line, which shows
+ * only for people you've run into lately. `now` is injectable for tests.
+ */
+export function isRecentlySeen(
+  lastSeen: string | null,
+  now = Date.now(),
+): boolean {
+  return !!lastSeen && now - new Date(lastSeen).getTime() < RECENT_MS;
+}
+
+/**
  * The section header a display name files under: its first letter (accents
  * folded, so "Émile" files under E), else "#" for digits/symbols/empty.
  */
@@ -34,9 +46,7 @@ export function filterPeople(
 ): ApiPerson[] {
   if (filter === "favorites") return people.filter((p) => p.favorite);
   if (filter === "recents")
-    return people.filter(
-      (p) => !!p.last_seen && now - new Date(p.last_seen).getTime() < RECENT_MS,
-    );
+    return people.filter((p) => isRecentlySeen(p.last_seen, now));
   return people;
 }
 

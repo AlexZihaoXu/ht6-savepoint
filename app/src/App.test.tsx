@@ -25,7 +25,7 @@ describe("App shell", () => {
     ).toBeInTheDocument();
   });
 
-  it("navigates to the People list via the pixel bottom bar", async () => {
+  it("opens the People pop-up via the pixel bottom bar", async () => {
     const user = userEvent.setup();
     render(<App />);
 
@@ -37,12 +37,10 @@ describe("App shell", () => {
       ),
     );
 
+    // People is a pop-up overlay now (waterprism), not a full page — the nav
+    // opens the dialog rather than routing to a titled People screen.
     expect(
-      await screen.findByRole(
-        "heading",
-        { level: 1, name: /people/i },
-        { timeout: 3000 },
-      ),
+      await screen.findByRole("dialog", { name: "People" }, { timeout: 3000 }),
     ).toBeInTheDocument();
   });
 

@@ -9,8 +9,8 @@ import { PageFallback } from "./PageFallback";
 // Route-level code-splitting: each page is its own chunk, so the initial
 // bundle stays small and route-only dependencies download only when that
 // screen is opened.
-const PeoplePage = lazy(() =>
-  import("@/pages/PeoplePage").then((m) => ({ default: m.PeoplePage })),
+const PeopleModal = lazy(() =>
+  import("@/components/PeopleModal").then((m) => ({ default: m.PeopleModal })),
 );
 const PlazaPage = lazy(() =>
   import("@/pages/PlazaPage").then((m) => ({ default: m.PlazaPage })),
@@ -88,10 +88,10 @@ export function AppShell() {
             <Route path="/plaza" element={page(PlazaPage, true)} />
             <Route path="/scene" element={page(DayScenePage, true)} />
             <Route path="/scene/:date" element={page(DayScenePage, true)} />
-            <Route path="/people" element={page(PeoplePage, true)} />
-            {/* Person profile is a pop-up now, not its own page — the deep-link
-                lands on PeoplePage, which opens the modal for :id. */}
-            <Route path="/people/:id" element={page(PeoplePage, true)} />
+            {/* People is a pop-up overlay now, not a full page (waterprism);
+                the /people/:id deep-link opens that person's profile on top. */}
+            <Route path="/people" element={page(PeopleModal, true)} />
+            <Route path="/people/:id" element={page(PeopleModal, true)} />
             <Route path="/record" element={page(RecordPage, true)} />
             <Route path="/voice-setup" element={page(VoiceSetupPage, true)} />
             <Route path="*" element={<Navigate to="/plaza" replace />} />

@@ -1,15 +1,14 @@
 /**
  * Main page — ONE continuous pixel world you swipe between (scroll-snap):
- *   panel 1: the character plaza — everyone from `/people` wandering a plot;
+ *   panel 1: the character plaza — everyone from `/people` free-roaming a plot;
  *   panel 2: the calendar garden — `/days` as a month of growing plants.
- * Matches waterprism's mockup: wooden Savepoint header, whistle + Past
- * floating controls, and the [ Today ][ journal ][ people ] bottom bar.
+ * Wooden Savepoint header, floating camera + clean-save controls, and the
+ * Home · People · Record bottom nav.
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useReducedMotion } from "framer-motion";
-import { GiWhistle } from "react-icons/gi";
 import {
   PiCaretDown,
   PiCaretLeft,
@@ -71,7 +70,6 @@ export function PlazaPage() {
   const [view, setView] = useState<0 | 1>(
     searchParams.get("view") === "garden" ? 1 : 0,
   );
-  const [lined, setLined] = useState(false);
   // "Clean the save" — the confirm-gated wipe of all People + moments.
   const [cleanOpen, setCleanOpen] = useState(false);
   const [cleaning, setCleaning] = useState(false);
@@ -173,7 +171,6 @@ export function PlazaPage() {
           <PlazaPanel
             people={people}
             error={peopleError}
-            lined={lined}
             active={view === 0}
             onRenamed={applyRename}
             onOpenProfile={setProfileId}
@@ -181,22 +178,10 @@ export function PlazaPage() {
           <GardenPanel days={days} error={daysError} active={view === 1} />
         </div>
 
-        {/* floating controls (mic + whistle + clean), per the mockup */}
-        <div className="absolute right-3 bottom-9 z-20 flex flex-col items-end gap-2">
+        {/* floating controls (camera + clean-save), per the mockup */}
+        <div className="absolute right-3 bottom-9 z-20 flex flex-col items-end gap-2.5">
           {/* SAV-40 first pass — placement is provisional, team may reposition */}
           <MicCapture />
-          <button
-            type="button"
-            aria-label={lined ? "Free roam" : "Whistle — line everyone up"}
-            aria-pressed={lined}
-            className="pixel-btn flex h-12 w-14 items-center justify-center"
-            onClick={() => {
-              setLined((v) => !v);
-              gotoPanel(0);
-            }}
-          >
-            <Icon icon={GiWhistle} size={26} />
-          </button>
           {/* clean the save — confirm-gated wipe of everyone + every moment */}
           <button
             type="button"
@@ -330,9 +315,6 @@ function seededRng(seed: string): Rng {
   return () => rand(seed, n++);
 }
 
-const ACTOR_TRANSITION =
-  "left 0.9s cubic-bezier(0.4, 0, 0.2, 1), top 0.9s cubic-bezier(0.4, 0, 0.2, 1)";
-
 /**
  * The sprite-facing animation inputs the wander sim feeds PixelSprite.
  * Position/gait stay imperative (per-frame style writes); facing, walking
@@ -354,14 +336,12 @@ const WALK_EPS = 1;
 function PlazaPanel({
   people,
   error,
-  lined,
   active,
   onRenamed,
   onOpenProfile,
 }: {
   people: ApiPerson[] | null;
   error: string | null;
-  lined: boolean;
   /** Swiped off-screen panels are inert — no tab stops, no stray taps. */
   active: boolean;
   /** Push an inline rename back up so the panel's people list re-renders. */
@@ -404,10 +384,7 @@ function PlazaPanel({
       const [bx, by] = SLOTS[i % SLOTS.length];
       const sx = bx + (rand(p.local_id, 1) - 0.5) * 9;
       const sy = by + (rand(p.local_id, 2) - 0.5) * 9;
-      const cols = Math.min(Math.max(list.length, 1), 4);
-      const lx = ((i % cols) + 0.5) * (100 / cols);
-      const ly = 30 + Math.floor(i / cols) * 32;
-      return { p, sx, sy, lx, ly };
+      return { p, sx, sy };
     });
   }, [people]);
 
@@ -420,14 +397,9 @@ function PlazaPanel({
     [people],
   );
 
-  // Line-up tidies the plaza — close any open bubble.
-  useEffect(() => {
-    if (lined) setSelected(null);
-  }, [lined]);
-
   // The wander engine: sim state lives in refs; this effect owns positioning
-  // (per-frame styles while wandering, transitioned styles for line-up,
-  // static placement under prefers-reduced-motion).
+  // (per-frame styles while free-roaming; static placement under
+  // prefers-reduced-motion).
   useEffect(() => {
     const plot = plotRef.current;
     if (!plot || placed.length === 0) return;
@@ -500,8 +472,8 @@ function PlazaPanel({
           !talking &&
           s.idleFor <= 0 &&
           s.speed > WALK_EPS;
-        // Static layouts (whistle line / reduced-motion) face everyone
-        // forward, matching the old un-flipped standing pose.
+        // The reduced-motion static scatter faces everyone forward, matching
+        // the old un-flipped standing pose.
         const facing = freeRoam ? s.facing : 1;
         // ONE bubble per chatting pair, floated between the two heads —
         // owned by the left (right-facing) talker.
@@ -533,10 +505,10 @@ function PlazaPanel({
       }
     };
 
-    const freeRoam = !lined && !reduce;
+    const freeRoam = !reduce;
 
-    // Whistle / reduced-motion snaps everyone to attention — conversations
-    // break up (stale stance targets must not survive into the next roam).
+    // Reduced-motion has no live sim — clear any stale conversation state so
+    // stance targets don't survive into a later roam.
     if (!freeRoam) {
       for (const s of sim) {
         s.talkPartner = null;
@@ -544,12 +516,12 @@ function PlazaPanel({
       }
     }
 
-    // Static layouts (whistle line / reduced-motion) place from the curated
-    // percentages, so they can be re-derived at any plot size.
+    // The reduced-motion static scatter places from the curated percentages,
+    // so it can be re-derived at any plot size.
     const placeStatic = () => {
       sim.forEach((s, i) => {
-        s.x = ((lined ? placed[i].lx : placed[i].sx) / 100) * w;
-        s.y = ((lined ? placed[i].ly : placed[i].sy) / 100) * h;
+        s.x = (placed[i].sx / 100) * w;
+        s.y = (placed[i].sy / 100) * h;
         s.gaitT = 0;
         paint(s, false);
       });
@@ -570,8 +542,8 @@ function PlazaPanel({
       };
       raf = requestAnimationFrame(tick);
     } else {
-      // Whistle line (CSS-transitioned) or reduced-motion scatter (instant).
-      setTransition(lined && !reduce ? ACTOR_TRANSITION : "none");
+      // Reduced-motion scatter (instant, no rAF loop).
+      setTransition("none");
       placeStatic();
       syncAnim(false);
     }
@@ -596,7 +568,7 @@ function PlazaPanel({
       if (raf) cancelAnimationFrame(raf);
       ro.disconnect();
     };
-  }, [placed, lined, reduce, selected]);
+  }, [placed, reduce, selected]);
 
   return (
     <section
@@ -652,7 +624,7 @@ function PlazaPanel({
           </p>
         )}
 
-        {placed.map(({ p, sx, sy, lx }) => {
+        {placed.map(({ p, sx, sy }) => {
           const isSel = selected?.id === p.local_id;
           return (
             <div
@@ -680,11 +652,7 @@ function PlazaPanel({
                   }
                   const plotW = plotRef.current?.clientWidth || 1;
                   const s = simRef.current.find((s) => s.id === p.local_id);
-                  const xPct = lined
-                    ? lx
-                    : s && !reduce
-                      ? (s.x / plotW) * 100
-                      : sx;
+                  const xPct = s && !reduce ? (s.x / plotW) * 100 : sx;
                   setSelected({ id: p.local_id, xPct });
                 }}
               >

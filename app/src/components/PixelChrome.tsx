@@ -5,7 +5,7 @@
  * with three destinations — Home · People · Record.
  */
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   PiHouseFill,
@@ -23,6 +23,32 @@ import { getCurrentTheme, toggleTheme, type ThemeMode } from "@/lib/theme";
 export function PixelHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [mode, setMode] = useState<ThemeMode>(() => getCurrentTheme());
+  const menuRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  // Dismiss the dropdown on an outside tap/click or Escape — a menu that only
+  // its own button could close feels stuck once it's open.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onPointer = (e: PointerEvent) => {
+      const target = e.target as Node;
+      if (
+        menuRef.current?.contains(target) ||
+        buttonRef.current?.contains(target)
+      )
+        return;
+      setMenuOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [menuOpen]);
 
   return (
     <header className="wood-bar relative z-40 flex h-[calc(3.5rem_+_var(--sat))] flex-none items-center justify-between px-3 pt-[var(--sat)]">
@@ -48,6 +74,7 @@ export function PixelHeader() {
       </span>
 
       <button
+        ref={buttonRef}
         type="button"
         aria-label="Menu"
         aria-expanded={menuOpen}
@@ -58,7 +85,11 @@ export function PixelHeader() {
       </button>
 
       {menuOpen && (
-        <div className="pixel-bubble absolute top-full right-2 z-50 mt-1 flex w-44 flex-col p-1 text-sm">
+        <div
+          ref={menuRef}
+          role="menu"
+          className="pixel-bubble absolute top-full right-2 z-50 mt-1 flex w-44 flex-col p-1 text-sm"
+        >
           <button
             type="button"
             className="flex items-center gap-2 px-3 py-2.5 text-left font-medium"
