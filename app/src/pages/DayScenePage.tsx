@@ -405,9 +405,18 @@ function StageActor({
       }`}
       style={{ top: -(STAGE_SIZE - STAGE_CLIP) }}
     >
-      {/* the pop-in animates ONLY opacity/scale — the actor mounts already
-          at its final spot, so a partner swap can't flash or jump */}
-      <div className={enter && !reduce ? "sp-pop" : ""}>
+      {/* a new partner WALKS IN from their edge before settling on their
+          mark (waterprism: people approach, then the scene plays); reduced
+          motion mounts them in place */}
+      <div
+        className={
+          enter && !reduce
+            ? side === "right"
+              ? "sp-walk-in-r"
+              : "sp-walk-in-l"
+            : ""
+        }
+      >
         <div
           className={`relative transition-[opacity,filter,transform] duration-500 ${
             lit && !reduce ? "sp-bob" : ""

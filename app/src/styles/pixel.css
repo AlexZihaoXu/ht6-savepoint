@@ -234,6 +234,33 @@
     transform: scale(1);
   }
 }
+/* a conversation partner walking onto their mark from their own edge */
+.sp-walk-in-r {
+  animation: sp-walk-in-r 0.62s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.sp-walk-in-l {
+  animation: sp-walk-in-l 0.62s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes sp-walk-in-r {
+  from {
+    opacity: 0;
+    transform: translateX(40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes sp-walk-in-l {
+  from {
+    opacity: 0;
+    transform: translateX(-40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
 @keyframes sp-bob {
   0%,
   100% {
