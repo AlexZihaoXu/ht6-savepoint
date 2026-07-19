@@ -80,6 +80,11 @@ class BaseRepository(Generic[ModelT]):
         result = await self._col.delete_one({"_id": id_})
         return bool(result.deleted_count)
 
+    async def clear(self) -> int:
+        """Delete every document in the collection; return how many were removed."""
+        result = await self._col.delete_many({})
+        return int(result.deleted_count)
+
 
 class PeopleRepository(BaseRepository[Person]):
     """People — keyed by the stable ``local_id`` so re-seen people stay one doc."""
