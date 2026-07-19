@@ -27,6 +27,9 @@ const PastMonthPage = lazy(() =>
 const CustomizePage = lazy(() =>
   import("@/pages/CustomizePage").then((m) => ({ default: m.CustomizePage })),
 );
+const RecordPage = lazy(() =>
+  import("@/pages/RecordPage").then((m) => ({ default: m.RecordPage })),
+);
 
 /**
  * Animated, suspense-wrapped route element. The Suspense boundary sits INSIDE
@@ -62,7 +65,8 @@ export function AppShell() {
     location.pathname.startsWith("/scene") ||
     location.pathname.startsWith("/people") ||
     location.pathname.startsWith("/past") ||
-    location.pathname.startsWith("/customize");
+    location.pathname.startsWith("/customize") ||
+    location.pathname.startsWith("/record");
 
   // New screen → start reading from the top (the window is the scroller).
   useEffect(() => {
@@ -93,6 +97,7 @@ export function AppShell() {
             <Route path="/people/:id" element={page(PersonPage, true)} />
             <Route path="/past/:month" element={page(PastMonthPage, true)} />
             <Route path="/customize" element={page(CustomizePage, true)} />
+            <Route path="/record" element={page(RecordPage, true)} />
             <Route path="*" element={<Navigate to="/plaza" replace />} />
           </Routes>
         </AnimatePresence>

@@ -14,11 +14,12 @@ from pathlib import Path
 
 from httpx import ASGITransport, AsyncClient
 
-from savepoint_server.api.speech import get_repos
+from savepoint_server.api.speech import get_repos, get_speech_transcriber
 from savepoint_server.db import Repositories
 from savepoint_server.main import app
 from savepoint_server.models import EventType, Transcript
 from savepoint_server.services.speech import (
+    AudioInput,
     StubTranscriber,
     event_from_segment,
     get_transcriber,
@@ -154,3 +155,67 @@ async def test_transcribe_endpoint_rejects_bad_day_id_with_400(repos: Repositori
         app.dependency_overrides.pop(get_repos, None)
     # A bad day_id never wrote anything.
     assert await repos.events.count({}) == 0
+
+
+class _RaisingTranscriber:
+    """A transcriber that always fails — used to prove /preview never 500s."""
+
+    def transcribe(self, audio: AudioInput) -> Transcript:
+        raise RuntimeError("boom: decoding failed")
+
+
+async def test_preview_happy_path_returns_segments() -> None:
+    """POST /speech/preview returns the stub's diarized segments, store-free."""
+    app.dependency_overrides[get_speech_transcriber] = lambda: StubTranscriber()
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+            resp = await client.post(
+                "/speech/preview",
+                files={"audio": ("clip.webm", b"fake audio bytes", "audio/webm")},
+            )
+    finally:
+        app.dependency_overrides.pop(get_speech_transcriber, None)
+
+    assert resp.status_code == 200
+    expected = _expected_transcript()
+    segments = resp.json()["segments"]
+    assert [s["speaker"] for s in segments] == [seg.speaker for seg in expected.segments]
+    assert [s["text"] for s in segments] == [seg.text for seg in expected.segments]
+    assert [s["start"] for s in segments] == [seg.start for seg in expected.segments]
+    assert [s["end"] for s in segments] == [seg.end for seg in expected.segments]
+    # Every segment carries exactly the contract keys.
+    assert all(set(s) == {"speaker", "start", "end", "text"} for s in segments)
+
+
+async def test_preview_rejects_empty_upload_with_400() -> None:
+    """An empty audio body is a clean 400, not a transcription attempt."""
+    app.dependency_overrides[get_speech_transcriber] = lambda: StubTranscriber()
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+            resp = await client.post(
+                "/speech/preview",
+                files={"audio": ("clip.webm", b"", "audio/webm")},
+            )
+    finally:
+        app.dependency_overrides.pop(get_speech_transcriber, None)
+
+    assert resp.status_code == 400
+
+
+async def test_preview_swallows_transcriber_errors_with_200_empty() -> None:
+    """A failing transcriber never 500s — /preview returns 200 + empty segments."""
+    app.dependency_overrides[get_speech_transcriber] = _RaisingTranscriber
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+            resp = await client.post(
+                "/speech/preview",
+                files={"audio": ("clip.webm", b"fake audio bytes", "audio/webm")},
+            )
+    finally:
+        app.dependency_overrides.pop(get_speech_transcriber, None)
+
+    assert resp.status_code == 200
+    assert resp.json() == {"segments": []}
