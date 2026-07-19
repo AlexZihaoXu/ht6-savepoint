@@ -45,7 +45,7 @@ import {
   Rock,
   Tree,
 } from "@/lib/scene";
-import { rand, relativeSeen } from "@/lib/scene-utils";
+import { rand, relativeSeen, talkingToId } from "@/lib/scene-utils";
 import {
   createWanderer,
   gaitOffset,
@@ -397,6 +397,15 @@ function PlazaPanel({
     });
   }, [people]);
 
+  // Who the Pi camera most recently confirmed present — the plaza's live
+  // "who am I facing right now" highlight. Re-derived on every /people poll
+  // tick (PlazaPage's PEOPLE_POLL_MS), which is a fine-enough refresh cadence
+  // for a signal that isn't itself continuous (see talkingToId's docstring).
+  const talkingTo = useMemo(
+    () => talkingToId(people ?? [], Date.now()),
+    [people],
+  );
+
   // Line-up tidies the plaza — close any open bubble.
   useEffect(() => {
     if (lined) setSelected(null);
@@ -670,7 +679,9 @@ function PlazaPanel({
                     if (el) spriteEls.current.set(p.local_id, el);
                     else spriteEls.current.delete(p.local_id);
                   }}
-                  className="sp-flip block"
+                  className={`sp-flip block ${
+                    p.local_id === talkingTo ? "sp-live-talking" : ""
+                  }`}
                 >
                   <PixelSprite
                     localId={p.local_id}

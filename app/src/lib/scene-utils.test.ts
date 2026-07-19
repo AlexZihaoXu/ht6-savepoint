@@ -4,11 +4,13 @@ import {
   fallbackAvatar,
   formatClock,
   isUnnamedSpeaker,
+  LIVE_TALK_WINDOW_MS,
   nearestEventTs,
   partnerAt,
+  talkingToId,
   YOU_AVATAR,
 } from "./scene-utils";
-import type { ApiEvent } from "./api";
+import type { ApiEvent, ApiPerson } from "./api";
 
 describe("scene helpers", () => {
   it("gives the same fallback avatar for the same id (deterministic)", () => {
@@ -166,5 +168,56 @@ describe("partnerAt (who shares the stage with you)", () => {
   it("is null when nobody else appears all day (or no events)", () => {
     expect(partnerAt([ev("you"), ev("you")], 1)).toBeNull();
     expect(partnerAt([], 0)).toBeNull();
+  });
+});
+
+describe("talkingToId (plaza live camera highlight)", () => {
+  const NOW = new Date("2026-07-19T12:00:00Z").getTime();
+  const person = (local_id: string, lastSeenIso: string | null): ApiPerson => ({
+    local_id,
+    name: null,
+    avatar_params: {
+      skin_tone: "fair",
+      hair_color: "brown",
+      hair_style: "short",
+      glasses: false,
+      hat: null,
+      shirt_color: "blue",
+    },
+    tags: [],
+    favorite: false,
+    first_seen: lastSeenIso,
+    last_seen: lastSeenIso,
+    notes: null,
+    bio: null,
+    sprite: null,
+  });
+
+  it("picks whoever was seen most recently, within the live window", () => {
+    const people = [
+      person("a", new Date(NOW - 40_000).toISOString()),
+      person("b", new Date(NOW - 5_000).toISOString()),
+      person("c", new Date(NOW - 55_000).toISOString()),
+    ];
+    expect(talkingToId(people, NOW)).toBe("b");
+  });
+
+  it("is null once the most recent sighting falls outside the window", () => {
+    const people = [
+      person("a", new Date(NOW - LIVE_TALK_WINDOW_MS - 1).toISOString()),
+    ];
+    expect(talkingToId(people, NOW)).toBeNull();
+  });
+
+  it("is null with no people, or people never seen", () => {
+    expect(talkingToId([], NOW)).toBeNull();
+    expect(talkingToId([person("a", null)], NOW)).toBeNull();
+  });
+
+  it("is exactly at the window boundary — inclusive", () => {
+    const people = [
+      person("a", new Date(NOW - LIVE_TALK_WINDOW_MS).toISOString()),
+    ];
+    expect(talkingToId(people, NOW)).toBe("a");
   });
 });

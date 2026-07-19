@@ -271,6 +271,30 @@
   }
 }
 
+/* Live camera highlight: a soft pulsing glow behind whoever the Pi camera
+   most recently confirmed present (PlazaPage's talkingToId) — "who am I
+   facing right now", distinct from the ambient NPC-to-NPC chat-bubble sim
+   below. Ring, not outline, so it reads at small sprite sizes. */
+.sp-live-talking {
+  animation: sp-live-glow 1.8s ease-in-out infinite;
+  border-radius: 999px;
+}
+@keyframes sp-live-glow {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 4px rgba(249, 243, 96, 0.55));
+  }
+  50% {
+    filter: drop-shadow(0 0 10px rgba(249, 243, 96, 0.95));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sp-live-talking {
+    animation: none;
+    filter: drop-shadow(0 0 8px rgba(249, 243, 96, 0.8));
+  }
+}
+
 /* Plaza chat bubble: chat-bubbles.png is a 96×32 strip of three 32×32
    frames (green dots filling in). steps(3) flicks through them at 5 fps —
    a pixel "talking…" loop. Offsets from the pair are set inline. */

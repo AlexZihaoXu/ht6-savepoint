@@ -78,6 +78,32 @@ export function partnerAt(
   return null;
 }
 
+/** How long a camera sighting stays "fresh" enough to count as a live conversation. */
+export const LIVE_TALK_WINDOW_MS = 60_000;
+
+/**
+ * Which person (if any) the camera most recently confirmed present, within
+ * LIVE_TALK_WINDOW_MS of `nowMs` — the plaza's "who am I facing right now"
+ * highlight. Backed by each ApiPerson's `last_seen` from `/ingest/video`.
+ *
+ * Not a perfectly continuous signal: the edge only re-emits a "seen" event
+ * when a track is (re)confirmed present (see edge/src/savepoint_edge/main.py
+ * — "a sustained presence emits exactly once"), not every frame someone
+ * stays in view. A real conversation's natural head movement re-triggers
+ * this often enough for the window above to stay a reasonable proxy; someone
+ * standing frozen, perfectly still, for over a minute would drop out of it.
+ */
+export function talkingToId(people: ApiPerson[], nowMs: number): string | null {
+  let best: { id: string; ts: number } | null = null;
+  for (const p of people) {
+    if (!p.last_seen) continue;
+    const ts = new Date(p.last_seen).getTime();
+    if (nowMs - ts > LIVE_TALK_WINDOW_MS) continue;
+    if (!best || ts > best.ts) best = { id: p.local_id, ts };
+  }
+  return best?.id ?? null;
+}
+
 /**
  * The timestamp (epoch ms) of the event nearest `targetMs` — used by the
  * day scene's `?t=` deep link to land the scrubber ON a conversation moment
