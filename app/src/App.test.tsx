@@ -10,14 +10,11 @@ describe("App shell", () => {
     render(<App />);
 
     // "/" redirects to /plaza — the immersive pixel chrome renders its
-    // wooden header and the plaza panel. Pages are lazy-loaded (route
-    // code-splitting), so await the Suspense boundary.
+    // wooden header (with the decorative, non-navigating Savepoint logotype)
+    // and the plaza panel. Pages are lazy-loaded (route code-splitting), so
+    // await the Suspense boundary.
     expect(
-      await screen.findByRole(
-        "link",
-        { name: /savepoint.*plaza/i },
-        { timeout: 3000 },
-      ),
+      await screen.findByText(/savepoint/i, undefined, { timeout: 3000 }),
     ).toBeInTheDocument();
     expect(
       await screen.findByLabelText(

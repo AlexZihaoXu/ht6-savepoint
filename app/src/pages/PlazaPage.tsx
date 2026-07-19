@@ -21,6 +21,7 @@ import {
 } from "react-icons/pi";
 import { Icon } from "@/components/Icon";
 import { MicCapture } from "@/components/MicCapture";
+import { PersonModal } from "@/components/PersonModal";
 import { PixelBottomNav, PixelHeader } from "@/components/PixelChrome";
 import { PixelSprite } from "@/lib/pixel-sprite";
 import {
@@ -75,6 +76,8 @@ export function PlazaPage() {
   const [cleanOpen, setCleanOpen] = useState(false);
   const [cleaning, setCleaning] = useState(false);
   const [cleanError, setCleanError] = useState<string | null>(null);
+  // Person profile pop-up (opened from a plaza character's bubble).
+  const [profileId, setProfileId] = useState<string | null>(null);
 
   useEffect(() => {
     const ac = new AbortController();
@@ -173,6 +176,7 @@ export function PlazaPage() {
             lined={lined}
             active={view === 0}
             onRenamed={applyRename}
+            onOpenProfile={setProfileId}
           />
           <GardenPanel days={days} error={daysError} active={view === 1} />
         </div>
@@ -305,6 +309,14 @@ export function PlazaPage() {
         </div>
       </div>
 
+      {profileId && (
+        <PersonModal
+          localId={profileId}
+          onClose={() => setProfileId(null)}
+          onRenamed={applyRename}
+        />
+      )}
+
       <PixelBottomNav />
     </div>
   );
@@ -345,6 +357,7 @@ function PlazaPanel({
   lined,
   active,
   onRenamed,
+  onOpenProfile,
 }: {
   people: ApiPerson[] | null;
   error: string | null;
@@ -353,8 +366,9 @@ function PlazaPanel({
   active: boolean;
   /** Push an inline rename back up so the panel's people list re-renders. */
   onRenamed: (localId: string, name: string | null) => void;
+  /** Open a character's profile pop-up (lifted into PlazaPage). */
+  onOpenProfile: (localId: string) => void;
 }) {
-  const navigate = useNavigate();
   const reduce = useReducedMotion();
   const [selected, setSelected] = useState<{ id: string; xPct: number } | null>(
     null,
@@ -722,7 +736,7 @@ function PlazaPanel({
                 <PersonBubble
                   person={p}
                   x={selected.xPct}
-                  onOpen={() => navigate(`/people/${p.local_id}`)}
+                  onOpen={() => onOpenProfile(p.local_id)}
                   onRenamed={onRenamed}
                 />
               )}

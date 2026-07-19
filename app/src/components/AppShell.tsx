@@ -12,9 +12,6 @@ import { PageFallback } from "./PageFallback";
 const PeoplePage = lazy(() =>
   import("@/pages/PeoplePage").then((m) => ({ default: m.PeoplePage })),
 );
-const PersonPage = lazy(() =>
-  import("@/pages/PersonPage").then((m) => ({ default: m.PersonPage })),
-);
 const PlazaPage = lazy(() =>
   import("@/pages/PlazaPage").then((m) => ({ default: m.PlazaPage })),
 );
@@ -92,7 +89,9 @@ export function AppShell() {
             <Route path="/scene" element={page(DayScenePage, true)} />
             <Route path="/scene/:date" element={page(DayScenePage, true)} />
             <Route path="/people" element={page(PeoplePage, true)} />
-            <Route path="/people/:id" element={page(PersonPage, true)} />
+            {/* Person profile is a pop-up now, not its own page — the deep-link
+                lands on PeoplePage, which opens the modal for :id. */}
+            <Route path="/people/:id" element={page(PeoplePage, true)} />
             <Route path="/record" element={page(RecordPage, true)} />
             <Route path="/voice-setup" element={page(VoiceSetupPage, true)} />
             <Route path="*" element={<Navigate to="/plaza" replace />} />

@@ -1,15 +1,14 @@
-// Inline rename (person profile page): stubs fetch the same way
-// src/lib/record.test.ts does for the API layer, and renders the page
-// through react-router + ToastProvider the way src/App.test.tsx renders
-// whole screens — PersonPage calls useToast() on every render, so the
-// provider has to be mounted above it even outside the full AppShell.
+// Inline rename (person profile pop-up): stubs fetch the way the API-layer
+// tests do, and renders the modal under react-router + ToastProvider —
+// PersonModal calls useToast() on every render and renders react-router
+// <Link>s for its recent-interaction rows.
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter } from "react-router-dom";
 import { ToastProvider } from "@/components/Toast";
 import { API_BASE, type ApiPersonDetail } from "@/lib/api";
-import { PersonPage } from "./PersonPage";
+import { PersonModal } from "./PersonModal";
 
 const PERSON: ApiPersonDetail = {
   local_id: "demo-alex",
@@ -36,22 +35,24 @@ function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status });
 }
 
-function renderPersonPage() {
+function renderModal(onClose = vi.fn(), onRenamed = vi.fn()) {
   return render(
-    <MemoryRouter initialEntries={[`/people/${PERSON.local_id}`]}>
+    <MemoryRouter>
       <ToastProvider>
-        <Routes>
-          <Route path="/people/:id" element={<PersonPage />} />
-        </Routes>
+        <PersonModal
+          localId={PERSON.local_id}
+          onClose={onClose}
+          onRenamed={onRenamed}
+        />
       </ToastProvider>
     </MemoryRouter>,
   );
 }
 
-describe("PersonPage — rename", () => {
+describe("PersonModal — rename", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it("saves a new name via PATCH /people/{id} and shows it", async () => {
+  it("saves a new name via PATCH /people/{id}, shows it, and reports it up", async () => {
     const fetchMock = vi.fn(
       async (input: RequestInfo | URL, init?: RequestInit) => {
         const method = init?.method ?? "GET";
@@ -62,11 +63,12 @@ describe("PersonPage — rename", () => {
       },
     );
     vi.stubGlobal("fetch", fetchMock);
+    const onRenamed = vi.fn();
     const user = userEvent.setup();
 
-    renderPersonPage();
+    renderModal(vi.fn(), onRenamed);
 
-    expect(await screen.findByRole("heading", { level: 1 })).toHaveTextContent(
+    expect(await screen.findByRole("heading", { level: 2 })).toHaveTextContent(
       "Alex",
     );
 
@@ -78,8 +80,7 @@ describe("PersonPage — rename", () => {
     await user.type(input, "Jordan");
     await user.click(screen.getByRole("button", { name: /save name/i }));
 
-    // the input is gone (edit mode exited) and the heading shows the saved name
-    expect(await screen.findByRole("heading", { level: 1 })).toHaveTextContent(
+    expect(await screen.findByRole("heading", { level: 2 })).toHaveTextContent(
       "Jordan",
     );
     expect(
@@ -96,6 +97,7 @@ describe("PersonPage — rename", () => {
       "application/json",
     );
     expect(JSON.parse(init!.body as string)).toEqual({ name: "Jordan" });
+    expect(onRenamed).toHaveBeenCalledWith(PERSON.local_id, "Jordan");
   });
 
   it("on a failed save, toasts an error, stays editable, and never adopts the failed name", async () => {
@@ -110,9 +112,9 @@ describe("PersonPage — rename", () => {
     vi.stubGlobal("fetch", fetchMock);
     const user = userEvent.setup();
 
-    renderPersonPage();
+    renderModal();
 
-    expect(await screen.findByRole("heading", { level: 1 })).toHaveTextContent(
+    expect(await screen.findByRole("heading", { level: 2 })).toHaveTextContent(
       "Alex",
     );
 
@@ -126,14 +128,37 @@ describe("PersonPage — rename", () => {
       /couldn.t rename/i,
     );
 
-    // still in edit mode (draft intact, controls re-enabled) so the user can retry
     const retryInput = screen.getByRole("textbox", { name: /name/i });
     expect(retryInput).toHaveValue("Jordan");
     expect(retryInput).toBeEnabled();
     expect(screen.getByRole("button", { name: /save name/i })).toBeEnabled();
 
-    // the failed PATCH never got adopted — cancelling reveals the old name
     await user.click(screen.getByRole("button", { name: /cancel/i }));
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Alex");
+    expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent("Alex");
+  });
+});
+
+describe("PersonModal — close", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("closes on the X button and on a backdrop click", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse(PERSON)),
+    );
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+
+    renderModal(onClose);
+
+    await screen.findByRole("heading", { level: 2 });
+
+    await user.click(screen.getByRole("button", { name: /close/i }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    // backdrop (the presentation wrapper) also closes
+    const dialog = screen.getByRole("dialog");
+    await user.click(dialog.parentElement as HTMLElement);
+    expect(onClose).toHaveBeenCalledTimes(2);
   });
 });

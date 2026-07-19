@@ -1,8 +1,17 @@
-import { useEffect, useState, type ReactNode } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+/**
+ * Person profile as a pop-up (waterprism: "pop ups, not full pages").
+ *
+ * Renders the same profile content the old PersonPage did — sprite, name with
+ * inline rename, seen/first-met line, bio, tags, notes, recent interactions —
+ * inside a centered modal over a dimmed backdrop. Opened from in-app taps
+ * (a plaza character bubble, a People-list row) and from the /people/:id
+ * deep-link. Closing on a deep-link returns to /people (handled by the caller).
+ */
+
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Link } from "react-router-dom";
 import { Chip } from "@heroui/react";
 import {
-  PiCaretLeft,
   PiCaretRight,
   PiCheck,
   PiPencilSimple,
@@ -10,8 +19,7 @@ import {
   PiUserCircleDashed,
   PiX,
 } from "react-icons/pi";
-import { Icon } from "@/components/Icon";
-import { PixelBottomNav, PixelHeader } from "@/components/PixelChrome";
+import { Icon } from "./Icon";
 import { useToast } from "@/lib/toast";
 import { PixelSprite } from "@/lib/pixel-sprite";
 import {
@@ -33,21 +41,16 @@ function fmtDay(iso: string): string {
 
 type Status = "loading" | "ready" | "missing" | "error";
 
-/** Shared pixel chrome around every Person state (loading/missing/ready). */
-function PersonChrome({ children }: { children: ReactNode }) {
-  return (
-    <div className="app-h flex flex-col overflow-hidden">
-      <PixelHeader />
-      <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
-      <PixelBottomNav />
-    </div>
-  );
-}
-
-/** Person info — real `/people/{id}` data: sprite, bio, notes, recent days. */
-export function PersonPage() {
-  const { id } = useParams();
-  const navigate = useNavigate();
+export function PersonModal({
+  localId,
+  onClose,
+  onRenamed,
+}: {
+  localId: string;
+  onClose: () => void;
+  /** Push a rename back up so an underlying list/plaza reflects it at once. */
+  onRenamed?: (localId: string, name: string | null) => void;
+}) {
   const toast = useToast();
 
   const [person, setPerson] = useState<ApiPersonDetail | null>(null);
@@ -57,16 +60,13 @@ export function PersonPage() {
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
   const [savingName, setSavingName] = useState(false);
+  const closeRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    if (!id) {
-      setStatus("missing");
-      return;
-    }
     const ac = new AbortController();
     setStatus("loading");
     setPerson(null);
-    api.person(id, ac.signal).then(
+    api.person(localId, ac.signal).then(
       (p) => {
         setPerson(p);
         setStatus("ready");
@@ -79,66 +79,25 @@ export function PersonPage() {
       },
     );
     return () => ac.abort();
-  }, [id]);
+  }, [localId]);
 
-  if (status === "loading") {
-    return (
-      <PersonChrome>
-        <section className="flex flex-col items-center gap-3 py-12 text-center">
-          <p className="animate-pulse text-sm text-[var(--muted)]">
-            Loading your world…
-          </p>
-        </section>
-      </PersonChrome>
-    );
-  }
+  // Escape closes the modal — but while editing the name, Escape belongs to
+  // the rename input (cancel edit), so don't also tear down the modal then.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !editingName) onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose, editingName]);
 
-  if (status === "missing" || status === "error" || !person) {
-    return (
-      <PersonChrome>
-        <section className="flex flex-col items-center gap-3 px-4 py-12 text-center">
-          <Icon
-            icon={PiUserCircleDashed}
-            className="text-5xl text-[var(--muted)]"
-          />
-          <h1 className="font-pixel text-[13px]">
-            {status === "error" ? "Backend asleep…" : "No one here yet"}
-          </h1>
-          <p className="text-sm text-[var(--muted)]">
-            {status === "error"
-              ? "Couldn't reach the SavePoint API — is it up?"
-              : "We haven't met this character."}
-          </p>
-          <button
-            type="button"
-            className="pixel-btn touch-target mt-1 px-4 py-2"
-            onClick={() => navigate("/people")}
-          >
-            <span className="font-pixel text-[10px]">Back to People</span>
-          </button>
-        </section>
-      </PersonChrome>
-    );
-  }
-
-  const name = displayName(person);
-  // Most recent days this person appeared in (from their event history).
-  // `first` is their opening moment that day — the row's clock AND the
-  // deep-link target, so tapping lands at the start of that conversation.
-  const recentDays = [...person.events]
-    .sort((a, b) => b.ts.localeCompare(a.ts))
-    .reduce<Array<{ day: string; count: number; first: string }>>((acc, e) => {
-      const hit = acc.find((d) => d.day === e.day_id);
-      if (hit) {
-        hit.count += 1;
-        hit.first = e.ts; // descending scan → the last write is the earliest
-      } else if (acc.length < 5)
-        acc.push({ day: e.day_id, count: 1, first: e.ts });
-      return acc;
-    }, []);
+  // Move focus onto the dialog (its close button) when it opens.
+  useEffect(() => {
+    closeRef.current?.focus();
+  }, []);
 
   const startEditingName = () => {
-    setNameDraft(person.name ?? "");
+    setNameDraft(person?.name ?? "");
     setEditingName(true);
   };
 
@@ -149,10 +108,12 @@ export function PersonPage() {
   // Trim client-side, but an empty result is a legitimate save (clears the
   // name back to "Neighbor XXX" — see `displayName`), not a validation error.
   const saveName = async () => {
+    if (!person) return;
     setSavingName(true);
     try {
       const updated = await renamePerson(person.local_id, nameDraft.trim());
       setPerson((p) => (p ? { ...p, name: updated.name } : p));
+      onRenamed?.(person.local_id, updated.name);
       setEditingName(false);
     } catch (e) {
       const why =
@@ -166,20 +127,65 @@ export function PersonPage() {
     }
   };
 
-  return (
-    <PersonChrome>
-      <section
-        aria-labelledby="person-heading"
-        className="flex flex-col gap-5 px-4 pt-4 pb-6"
-      >
-        <Link
-          to="/people"
-          className="pixel-btn touch-target inline-flex items-center gap-1.5 self-start px-3 py-1.5"
-        >
-          <Icon icon={PiCaretLeft} size={12} />
-          <span className="font-pixel text-[9px]">People</span>
-        </Link>
+  let body: ReactNode;
 
+  if (status === "loading") {
+    body = (
+      <section className="flex flex-col items-center gap-3 py-12 text-center">
+        <p className="animate-pulse text-sm text-[var(--muted)]">
+          Loading your world…
+        </p>
+      </section>
+    );
+  } else if (status === "missing" || status === "error" || !person) {
+    body = (
+      <section className="flex flex-col items-center gap-3 px-2 py-12 text-center">
+        <Icon
+          icon={PiUserCircleDashed}
+          className="text-5xl text-[var(--muted)]"
+        />
+        <h2 className="font-pixel text-[13px]">
+          {status === "error" ? "Backend asleep…" : "No one here yet"}
+        </h2>
+        <p className="text-sm text-[var(--muted)]">
+          {status === "error"
+            ? "Couldn't reach the SavePoint API — is it up?"
+            : "We haven't met this character."}
+        </p>
+        <button
+          type="button"
+          className="pixel-btn touch-target mt-1 px-4 py-2"
+          onClick={onClose}
+        >
+          <span className="font-pixel text-[10px]">Close</span>
+        </button>
+      </section>
+    );
+  } else {
+    const name = displayName(person);
+    // Most recent days this person appeared in (from their event history).
+    // `first` is their opening moment that day — the row's clock AND the
+    // deep-link target, so tapping lands at the start of that conversation.
+    const recentDays = [...person.events]
+      .sort((a, b) => b.ts.localeCompare(a.ts))
+      .reduce<Array<{ day: string; count: number; first: string }>>(
+        (acc, e) => {
+          const hit = acc.find((d) => d.day === e.day_id);
+          if (hit) {
+            hit.count += 1;
+            hit.first = e.ts; // descending scan → the last write is the earliest
+          } else if (acc.length < 5)
+            acc.push({ day: e.day_id, count: 1, first: e.ts });
+          return acc;
+        },
+        [],
+      );
+
+    body = (
+      <section
+        aria-labelledby="person-modal-heading"
+        className="flex flex-col gap-5"
+      >
         <div className="flex items-center gap-4">
           <span className="sprite-bob">
             <PixelSprite
@@ -190,8 +196,8 @@ export function PersonPage() {
             />
           </span>
           <div className="min-w-0">
-            <h1
-              id="person-heading"
+            <h2
+              id="person-modal-heading"
               className="font-pixel flex flex-wrap items-center gap-2 text-[13px] leading-6 break-words"
             >
               {editingName ? (
@@ -254,7 +260,7 @@ export function PersonPage() {
                   </button>
                 </>
               )}
-            </h1>
+            </h2>
             <p className="mt-1 text-sm text-[var(--muted)]">
               Seen {relativeSeen(person.last_seen)}
               {person.first_seen
@@ -280,7 +286,7 @@ export function PersonPage() {
         )}
 
         <div className="pixel-panel">
-          <h2 className="font-pixel text-[10px]">Notes</h2>
+          <h3 className="font-pixel text-[10px]">Notes</h3>
           <p className="mt-2 text-sm leading-relaxed">
             {person.notes?.trim() ||
               "No notes yet — your next chat will fill this in."}
@@ -288,7 +294,7 @@ export function PersonPage() {
         </div>
 
         <div className="pixel-panel">
-          <h2 className="font-pixel text-[10px]">Recent interactions</h2>
+          <h3 className="font-pixel text-[10px]">Recent interactions</h3>
           <p className="mt-1 text-xs opacity-70">
             Tap a row to jump into that chat
           </p>
@@ -317,6 +323,33 @@ export function PersonPage() {
           </div>
         </div>
       </section>
-    </PersonChrome>
+    );
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4"
+      role="presentation"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={person ? displayName(person) : "Person profile"}
+        className="pixel-bubble sp-modal-card relative flex max-h-[85vh] w-full max-w-md flex-col p-0"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          ref={closeRef}
+          type="button"
+          aria-label="Close"
+          onClick={onClose}
+          className="pixel-btn touch-target absolute top-2 right-2 z-10 flex items-center justify-center"
+        >
+          <Icon icon={PiX} size={16} />
+        </button>
+        <div className="min-h-0 flex-1 overflow-y-auto p-4 pt-5">{body}</div>
+      </div>
+    </div>
   );
 }
