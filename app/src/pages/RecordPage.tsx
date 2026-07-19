@@ -14,8 +14,9 @@
  * jsdom; the state machine itself lives in `lib/record.ts` where it's tested.
  */
 
-import { useCallback, useEffect, useReducer, useRef } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useReducedMotion } from "framer-motion";
 import {
   PiArrowCounterClockwise,
   PiCaretLeft,
@@ -56,6 +57,8 @@ export function RecordPage() {
   const previewTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const inFlightRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
+  // Live mic stream, in state so the recording visualizer can tap it.
+  const [liveStream, setLiveStream] = useState<MediaStream | null>(null);
 
   // Touches refs only, so the identity is stable — safe as an effect dep.
   const releaseMedia = useCallback(() => {
@@ -66,6 +69,7 @@ export function RecordPage() {
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
     recorderRef.current = null;
+    setLiveStream(null);
   }, []);
 
   // Unmount (incl. the post-save navigation): drop the mic, timers, and any
@@ -189,6 +193,7 @@ export function RecordPage() {
     recorder.start(1000);
     recorderRef.current = recorder;
     streamRef.current = stream;
+    setLiveStream(stream); // feed the live spectrum visualizer
     dispatch({ type: "started" });
 
     const startedMs = startedAtRef.current.getTime();
@@ -261,6 +266,11 @@ export function RecordPage() {
         )}
       </div>
 
+      {/* live mic spectrum + duration, while recording */}
+      {state.phase === "recording" && (
+        <RecordingVisualizer stream={liveStream} elapsed={state.elapsed} />
+      )}
+
       {/* transcript panel */}
       <section
         aria-labelledby="record-heading"
@@ -319,6 +329,91 @@ export function RecordPage() {
             : "Live transcription is delayed a few seconds."}
         </p>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Live recording readout: elapsed duration + a real-time frequency spectrum
+ * (FFT magnitude per bin) drawn from the mic stream. Under prefers-reduced-
+ * motion we skip the animated canvas and just show the timer.
+ */
+function RecordingVisualizer({
+  stream,
+  elapsed,
+}: {
+  stream: MediaStream | null;
+  elapsed: number;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const reduce = useReducedMotion();
+
+  useEffect(() => {
+    if (!stream || reduce) return;
+    const Ctor =
+      window.AudioContext ??
+      (window as unknown as { webkitAudioContext?: typeof AudioContext })
+        .webkitAudioContext;
+    if (!Ctor) return;
+
+    const ctx = new Ctor();
+    const source = ctx.createMediaStreamSource(stream);
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 128; // 64 magnitude bins across the spectrum
+    analyser.smoothingTimeConstant = 0.75;
+    source.connect(analyser); // not to destination — analysis only, no echo
+    const bins = analyser.frequencyBinCount;
+    const data = new Uint8Array(bins);
+    const accent =
+      getComputedStyle(document.documentElement)
+        .getPropertyValue("--accent")
+        .trim() || "#8fb457";
+
+    let raf = 0;
+    const draw = () => {
+      raf = requestAnimationFrame(draw);
+      const canvas = canvasRef.current;
+      const c = canvas?.getContext("2d");
+      if (!canvas || !c) return;
+      const dpr = window.devicePixelRatio || 1;
+      const w = canvas.clientWidth;
+      const h = canvas.clientHeight;
+      if (canvas.width !== Math.round(w * dpr))
+        canvas.width = Math.round(w * dpr);
+      if (canvas.height !== Math.round(h * dpr))
+        canvas.height = Math.round(h * dpr);
+      c.setTransform(dpr, 0, 0, dpr, 0, 0);
+      c.clearRect(0, 0, w, h);
+      analyser.getByteFrequencyData(data);
+      const gap = 2;
+      const barW = (w - gap * (bins - 1)) / bins;
+      c.fillStyle = accent;
+      for (let i = 0; i < bins; i++) {
+        const barH = Math.max(2, (data[i] / 255) * h);
+        c.fillRect(i * (barW + gap), h - barH, barW, barH);
+      }
+    };
+    draw();
+
+    return () => {
+      cancelAnimationFrame(raf);
+      source.disconnect();
+      void ctx.close();
+    };
+  }, [stream, reduce]);
+
+  return (
+    <div className="pixel-bar flex flex-none items-center gap-3 px-3 py-2">
+      <span className="font-pixel flex-none text-[15px] tabular-nums">
+        {formatElapsed(elapsed)}
+      </span>
+      {reduce ? (
+        <span className="flex-1 text-center text-xs text-[var(--muted)]">
+          recording…
+        </span>
+      ) : (
+        <canvas ref={canvasRef} aria-hidden className="h-9 min-w-0 flex-1" />
+      )}
     </div>
   );
 }
