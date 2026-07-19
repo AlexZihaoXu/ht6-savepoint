@@ -84,22 +84,18 @@
   color: #222033;
 }
 
-/* SINGLE-layer pixel-art icon button — the .pixel-btn sprite (btn.png) is a
-   stacked double-tile that reads as "two layers" on a small corner control (a
-   modal's close X / filter). This is one crisp tile in the same pixel style as
-   the dialogue nameplate/panels: solid fill, a hard 1-colour border, sharp
-   corners (no radius), and a hard 1px-offset drop-shadow for depth — not the
-   smooth rounded CSS box, not the stacked sprite. Theme-aware. */
+/* Flat, SINGLE-layer icon button (modal close / filter) — a smooth rounded
+   tile in the warm bar palette, one clean layer (not the .pixel-btn stacked
+   double-tile). Theme-aware. (diamondpixals preferred this over the pixel-art
+   variant.) */
 .pixel-icon-btn {
   background: var(--pixel-bar-bg);
   color: var(--pixel-btn-fg);
-  border: 2px solid var(--pixel-btn-fg);
-  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.28);
-  image-rendering: pixelated;
+  border: 2px solid var(--pixel-bar-border);
+  border-radius: 7px;
 }
 .pixel-icon-btn:active {
   transform: translateY(1px);
-  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.28);
 }
 
 .pixel-bar {
