@@ -61,11 +61,20 @@ export function PersonModal({
   const [nameDraft, setNameDraft] = useState("");
   const [savingName, setSavingName] = useState(false);
   const closeRef = useRef<HTMLButtonElement>(null);
+  // Only a press that BOTH starts and ends on the backdrop should close — a
+  // drag that begins inside (e.g. selecting text in the rename field) and
+  // releases outside must not tear the modal down + lose the draft.
+  const pressOnBackdrop = useRef(false);
 
   useEffect(() => {
     const ac = new AbortController();
     setStatus("loading");
     setPerson(null);
+    // Re-pointing the same modal at a different person must not carry over an
+    // in-progress rename draft/edit from the previous one.
+    setEditingName(false);
+    setNameDraft("");
+    setSavingName(false);
     api.person(localId, ac.signal).then(
       (p) => {
         setPerson(p);
@@ -90,6 +99,18 @@ export function PersonModal({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose, editingName]);
+
+  // Lock background scroll while open and return focus to whatever opened the
+  // modal once it closes (captured before we move focus onto the dialog).
+  useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      opener?.focus?.();
+    };
+  }, []);
 
   // Move focus onto the dialog (its close button) when it opens.
   useEffect(() => {
@@ -330,7 +351,12 @@ export function PersonModal({
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4"
       role="presentation"
-      onClick={onClose}
+      onMouseDown={(e) => {
+        pressOnBackdrop.current = e.target === e.currentTarget;
+      }}
+      onClick={(e) => {
+        if (pressOnBackdrop.current && e.target === e.currentTarget) onClose();
+      }}
     >
       <div
         role="dialog"
