@@ -317,7 +317,11 @@ export function DayScenePage() {
 
         {/* timeline — tap a flag to jump to that moment (no drag scrubber) */}
         <div className="flex-none px-3 pt-1 pb-[max(0.9rem,env(safe-area-inset-bottom))]">
-          <TimelineFlags events={events} activeIdx={activeIdx} onPick={jumpTo} />
+          <TimelineFlags
+            events={events}
+            activeIdx={activeIdx}
+            onPick={jumpTo}
+          />
         </div>
 
         {/* tap-to-name person picker (SAV-57) */}
