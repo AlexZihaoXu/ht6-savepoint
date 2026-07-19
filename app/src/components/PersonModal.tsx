@@ -584,7 +584,7 @@ export function PersonModal({
           type="button"
           aria-label="Close"
           onClick={onClose}
-          className="pixel-btn touch-target absolute top-2 right-2 z-10 flex items-center justify-center"
+          className="pixel-icon-btn touch-target absolute top-2 right-2 z-10 flex items-center justify-center"
         >
           <Icon icon={PiX} size={16} />
         </button>
