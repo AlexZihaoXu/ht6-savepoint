@@ -44,7 +44,7 @@ class PersonUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str | None = Field(default=None, max_length=80)
-    notes: str | None = None
+    notes: str | None = Field(default=None, max_length=2000)
     tags: list[str] | None = None
 
 

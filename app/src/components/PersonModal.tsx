@@ -410,6 +410,13 @@ export function PersonModal({
                 if (e.key === "Enter") {
                   e.preventDefault();
                   addTag();
+                } else if (e.key === "Escape") {
+                  // Escape belongs to the tag input (clear the draft), not the
+                  // modal — stop it reaching the window close-on-Escape handler.
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setTagInput("");
+                  e.currentTarget.blur();
                 }
               }}
               disabled={savingTags}
