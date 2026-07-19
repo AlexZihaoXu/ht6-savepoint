@@ -75,6 +75,12 @@ def get_sprite_hook_dep(
     return build_sprite_hook(get_settings(), repos)
 
 
+def get_person_match_threshold_dep() -> float:
+    """Provide the configured nearest-embedding match threshold (overridable in
+    tests via dependency_overrides)."""
+    return get_settings().person_match_similarity_threshold
+
+
 def get_transcript_refiner_dep() -> list[TranscriptRefineClient] | None:
     """Provide the optional transcript-refine engine chain (``None`` unless
     ``transcript_refine`` is enabled and an engine is configured; overridable in tests
@@ -130,10 +136,13 @@ async def ingest_video(
     body: list[EdgeEvent],
     repos: Annotated[Repositories, Depends(get_repos)],
     sprite_hook: Annotated[NewPersonHook | None, Depends(get_sprite_hook_dep)],
+    match_threshold: Annotated[float, Depends(get_person_match_threshold_dep)],
 ) -> VideoIngestResult:
     """Land the Pi's edge detections (``list[EdgeEvent]``): upsert People + SEEN events."""
     try:
-        return await ingest_video_detections(body, repos=repos, sprite_hook=sprite_hook)
+        return await ingest_video_detections(
+            body, repos=repos, sprite_hook=sprite_hook, match_threshold=match_threshold
+        )
     except IngestValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

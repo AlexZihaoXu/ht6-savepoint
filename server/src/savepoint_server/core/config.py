@@ -104,6 +104,18 @@ class Settings(BaseSettings):
     # mounted at ``/sprites/{local_id}/{file}``. Override with SAVEPOINT_SPRITES_DIR.
     sprites_dir: str = Field(default_factory=_default_sprites_dir)
 
+    # --- Person identity matching (video ingest) ---
+    # Cross-session nearest-embedding fallback (DESIGN §9: "match by nearest
+    # face embedding, else new localId"). edge/identity_gallery.py's
+    # IdentityGallery is deliberately session-scoped/in-memory — a track that
+    # expires and reforms (e.g. a brief occlusion) mints a genuinely fresh
+    # local_id even for the same physical person who never left. Without this
+    # fallback, /ingest/video upserted strictly by exact local_id match, so
+    # every such re-mint created a brand-new duplicate Person. Same embedding
+    # space as the edge's own matching (w600k_mbf ArcFace, 512-d,
+    # L2-normalized) — see identity_gallery.py's own citation for why 0.30.
+    person_match_similarity_threshold: float = 0.30
+
     # --- Speech pipeline (SAV-32) ---
     # Which transcriber the speech service uses. "stub" (default) is CI-safe and
     # needs no torch; "real" shells out to jiucheng's vendored pipeline.

@@ -51,6 +51,21 @@ def _avatar_dict() -> dict[str, object]:
     }
 
 
+def _vector(seed: float) -> list[float]:
+    """A distinguishable-but-reproducible 512-d embedding (mirrors
+    edge/tests/test_identity_gallery.py's generator) — NOT a uniform fill
+    like [c]*512, which is a scalar multiple of every other uniform fill and
+    so is indistinguishable from any of them under cosine similarity."""
+    return [((seed + i * 0.37) % 1.0) - 0.5 for i in range(512)]
+
+
+def _jittered(seed: float, amount: float) -> list[float]:
+    """Same identity as _vector(seed), small per-dimension noise — models a
+    second, slightly-different capture of the same real face."""
+    base = _vector(seed)
+    return [v + (amount if i % 2 == 0 else -amount) for i, v in enumerate(base)]
+
+
 def _edge_event(
     local_id: str,
     seen_at: datetime,
@@ -192,6 +207,62 @@ async def test_ingest_video_embedding_not_wiped_when_absent(repos: Repositories)
     person = await repos.people.get_by_local_id("alex")
     assert person is not None
     assert person.face_embedding == embedding
+
+
+async def test_ingest_video_unrecognized_local_id_reuses_person_by_embedding(
+    repos: Repositories,
+) -> None:
+    """A never-before-seen local_id whose embedding closely matches an existing
+    Person (the edge's session-scoped IdentityGallery minted a fresh local_id
+    after a track expired/reformed, even though the same physical person never
+    left) must reuse that Person, not create a duplicate."""
+    embedding = _vector(0.11)
+    async with _client(repos) as client:
+        await client.post(
+            "/ingest/video", json=[_edge_event("edge-session1-abc", BASE, face_embedding=embedding)]
+        )
+        resp = await client.post(
+            "/ingest/video",
+            json=[
+                _edge_event(
+                    "edge-session2-xyz",  # brand-new local_id, same real face
+                    BASE + timedelta(minutes=1),
+                    face_embedding=_jittered(0.11, 0.02),
+                )
+            ],
+        )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    # Resolved onto the ORIGINAL person's local_id, not the new edge-supplied one.
+    assert [p["local_id"] for p in body["people"]] == ["edge-session1-abc"]
+    assert await repos.people.count() == 1
+    person = await repos.people.get_by_local_id("edge-session1-abc")
+    assert person is not None
+    assert person.last_seen == BASE + timedelta(minutes=1)
+    # Both detections landed as SEEN events under the one person.
+    events = await repos.events.list_for_day(DAY)
+    assert len(events) == 2
+    assert {e.person_id for e in events} == {"edge-session1-abc"}
+
+
+async def test_ingest_video_unrecognized_local_id_with_dissimilar_embedding_creates_new_person(
+    repos: Repositories,
+) -> None:
+    """A never-before-seen local_id whose embedding does NOT resemble anyone
+    known is a genuinely new person, not a false merge."""
+    async with _client(repos) as client:
+        await client.post(
+            "/ingest/video", json=[_edge_event("alex", BASE, face_embedding=_vector(0.11))]
+        )
+        resp = await client.post(
+            "/ingest/video",
+            json=[_edge_event("sam", BASE + timedelta(minutes=1), face_embedding=_vector(0.6))],
+        )
+
+    assert resp.status_code == 200
+    assert [p["local_id"] for p in resp.json()["people"]] == ["sam"]
+    assert await repos.people.count() == 2
 
 
 # --------------------------------------------------------------------------- #

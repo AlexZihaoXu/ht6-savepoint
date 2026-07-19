@@ -36,8 +36,10 @@ class Person(MongoModel):
     # optional here for enrolled speakers bound server-side.
     voice_embedding: list[float] | None = None
     # Face-attribute embedding from the edge detector (512-d, MobileFaceNet /
-    # w600k_mbf.onnx; see edge/types.py). Stored from EdgeEvents so future
-    # detections can nearest-neighbour match a face to a known Person (DESIGN §9).
+    # w600k_mbf.onnx; see edge/types.py). Stored from EdgeEvents so a later
+    # detection under an unrecognized local_id can nearest-neighbour match
+    # this Person instead of minting a duplicate (DESIGN §9; see
+    # services/ingest.py's _find_matching_person).
     face_embedding: list[float] | None = None
     tags: list[str] = Field(default_factory=list)
     favorite: bool = False

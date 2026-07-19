@@ -23,6 +23,7 @@ Everything is deterministic and torch-free on the default path, so the full
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
 from datetime import UTC, date, datetime
 
@@ -342,6 +343,48 @@ class AudioIngestResult(BaseModel):
     days: list[Day] = Field(default_factory=list)
 
 
+# Same embedding space as edge/identity_gallery.py's own matching (w600k_mbf
+# ArcFace, 512-d, L2-normalized) — see that module's citation for why 0.30.
+# Overridable per-call via Settings.person_match_similarity_threshold (routed
+# through the API layer); this is only the fallback for direct callers (tests,
+# the combined-ingest path) that don't thread one through.
+_DEFAULT_PERSON_MATCH_THRESHOLD = 0.30
+
+
+def _cosine_similarity(a: list[float], b: list[float]) -> float:
+    n = min(len(a), len(b))
+    if n == 0:
+        return 0.0
+    dot = sum(a[i] * b[i] for i in range(n))
+    norm_a = math.sqrt(sum(v * v for v in a[:n]))
+    norm_b = math.sqrt(sum(v * v for v in b[:n]))
+    if norm_a == 0.0 or norm_b == 0.0:
+        return 0.0
+    return dot / (norm_a * norm_b)
+
+
+async def _find_matching_person(
+    embedding: list[float], repos: Repositories, *, threshold: float
+) -> Person | None:
+    """Nearest-embedding match against every known Person (DESIGN §9).
+
+    Brute-force cosine similarity over the whole collection is fine at this
+    project's scale (a session's worth of distinct people, not a production
+    corpus) — no vector index exists or is needed yet. Returns the
+    highest-scoring candidate at or above ``threshold``, or ``None``.
+    """
+    best: Person | None = None
+    best_score = threshold
+    for candidate in await repos.people.list(limit=500):
+        if candidate.face_embedding is None:
+            continue
+        score = _cosine_similarity(embedding, candidate.face_embedding)
+        if score >= best_score:
+            best = candidate
+            best_score = score
+    return best
+
+
 async def _upsert_seen_person(
     local_id: str,
     avatar: AvatarParams,
@@ -350,16 +393,28 @@ async def _upsert_seen_person(
     face_embedding: list[float] | None,
     seen_at: datetime,
     sprite_hook: NewPersonHook | None = None,
+    match_threshold: float = _DEFAULT_PERSON_MATCH_THRESHOLD,
 ) -> Person:
-    """Upsert the Person for an edge detection, keyed by ``local_id``.
+    """Upsert the Person for an edge detection, keyed by ``local_id`` — falling
+    back to a nearest-embedding match against already-known people when this
+    exact ``local_id`` hasn't been seen before (DESIGN §9).
 
-    A re-seen person keeps their name/tags/first_seen and refreshes the avatar +
-    ``last_seen``; a new face is created with ``first_seen == last_seen == seen_at``.
-    ``face_embedding`` is stored when present but never overwritten with ``None`` (so
-    an event that omits it doesn't wipe a previously stored embedding). When a NEW
-    person is created and ``sprite_hook`` is supplied, it fires once (fire-and-forget).
+    That fallback matters because edge/identity_gallery.py's session-scoped,
+    in-memory IdentityGallery mints a genuinely fresh ``local_id`` whenever a
+    track expires and reforms (e.g. a brief occlusion or a missed detection
+    tick) — even for someone who never actually left. Without matching on the
+    face itself, every such re-mint would otherwise create a duplicate Person.
+
+    A re-seen person (by either route) keeps their name/tags/first_seen and
+    refreshes the avatar + ``last_seen``; a genuinely new face is created with
+    ``first_seen == last_seen == seen_at``. ``face_embedding`` is stored when
+    present but never overwritten with ``None`` (so an event that omits it
+    doesn't wipe a previously stored embedding). When a NEW person is created
+    and ``sprite_hook`` is supplied, it fires once (fire-and-forget).
     """
     existing = await repos.people.get_by_local_id(local_id)
+    if existing is None and face_embedding is not None:
+        existing = await _find_matching_person(face_embedding, repos, threshold=match_threshold)
     if existing is not None:
         update: dict[str, object] = {
             "avatar_params": avatar,
@@ -388,12 +443,15 @@ async def ingest_video_detections(
     *,
     repos: Repositories,
     sprite_hook: NewPersonHook | None = None,
+    match_threshold: float = _DEFAULT_PERSON_MATCH_THRESHOLD,
 ) -> VideoIngestResult:
     """Land the Pi's edge detections: upsert People + record SEEN events by ts.
 
     Each :class:`EdgeEvent` carries an absolute ``ts_unix_ms``, a stable ``local_id``,
-    the on-device ``avatar_params``, and (for a face) a ``face_embedding`` stored on
-    the Person for later nearest-neighbour matching (DESIGN §9). Timestamps are
+    the on-device ``avatar_params``, and (for a face) a ``face_embedding``. An
+    unrecognized ``local_id`` with an embedding is matched against known people by
+    nearest embedding before minting a new Person (DESIGN §9) — see
+    :func:`_upsert_seen_person` for why that fallback exists at all. Timestamps are
     converted up front, so a bad ``ts_unix_ms`` fails the whole batch with a clean
     400 before anything is written; detections are processed in timestamp order so
     ``last_seen`` stays chronological, and each day the batch touches is re-rolled up.
@@ -417,6 +475,7 @@ async def ingest_video_detections(
             face_embedding=edge.face_embedding,
             seen_at=ts,
             sprite_hook=sprite_hook,
+            match_threshold=match_threshold,
         )
         people[person.local_id] = person
         events.append(
