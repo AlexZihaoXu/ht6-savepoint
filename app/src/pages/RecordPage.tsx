@@ -30,6 +30,7 @@ import { PixelHeader } from "@/components/PixelChrome";
 import { useToast } from "@/lib/toast";
 import { ApiError, ingestAudioClip, previewTranscribe } from "@/lib/api";
 import { formatElapsed, micSupported, pickAudioMime } from "@/lib/mic";
+import { toUploadWav } from "@/lib/wav";
 import {
   RECORD_INITIAL,
   recordReducer,
@@ -91,8 +92,11 @@ export function RecordPage() {
     dispatch({ type: "preview-start" });
     try {
       const blob = new Blob(chunksRef.current, { type: mimeRef.current });
+      // Real diarizer only reads WAV — transcode before sending (best-effort;
+      // a partial mid-recording clip that won't decode just skips this tick).
+      const upload = await toUploadWav(blob);
       const { segments } = await previewTranscribe(
-        blob,
+        upload,
         abortRef.current?.signal,
       );
       dispatch({ type: "preview-ok", segments });
@@ -107,7 +111,10 @@ export function RecordPage() {
   /** Upload the finished clip; on success jump straight into today's scene. */
   const saveClip = async (blob: Blob) => {
     try {
-      const result = await ingestAudioClip(blob, startedAtRef.current);
+      // The real speech pipeline reads the upload as WAV verbatim; transcode
+      // the browser's webm/mp4 recording so the clip actually diarizes.
+      const upload = await toUploadWav(blob);
+      const result = await ingestAudioClip(upload, startedAtRef.current);
       toast.show("success", "Recording analyzed — here's your day");
       const latestTs = result.events
         .map((e) => e.ts)
