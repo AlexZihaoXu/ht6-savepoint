@@ -107,10 +107,26 @@ export function DayScenePage() {
     // re-runs exactly on navigation. NaN is Object.is-stable as a dep.
   }, [date, isToday, deepMs]);
 
-  const events = useMemo(() => view?.events ?? [], [view]);
   const peopleById = useMemo(
     () => new Map((view?.people ?? []).map((p) => [p.local_id, p])),
     [view],
+  );
+  // Playable scene beats: every "spoke" line, plus a "seen" moment ONLY when
+  // it resolves to a real, named person. An unnamed edge detection (nobody's
+  // ever tap-to-named them — that flow only covers raw "Speaker N" diarizer
+  // labels, not camera-only faces) has nothing worth saying, so it would
+  // otherwise render as a hollow "(Neighbor XXX stopped by.)" line. The
+  // event still exists in `view.events` / counts toward the day's summary —
+  // this is a display-only filter, so index-based navigation (activeIdx,
+  // partnerAt, jumpTo, the timeline flags, the transcript) all stay
+  // consistent by uniformly reading from this one derived array instead of
+  // the raw one.
+  const events = useMemo(
+    () =>
+      (view?.events ?? []).filter(
+        (e) => e.type !== "seen" || !!peopleById.get(e.person_id)?.name,
+      ),
+    [view, peopleById],
   );
 
   const t0 = events.length ? new Date(events[0].ts).getTime() : 0;

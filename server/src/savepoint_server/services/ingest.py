@@ -680,6 +680,20 @@ async def auto_match_speakers_to_seen_people(
     matched_person_id} for every label actually bound, so a caller holding
     its own in-memory copy of the just-inserted events (stamped with the raw
     labels, now stale) can patch them instead of re-querying.
+
+    Known gap (not fixed here — see services/voice.py's match_voice_to_you):
+    the wearer's own voice is never itself a SEEN event (nobody's behind
+    their own camera), so if voice-matching fails to positively label their
+    speech "you" (e.g. a near-miss on the similarity threshold), this pass
+    has no way to distinguish "genuinely a bystander" from "actually the
+    wearer, coincidentally near one" — both produce identical event data. A
+    day with only one distinct SEEN person is the shape of BOTH the
+    legitimate single-visitor case (already covered by
+    test_auto_match_binds_the_only_person_seen_nearby) and the wearer
+    misattribution failure mode, so it can't be gated on without breaking
+    the former to guard the latter. A real fix needs voice-match's
+    similarity score threaded in as a veto signal, not a purely
+    event-data-based heuristic here.
     """
     events = await repos.events.list_for_day(day_id)
     seen = [e for e in events if e.type is EventType.SEEN]
