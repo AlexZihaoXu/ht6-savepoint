@@ -24,6 +24,7 @@ compare), so the default dev/test path is completely unaffected.
 from __future__ import annotations
 
 import json
+import logging
 import math
 import subprocess
 import tempfile
@@ -39,6 +40,8 @@ from savepoint_server.services.speech import (
     _sniff_audio_extension,
     normalize_audio_to_wav,
 )
+
+logger = logging.getLogger(__name__)
 
 # Re-exported under a voice-specific name for callers that don't want to know
 # this is the same subprocess-pipeline-stage-failed error speech.py raises —
@@ -174,10 +177,17 @@ async def match_voice_to_you(
     label is left untouched, and at most one raw label is ever relabeled.
     """
     if not isinstance(transcriber, RealTranscriber) or not transcriber.last_voiceprints:
+        logger.info(
+            "match_voice_to_you: no-op — %s",
+            "not a RealTranscriber call"
+            if not isinstance(transcriber, RealTranscriber)
+            else "align.py returned no voiceprints for this call",
+        )
         return transcript
 
     wearer = await repos.wearer_voice.get("you")
     if wearer is None:
+        logger.info("match_voice_to_you: no-op — no wearer voice enrolled yet")
         return transcript
 
     best_label: str | None = None
@@ -189,7 +199,23 @@ async def match_voice_to_you(
             best_label = label
 
     if best_label is None or best_score < threshold:
+        # Logged at the score level (not just pass/fail) specifically because
+        # this is the hardest case to debug blind: a genuinely-you utterance
+        # that misses the bar looks identical, from the outside, to one that
+        # was never close — only the actual number tells them apart.
+        logger.info(
+            "match_voice_to_you: no-op — best candidate %r scored %.3f, below threshold %.3f",
+            best_label,
+            best_score,
+            threshold,
+        )
         return transcript
+    logger.info(
+        "match_voice_to_you: relabeling %r -> 'you' (score %.3f >= threshold %.3f)",
+        best_label,
+        best_score,
+        threshold,
+    )
 
     return Transcript(
         segments=[
