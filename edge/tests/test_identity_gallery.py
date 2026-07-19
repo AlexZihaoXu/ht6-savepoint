@@ -57,6 +57,20 @@ def test_overlapping_bbox_reuses_id_even_with_dissimilar_embedding():
     assert frontal == profile
 
 
+def test_pronounced_head_turn_still_reuses_id_via_spatial_continuity():
+    # A real profile turn shifts/shrinks the detected box more, and degrades
+    # the embedding more, than a toy jitter does (unlike
+    # test_overlapping_bbox_reuses_id_even_with_dissimilar_embedding's small
+    # nudge). IoU here (~0.21) and cosine similarity (~0.07) both fall below
+    # the ORIGINAL 0.3/0.35 defaults — this exact case used to fragment into
+    # two ids — but IoU still clears the current, lowered 0.15 threshold.
+    g = _gallery()
+    frontal = g.resolve(_vector(0.11), _HERE, 0).local_id
+    turned_bbox = (0.42, 0.38, 0.12, 0.18)  # smaller + shifted: IoU ~0.21
+    turned = g.resolve(_vector(0.3), turned_bbox, 100).local_id
+    assert frontal == turned
+
+
 def test_non_overlapping_bbox_falls_back_to_embedding_matching():
     g = _gallery()
     a = g.resolve(_vector(0.11), _HERE, 0).local_id

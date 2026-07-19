@@ -69,13 +69,26 @@ from savepoint_edge.sprite_params import compute_local_id
 # backbones (e.g. Immich, running the bigger w600k_r50) report needing to
 # loosen this same knob to stop the same person splitting into multiple
 # identities — the exact symptom that motivated dropping this value.
-_SIMILARITY_THRESHOLD = 0.35
+# Dropped again, to insightface's own cited floor, after real Pi hardware
+# testing showed the same person still fragmenting into multiple ids on a
+# profile turn — a frontal-trained backbone's embedding for a profile face
+# degrades further than mid-range community numbers assume. Env-tunable
+# (SAVEPOINT_EDGE_SIMILARITY_THRESHOLD) so it can be dialed in against real
+# footage without a redeploy — just edit edge/.env and restart the service.
+_SIMILARITY_THRESHOLD = float(os.environ.get("SAVEPOINT_EDGE_SIMILARITY_THRESHOLD", "0.30"))
 
 # A face box overlapping this much with a recent track is treated as the
 # same physical face continuing to be tracked, regardless of embedding
-# similarity. 0.3 tolerates normal frame-to-frame jitter/motion without
-# being so loose that two adjacent-but-distinct faces would count.
-_IOU_THRESHOLD = 0.3
+# similarity — the primary defense against a turning head fragmenting into
+# a new id (see class docstring §A.1): the embedding degrades on a turn,
+# but the box hasn't teleported. Lowered from an initial 0.3 after real Pi
+# testing: a real head turn shifts/shrinks the detected box more than that
+# tolerated, still not so loose that two simultaneous adjacent-but-distinct
+# faces would count (rare in the small scenes this targets — see the
+# trade-off note in the class docstring). Env-tunable
+# (SAVEPOINT_EDGE_IOU_THRESHOLD) for the same reason as the similarity
+# threshold above.
+_IOU_THRESHOLD = float(os.environ.get("SAVEPOINT_EDGE_IOU_THRESHOLD", "0.15"))
 
 # How long a track survives with no matching detection before it stops
 # counting for spatial continuity (it can still be re-matched by embedding
