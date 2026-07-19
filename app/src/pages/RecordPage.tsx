@@ -426,12 +426,14 @@ function TranscriptPanel({ state }: { state: RecordState }) {
     <div className="mx-auto flex max-w-md flex-col gap-2">
       {state.segments.length === 0 && (
         <div className="pixel-panel flex flex-col items-center gap-2 px-4 py-8 text-center">
+          {/* inherit the panel's dark-brown ink (.pixel-panel) — the muted
+              gray was near-invisible on the tan panel */}
           <Icon
             icon={live ? PiEar : PiMicrophone}
             size={30}
-            className="text-[var(--muted)]"
+            className="opacity-60"
           />
-          <p className="text-sm text-[var(--muted)]">
+          <p className="text-sm">
             {state.phase === "idle"
               ? "Hit Record and chat away — each voice gets its own line here."
               : state.previewedOnce
@@ -464,9 +466,12 @@ function TranscriptPanel({ state }: { state: RecordState }) {
       )}
 
       {live && (
+        // On bare grass — a fixed cream + ink shadow reads on green in both
+        // themes (muted gray washed out against the grass).
         <p
           role="status"
-          className="animate-pulse px-1 text-center text-xs text-[var(--muted)]"
+          className="animate-pulse px-1 text-center text-xs font-medium text-[#faf3e3]"
+          style={{ textShadow: "0 1px 2px rgba(20,16,10,0.75)" }}
         >
           {state.previewing ? "transcribing…" : "listening…"}
         </p>
