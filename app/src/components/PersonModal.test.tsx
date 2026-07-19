@@ -138,6 +138,118 @@ describe("PersonModal — rename", () => {
   });
 });
 
+describe("PersonModal — edit notes", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("saves notes via PATCH /people/{id} and reflects them", async () => {
+    const fetchMock = vi.fn(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const method = init?.method ?? "GET";
+        if (method === "GET") return jsonResponse(PERSON);
+        if (method === "PATCH")
+          return jsonResponse({ ...PERSON, notes: "Met at the market" });
+        throw new Error(`unexpected ${method} ${String(input)}`);
+      },
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+
+    renderModal();
+
+    await screen.findByRole("heading", { level: 2 });
+
+    await user.click(screen.getByRole("button", { name: /edit notes/i }));
+    const textarea = screen.getByRole("textbox", { name: /notes/i });
+    await user.type(textarea, "Met at the market");
+    await user.click(screen.getByRole("button", { name: /save notes/i }));
+
+    expect(await screen.findByText("Met at the market")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("textbox", { name: /notes/i }),
+    ).not.toBeInTheDocument();
+
+    const patchCall = fetchMock.mock.calls.find(
+      ([, init]) => init?.method === "PATCH",
+    );
+    expect(patchCall).toBeDefined();
+    const [url, init] = patchCall!;
+    expect(String(url)).toBe(`${API_BASE}/people/${PERSON.local_id}`);
+    // Only `notes` is sent — omitted keys must not be touched server-side.
+    expect(JSON.parse(init!.body as string)).toEqual({
+      notes: "Met at the market",
+    });
+  });
+});
+
+describe("PersonModal — edit tags", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("adds a tag via PATCH with the new list", async () => {
+    const start: ApiPersonDetail = { ...PERSON, tags: ["friend"] };
+    const fetchMock = vi.fn(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const method = init?.method ?? "GET";
+        if (method === "GET") return jsonResponse(start);
+        if (method === "PATCH")
+          return jsonResponse({ ...start, tags: ["friend", "gym"] });
+        throw new Error(`unexpected ${method} ${String(input)}`);
+      },
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+
+    renderModal();
+
+    await screen.findByRole("heading", { level: 2 });
+
+    const input = screen.getByRole("textbox", { name: /add a tag/i });
+    await user.type(input, "gym");
+    await user.click(screen.getByRole("button", { name: /^add tag$/i }));
+
+    expect(await screen.findByText("gym")).toBeInTheDocument();
+
+    const patchCall = fetchMock.mock.calls.find(
+      ([, init]) => init?.method === "PATCH",
+    );
+    expect(patchCall).toBeDefined();
+    expect(JSON.parse(patchCall![1]!.body as string)).toEqual({
+      tags: ["friend", "gym"],
+    });
+  });
+
+  it("removes a tag via PATCH with the shortened list", async () => {
+    const start: ApiPersonDetail = { ...PERSON, tags: ["friend", "gym"] };
+    const fetchMock = vi.fn(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const method = init?.method ?? "GET";
+        if (method === "GET") return jsonResponse(start);
+        if (method === "PATCH")
+          return jsonResponse({ ...start, tags: ["friend"] });
+        throw new Error(`unexpected ${method} ${String(input)}`);
+      },
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+
+    renderModal();
+
+    await screen.findByRole("heading", { level: 2 });
+
+    await user.click(screen.getByRole("button", { name: /remove tag gym/i }));
+
+    const patchCall = await vi.waitFor(() => {
+      const call = fetchMock.mock.calls.find(
+        ([, init]) => init?.method === "PATCH",
+      );
+      expect(call).toBeDefined();
+      return call!;
+    });
+    expect(JSON.parse(patchCall[1]!.body as string)).toEqual({
+      tags: ["friend"],
+    });
+  });
+});
+
 describe("PersonModal — close", () => {
   afterEach(() => vi.unstubAllGlobals());
 
