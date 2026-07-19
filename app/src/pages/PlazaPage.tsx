@@ -660,6 +660,20 @@ function PlazaPanel({
                   />
                 </span>
               </button>
+              {/* floating name tag over the head — only for people with a real
+                  name (raw p.name; unnamed faces / Speaker N get no label).
+                  Sibling of the sprite so paint() carries it along each frame;
+                  z-30 to paint over the upward-overflowing sprite; no pointer
+                  events so it never steals the select tap. */}
+              {p.name && (
+                <span
+                  aria-hidden
+                  className="pixel-name font-pixel pointer-events-none absolute left-0 z-30 -translate-x-1/2 text-[8px] whitespace-nowrap"
+                  style={{ top: -88 }}
+                >
+                  [{p.name}]
+                </span>
+              )}
               {/* the pair's animated "…" chat bubble, centered between the
                   two heads (this talker faces right; partner stands TALK_GAP
                   to the right) */}
