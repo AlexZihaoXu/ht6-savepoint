@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   PiCaretRight,
   PiCheck,
@@ -8,6 +8,7 @@ import {
   PiUsersThree,
 } from "react-icons/pi";
 import { Icon } from "@/components/Icon";
+import { PersonModal } from "@/components/PersonModal";
 import { PixelBottomNav, PixelHeader } from "@/components/PixelChrome";
 import { PixelSprite } from "@/lib/pixel-sprite";
 import { api, displayName, type ApiPerson } from "@/lib/api";
@@ -36,11 +37,36 @@ const SORT_LABELS: Record<PeopleSort, string> = {
  * button that opens the filter/sort options. Tap a row → Person info.
  */
 export function PeoplePage() {
+  // /people/:id deep-links straight to a person's pop-up (the profile is a
+  // modal now, not its own page). A row tap opens the same modal client-side.
+  const { id } = useParams();
+  const navigate = useNavigate();
+
   const [filter, setFilter] = useState<PeopleFilter>("all");
   const [sort, setSort] = useState<PeopleSort>("az");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [people, setPeople] = useState<ApiPerson[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(id ?? null);
+
+  // Keep the open pop-up in sync with the URL: a deep-link (or navigating
+  // back to /people) drives which profile — if any — is showing.
+  useEffect(() => {
+    setOpenId(id ?? null);
+  }, [id]);
+
+  const closeModal = useCallback(() => {
+    // Opened via the deep-link URL → return to the bare list so the URL
+    // doesn't go stale; opened via a row tap → just drop the overlay.
+    if (id) navigate("/people");
+    else setOpenId(null);
+  }, [id, navigate]);
+
+  const applyRename = useCallback((localId: string, name: string | null) => {
+    setPeople((ps) =>
+      ps ? ps.map((p) => (p.local_id === localId ? { ...p, name } : p)) : ps,
+    );
+  }, []);
 
   useEffect(() => {
     const ac = new AbortController();
@@ -160,7 +186,11 @@ export function PeoplePage() {
                 )}
                 <ul>
                   {items.map((p) => (
-                    <ContactRow key={p.local_id} person={p} />
+                    <ContactRow
+                      key={p.local_id}
+                      person={p}
+                      onOpen={() => setOpenId(p.local_id)}
+                    />
                   ))}
                 </ul>
               </li>
@@ -169,19 +199,34 @@ export function PeoplePage() {
         )}
       </section>
 
+      {openId && (
+        <PersonModal
+          localId={openId}
+          onClose={closeModal}
+          onRenamed={applyRename}
+        />
+      )}
+
       <PixelBottomNav />
     </div>
   );
 }
 
 /** One contacts row: sprite avatar + name (+ star), sub-line, chevron. */
-function ContactRow({ person: p }: { person: ApiPerson }) {
+function ContactRow({
+  person: p,
+  onOpen,
+}: {
+  person: ApiPerson;
+  onOpen: () => void;
+}) {
   return (
     <li className="border-b border-[var(--separator)] last:border-b-0">
-      <Link
-        to={`/people/${p.local_id}`}
+      <button
+        type="button"
+        onClick={onOpen}
         aria-label={`Open ${displayName(p)}`}
-        className="flex items-center gap-3 px-4 py-2 transition-colors active:bg-[var(--surface-tertiary)]"
+        className="flex w-full items-center gap-3 px-4 py-2 text-left transition-colors active:bg-[var(--surface-tertiary)]"
       >
         <PixelSprite
           localId={p.local_id}
@@ -207,7 +252,7 @@ function ContactRow({ person: p }: { person: ApiPerson }) {
           </p>
         </div>
         <Icon icon={PiCaretRight} className="shrink-0 text-[var(--muted)]" />
-      </Link>
+      </button>
     </li>
   );
 }

@@ -1,20 +1,23 @@
 /**
  * Chrome for the immersive pixel screens (plaza / garden / day scene):
- * a wooden header with the bracketed Savepoint logotype + hamburger menu,
- * and the mockup's bottom bar — [ Today ] [ journal ] [ people ].
+ * a wooden header with the bracketed Savepoint logotype (decorative — NOT a
+ * home button) + hamburger menu, and a real primary nav bar at the bottom
+ * with three destinations — Home · People · Record.
  */
 
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
+  PiHouseFill,
+  PiHouseLine,
   PiList,
   PiMicrophone,
   PiMoonStars,
-  PiNotePencil,
   PiSun,
-  PiUserList,
+  PiUsersThree,
 } from "react-icons/pi";
 import { Icon } from "./Icon";
+import { activeNav, type NavDest } from "@/lib/nav";
 import { getCurrentTheme, toggleTheme, type ThemeMode } from "@/lib/theme";
 
 export function PixelHeader() {
@@ -23,11 +26,10 @@ export function PixelHeader() {
 
   return (
     <header className="wood-bar relative z-40 flex h-[calc(3.5rem_+_var(--sat))] flex-none items-center justify-between px-3 pt-[var(--sat)]">
-      <Link
-        to="/plaza"
-        aria-label="Savepoint — plaza"
-        className="relative flex items-center justify-center px-2.5 py-2"
-      >
+      {/* Decorative logotype — the corner-bracketed Savepoint mark. It no
+          longer navigates (Home lives in the bottom nav now), so it's a plain
+          non-interactive element. */}
+      <span className="relative flex items-center justify-center px-2.5 py-2">
         {/* corner brackets, per the mockup logotype — pinned to the box
             corners so the logotype sits dead-center between them */}
         <span
@@ -43,7 +45,7 @@ export function PixelHeader() {
         <span className="font-pixel -translate-y-[1px] text-[15px] leading-none">
           Savepoint
         </span>
-      </Link>
+      </span>
 
       <button
         type="button"
@@ -66,13 +68,6 @@ export function PixelHeader() {
             {mode === "dark" ? "Day time" : "Night time"}
           </button>
           <Link
-            to="/people"
-            className="px-3 py-2.5 font-medium"
-            onClick={() => setMenuOpen(false)}
-          >
-            People list
-          </Link>
-          <Link
             to="/voice-setup"
             className="flex items-center gap-2 px-3 py-2.5 font-medium"
             onClick={() => setMenuOpen(false)}
@@ -86,36 +81,68 @@ export function PixelHeader() {
   );
 }
 
+/** One primary-nav destination — icon over a short label. */
+interface NavItem {
+  dest: NavDest;
+  to: string;
+  label: string;
+  icon: typeof PiHouseLine;
+  iconActive: typeof PiHouseLine;
+}
+
+const NAV_ITEMS: NavItem[] = [
+  {
+    dest: "home",
+    to: "/plaza",
+    label: "Home",
+    icon: PiHouseLine,
+    iconActive: PiHouseFill,
+  },
+  {
+    dest: "people",
+    to: "/people",
+    label: "People",
+    icon: PiUsersThree,
+    iconActive: PiUsersThree,
+  },
+  {
+    dest: "record",
+    to: "/record",
+    label: "Record",
+    icon: PiMicrophone,
+    iconActive: PiMicrophone,
+  },
+];
+
 export function PixelBottomNav() {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const active = activeNav(pathname);
+
   return (
     <nav
       aria-label="Primary"
-      className="pixel-bar z-40 flex flex-none items-stretch gap-2 px-3 pt-2 pb-[max(0.6rem,env(safe-area-inset-bottom))]"
+      className="pixel-bar z-40 flex flex-none items-stretch gap-1 px-2 pt-1.5 pb-[max(0.6rem,env(safe-area-inset-bottom))]"
     >
-      <button
-        type="button"
-        className="pixel-btn pixel-btn-primary touch-target flex-1 px-4 py-2.5"
-        onClick={() => navigate("/scene/today")}
-      >
-        <span className="font-pixel text-[13px]">Today</span>
-      </button>
-      <button
-        type="button"
-        aria-label="Journal — the garden of days"
-        className="pixel-btn touch-target flex w-14 items-center justify-center"
-        onClick={() => navigate("/plaza?view=garden")}
-      >
-        <Icon icon={PiNotePencil} size={22} />
-      </button>
-      <button
-        type="button"
-        aria-label="People"
-        className="pixel-btn touch-target flex w-14 items-center justify-center"
-        onClick={() => navigate("/people")}
-      >
-        <Icon icon={PiUserList} size={22} />
-      </button>
+      {NAV_ITEMS.map((item) => {
+        const isActive = active === item.dest;
+        return (
+          <button
+            key={item.dest}
+            type="button"
+            aria-current={isActive ? "page" : undefined}
+            className={`touch-target flex flex-1 flex-col items-center justify-center gap-1 py-1 transition-colors ${
+              isActive ? "text-[var(--accent)]" : "text-[var(--pixel-btn-fg)]"
+            }`}
+            onClick={() => navigate(item.to)}
+          >
+            <Icon icon={isActive ? item.iconActive : item.icon} size={22} />
+            <span className="font-pixel text-[8px] leading-none">
+              {item.label}
+            </span>
+          </button>
+        );
+      })}
     </nav>
   );
 }
