@@ -120,13 +120,17 @@ export function RecordPage() {
       const upload = await toUploadWav(blob);
       const result = await ingestAudioClip(upload, startedAtRef.current);
       toast.show("success", "Recording analyzed — here's your day");
-      const latestTs = result.events
+      // Deep-link to the FIRST line of what was just recorded, not the
+      // last — landing on the last line meant the scene opened already at
+      // the end of the conversation you just finished, with nothing left
+      // to play through.
+      const firstTs = result.events
         .map((e) => e.ts)
         .sort()
-        .at(-1);
+        .at(0);
       navigate(
-        latestTs
-          ? `/scene/today?t=${encodeURIComponent(latestTs)}`
+        firstTs
+          ? `/scene/today?t=${encodeURIComponent(firstTs)}`
           : "/scene/today",
         { replace: true },
       );
