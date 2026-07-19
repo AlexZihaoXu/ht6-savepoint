@@ -21,6 +21,7 @@ import { useReducedMotion } from "framer-motion";
 import {
   PiCaretDown,
   PiCaretLeft,
+  PiFlagPennantFill,
   PiScroll,
   PiUserPlus,
   PiX,
@@ -108,9 +109,6 @@ export function DayScenePage() {
   );
 
   const t0 = events.length ? new Date(events[0].ts).getTime() : 0;
-  const t1 = events.length
-    ? new Date(events[events.length - 1].ts).getTime()
-    : 0;
   const t = scrubT ?? t0;
 
   // Active line = the last event whose timestamp has passed the scrub time.
@@ -170,9 +168,9 @@ export function DayScenePage() {
             >
               <span
                 aria-hidden
-                className="scene-glass-btn flex h-9 w-9 items-center justify-center"
+                className="scene-glass-btn flex h-11 w-11 items-center justify-center"
               >
-                <Icon icon={PiCaretLeft} size={18} />
+                <Icon icon={PiCaretLeft} size={24} />
               </span>
             </button>
             <span className="font-pixel truncate text-[9px] text-white/50">
@@ -317,20 +315,9 @@ export function DayScenePage() {
         {/* bottom letterbox bar */}
         <div className="min-h-0 flex-1" />
 
-        {/* timeline scrubber */}
-        <div className="flex-none px-4 pt-1 pb-[max(0.9rem,env(safe-area-inset-bottom))]">
-          <input
-            type="range"
-            className="scrub"
-            aria-label="Scrub through the day"
-            min={t0}
-            max={Math.max(t1, t0 + 1)}
-            step={30000}
-            value={t}
-            disabled={events.length < 2}
-            onChange={(e) => setScrubT(Number(e.target.value))}
-          />
-          <TimelineMarks events={events} t0={t0} t1={t1} />
+        {/* timeline — tap a flag to jump to that moment (no drag scrubber) */}
+        <div className="flex-none px-3 pt-1 pb-[max(0.9rem,env(safe-area-inset-bottom))]">
+          <TimelineFlags events={events} activeIdx={activeIdx} onPick={jumpTo} />
         </div>
 
         {/* tap-to-name person picker (SAV-57) */}
@@ -763,53 +750,53 @@ function SpeakerPickerSheet({
 
 /* ---- timeline + transcript ------------------------------------------------- */
 
-function TimelineMarks({
+/**
+ * The day's moments as a row of clickable flags (waterprism: "clickable flags,
+ * not a direct video timeline"). Each event is a pennant + its clock time;
+ * tapping one jumps the scene to that moment. The active moment's flag is
+ * enlarged + lit. Overflows to a horizontal scroll on very busy days.
+ */
+function TimelineFlags({
   events,
-  t0,
-  t1,
+  activeIdx,
+  onPick,
 }: {
   events: ApiEvent[];
-  t0: number;
-  t1: number;
+  activeIdx: number;
+  onPick: (i: number) => void;
 }) {
-  // Evenly spaced time marks (ends exact, interior ones rounded to a clean
-  // half-hour) — event-based marks bunch up when a day clusters in one hour.
-  const marks = useMemo(() => {
-    if (events.length === 0) return [];
-    if (t1 <= t0)
-      return [{ key: 0, frac: 0, label: formatClock(events[0].ts) }];
-    const HALF_HOUR = 30 * 60 * 1000;
-    return [0, 1 / 3, 2 / 3, 1].map((f, k, arr) => {
-      const isEnd = k === 0 || k === arr.length - 1;
-      const raw = t0 + f * (t1 - t0);
-      const ts = isEnd ? raw : Math.round(raw / HALF_HOUR) * HALF_HOUR;
-      return {
-        key: k,
-        frac: (ts - t0) / (t1 - t0),
-        label: formatClock(new Date(ts).toISOString(), isEnd),
-      };
-    });
-  }, [events, t0, t1]);
-
+  if (events.length === 0) return null;
   return (
-    <div className="relative mt-0.5 h-5">
-      {marks.map((m, k) => (
-        <span
-          key={m.key}
-          className="font-pixel absolute text-[8px] text-white/70"
-          style={{
-            left: `${m.frac * 100}%`,
-            transform:
-              k === 0
-                ? "none"
-                : k === marks.length - 1
-                  ? "translateX(-100%)"
-                  : "translateX(-50%)",
-          }}
-        >
-          {m.label}
-        </span>
-      ))}
+    <div
+      role="tablist"
+      aria-label="Jump to a moment"
+      className="no-scrollbar flex items-end gap-1 overflow-x-auto"
+    >
+      {events.map((e, i) => {
+        const isActive = i === activeIdx;
+        return (
+          <button
+            key={i}
+            type="button"
+            role="tab"
+            aria-selected={isActive}
+            aria-label={`Moment at ${formatClock(e.ts)}`}
+            className="flex flex-none flex-col items-center gap-0.5 px-1 pt-0.5 transition-opacity"
+            onClick={() => onPick(i)}
+          >
+            <Icon
+              icon={PiFlagPennantFill}
+              size={isActive ? 22 : 15}
+              className={isActive ? "text-[#f9f360]" : "text-white/50"}
+            />
+            <span
+              className={`font-pixel text-[7px] ${isActive ? "text-white/90" : "text-white/45"}`}
+            >
+              {formatClock(e.ts)}
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 }
