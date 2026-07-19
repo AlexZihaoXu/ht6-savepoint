@@ -126,10 +126,16 @@ async def _upsert_person(
 ) -> Person:
     """Upsert the deterministic Person for ``sprite`` (same face -> same document).
 
-    A re-seen person keeps their name/tags/first_seen and only refreshes the sprite
-    avatar + ``last_seen``; a newly met face is created with
-    ``first_seen == last_seen == seen_at``. When a NEW person is created and
-    ``sprite_hook`` is supplied, it is fired once (fire-and-forget sprite generation).
+    A re-seen person keeps their name/tags/first_seen/avatar and only refreshes
+    ``last_seen``; a newly met face is created with ``first_seen == last_seen
+    == seen_at``. The avatar is deliberately NOT recomputed on a re-seen touch
+    even though ``avatar_from_sprite`` is pure/deterministic for a given
+    ``sprite`` — ``sprite`` itself comes from a fresh per-frame vision read
+    that isn't perfectly stable frame to frame, so blindly overwriting would
+    let a recurring character's look drift/reset on every re-sighting instead
+    of staying the one fixed appearance the person was first met with. When a
+    NEW person is created and ``sprite_hook`` is supplied, it is fired once
+    (fire-and-forget sprite generation).
     """
     local_id = derive_person_id(sprite, person_key)
     avatar = avatar_from_sprite(sprite)
@@ -139,7 +145,6 @@ async def _upsert_person(
         return await repos.people.upsert(
             existing.model_copy(
                 update={
-                    "avatar_params": avatar,
                     "first_seen": existing.first_seen or seen_at,
                     "last_seen": seen_at,
                 }
@@ -351,6 +356,21 @@ class AudioIngestResult(BaseModel):
 # the combined-ingest path) that don't thread one through.
 _DEFAULT_PERSON_MATCH_THRESHOLD = 0.30
 
+# How many recent face-embedding samples a Person keeps (services/models/person.py's
+# face_embeddings). Each SEEN event with a face is a one-shot edge-side event (fired
+# once per confirmed track, not per frame — see edge/main.py), so this caps slowly
+# over real usage, not per-frame; a handful of samples is enough to span a day's
+# lighting/pose variation without the gallery growing unbounded.
+_MAX_FACE_GALLERY = 8
+
+
+def _append_face_embedding(
+    gallery: list[list[float]], embedding: list[float], *, cap: int = _MAX_FACE_GALLERY
+) -> list[list[float]]:
+    """Append a fresh sample to a Person's face-embedding gallery, newest last,
+    keeping only the most recent ``cap`` samples."""
+    return [*gallery, embedding][-cap:]
+
 
 def _cosine_similarity(a: list[float], b: list[float]) -> float:
     n = min(len(a), len(b))
@@ -371,15 +391,18 @@ async def _find_matching_person(
 
     Brute-force cosine similarity over the whole collection is fine at this
     project's scale (a session's worth of distinct people, not a production
-    corpus) — no vector index exists or is needed yet. Returns the
-    highest-scoring candidate at or above ``threshold``, or ``None``.
+    corpus) — no vector index exists or is needed yet. Each candidate is
+    matched against the *best* of their stored gallery samples (not just the
+    latest one), since a person's stored embeddings span several past
+    lighting/pose conditions. Returns the highest-scoring candidate at or
+    above ``threshold``, or ``None``.
     """
     best: Person | None = None
     best_score = threshold
     for candidate in await repos.people.list(limit=500):
-        if candidate.face_embedding is None:
+        if not candidate.face_embeddings:
             continue
-        score = _cosine_similarity(embedding, candidate.face_embedding)
+        score = max(_cosine_similarity(embedding, sample) for sample in candidate.face_embeddings)
         if score >= best_score:
             best = candidate
             best_score = score
@@ -406,30 +429,42 @@ async def _upsert_seen_person(
     tick) — even for someone who never actually left. Without matching on the
     face itself, every such re-mint would otherwise create a duplicate Person.
 
-    A re-seen person (by either route) keeps their name/tags/first_seen and
-    refreshes the avatar + ``last_seen``; a genuinely new face is created with
-    ``first_seen == last_seen == seen_at``. ``face_embedding`` is stored when
-    present but never overwritten with ``None`` (so an event that omits it
-    doesn't wipe a previously stored embedding). When a NEW person is created
-    and ``sprite_hook`` is supplied, it fires once (fire-and-forget).
+    A re-seen person (by either route) keeps their name/tags/first_seen AND
+    avatar, refreshing only ``last_seen``. The avatar is deliberately never
+    overwritten here: ``avatar`` is derived edge-side from
+    ``compute_avatar_params(embedding)``, a hash of the raw per-sighting
+    embedding (edge/sprite_params.py) — since embeddings are noisy frame to
+    frame (the exact reason edge/identity_gallery.py exists at all), that
+    hash routinely differs between sightings of the same real person, so
+    overwriting on every touch reshuffled skin tone/hair/glasses/shirt on
+    every re-sighting instead of keeping one stable recurring character. A
+    genuinely new face is created with ``first_seen == last_seen == seen_at``
+    (using THIS sighting's avatar, since there's no prior one to keep). A
+    present ``face_embedding`` is appended to the person's gallery (see
+    ``_append_face_embedding``) rather than overwriting it — a single
+    overwritten sample drifts to whatever lighting/pose was last seen and
+    makes future matches unreliable; an absent one leaves the gallery
+    untouched. When a NEW person is created and ``sprite_hook`` is supplied,
+    it fires once (fire-and-forget).
     """
     existing = await repos.people.get_by_local_id(local_id)
     if existing is None and face_embedding is not None:
         existing = await _find_matching_person(face_embedding, repos, threshold=match_threshold)
     if existing is not None:
         update: dict[str, object] = {
-            "avatar_params": avatar,
             "first_seen": existing.first_seen or seen_at,
             "last_seen": seen_at,
         }
         if face_embedding is not None:
-            update["face_embedding"] = face_embedding
+            update["face_embeddings"] = _append_face_embedding(
+                existing.face_embeddings, face_embedding
+            )
         return await repos.people.upsert(existing.model_copy(update=update))
     created = await repos.people.upsert(
         Person(
             local_id=local_id,
             avatar_params=avatar,
-            face_embedding=face_embedding,
+            face_embeddings=[face_embedding] if face_embedding is not None else [],
             first_seen=seen_at,
             last_seen=seen_at,
         )
