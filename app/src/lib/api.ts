@@ -164,6 +164,44 @@ export async function ingestAudioClip(
   return (await res.json()) as AudioIngestResult;
 }
 
+/* ---- live preview transcription (record screen) --------------------------- */
+
+/** One diarized line of `POST /speech/preview` — relative seconds, no ids. */
+export interface PreviewSegment {
+  speaker: string;
+  start: number;
+  end: number;
+  text: string;
+}
+
+/** The store-free preview response: just the separated speech so far. */
+export interface PreviewTranscribeResult {
+  segments: PreviewSegment[];
+}
+
+/**
+ * Preview-transcribe a (partial) recording: POST the audio accumulated so far
+ * to `/speech/preview` and get back diarized "Speaker N" segments WITHOUT
+ * anything being written server-side — safe to poll repeatedly while the
+ * recorder is still running. The backend contract is "never 500": decode
+ * failures come back as `{segments: []}`, so an ok response always parses.
+ */
+export async function previewTranscribe(
+  blob: Blob,
+  signal?: AbortSignal,
+): Promise<PreviewTranscribeResult> {
+  const path = "/speech/preview";
+  const form = new FormData();
+  form.append("audio", blob, "preview.webm");
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    body: form,
+    signal,
+  });
+  if (!res.ok) throw new ApiError(res.status, path);
+  return (await res.json()) as PreviewTranscribeResult;
+}
+
 /* ---- tap-to-name (SAV-57 — bind a "Speaker N" to a real Person) ----------- */
 
 /** What `POST /day/{date}/assign-speaker` hands back: the binding + fresh day. */
