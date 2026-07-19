@@ -5,27 +5,40 @@
  * scene-utils.ts.
  */
 
-/* ---- growth-stage plant sprite ----------------------------------------- */
+/* ---- day flower sprite --------------------------------------------------- */
 
-/** The sheet's flower columns — four palettes, each drawn in 4 growth rows. */
+/** The sheet's four flower palettes. */
 const FLOWER_COLORS = ["pink", "gold", "blue", "green"] as const;
+/** Each palette has 4 distinct flowers (NOT growth stages) — same size. */
+const FLOWER_SPECIES = [1, 2, 3, 4] as const;
+
+/** FNV-ish hash so a seed maps deterministically to a palette + species. */
+function hashSeed(seed: string): number {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  return h;
+}
 
 /** Deterministic flower colour per seed (e.g. the day's ISO date). */
 function flowerColor(seed: string): (typeof FLOWER_COLORS)[number] {
-  let h = 0;
-  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
-  return FLOWER_COLORS[h % FLOWER_COLORS.length];
+  return FLOWER_COLORS[hashSeed(seed) % FLOWER_COLORS.length];
+}
+
+/** Deterministic flower species per seed — a different salt from the colour. */
+function flowerSpecies(seed: string): (typeof FLOWER_SPECIES)[number] {
+  return FLOWER_SPECIES[hashSeed(`${seed}#species`) % FLOWER_SPECIES.length];
 }
 
 /**
- * A day's plant: stage 0 (bare soil) .. 4 (full bloom), straight from the
- * sheet's flower growth rows. Same seed → same flower colour, so a day keeps
- * its plant across renders. Bigger stage = bigger, fuller flower — the
- * garden reads at a glance.
+ * A day's flower. The four artwork variants per palette are DIFFERENT FLOWERS,
+ * not growth frames — every flower renders at the SAME size (waterprism). Which
+ * flower a day shows is deterministic from its seed for now; it becomes
+ * user-pickable once the day model carries a chosen flower. `stage` only gates
+ * whether a day has bloomed yet (0 = bare soil).
  */
 export function PlantSprite({
   stage,
-  size = 22,
+  size = 24,
   seed = "",
   className,
 }: {
@@ -34,8 +47,7 @@ export function PlantSprite({
   seed?: string;
   className?: string;
 }) {
-  const s = Math.max(0, Math.min(4, stage));
-  if (s === 0) {
+  if (Math.max(0, stage) === 0) {
     return (
       <svg
         viewBox="0 0 16 16"
@@ -51,7 +63,7 @@ export function PlantSprite({
   }
   return (
     <img
-      src={`/assets/sheet/flower-${flowerColor(seed)}-${s}.png`}
+      src={`/assets/sheet/flower-${flowerColor(seed)}-${flowerSpecies(seed)}.png`}
       alt=""
       aria-hidden
       draggable={false}
