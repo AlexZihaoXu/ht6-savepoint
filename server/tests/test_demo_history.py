@@ -113,11 +113,15 @@ async def test_enabled_today_is_never_demo(repos: Repositories) -> None:
     assert body["people"] == []
 
 
-async def test_enabled_people_list_includes_demo_cast(repos: Repositories) -> None:
+async def test_enabled_people_list_never_includes_demo_cast(repos: Repositories) -> None:
+    """/people is the "who I know right now" roster (Plaza wandering cast,
+    tap-to-name picker, People page) — not a past-time view, so the demo cast
+    never appears there even with demo history on. It only surfaces inside
+    actual past-time views (a day, the days calendar, a person's own page)."""
     async with _client(repos, demo_enabled=True) as client:
         resp = await client.get("/people")
     local_ids = {p["local_id"] for p in resp.json()}
-    assert "demo-mia" in local_ids
+    assert "demo-mia" not in local_ids
 
 
 async def test_enabled_demo_person_detail_resolves(repos: Repositories) -> None:

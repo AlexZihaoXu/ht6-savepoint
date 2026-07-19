@@ -172,31 +172,25 @@ async def _build_day_view(day_date: date, repos: Repositories, *, demo_enabled: 
 @router.get("/people", response_model=list[Person], tags=["read"])
 async def list_people(
     repos: Annotated[Repositories, Depends(get_repos)],
-    demo_enabled: Annotated[bool, Depends(get_demo_history_enabled_dep)],
     favorite: Annotated[
         bool | None, Query(description="Filter by the favourite flag when set.")
     ] = None,
     limit: Annotated[int, Query(ge=1, le=500, description="Max people to return.")] = 100,
 ) -> list[Person]:
-    """List people (the town), most-recently-seen first."""
+    """List people (the town), most-recently-seen first.
+
+    Never includes demo_history's cast, even with demo history enabled — this
+    is the "who I know right now" roster (the Plaza's wandering characters,
+    the tap-to-name picker, the People page), not a past-time view. The demo
+    cast only ever shows up inside actual past-time views: a specific past
+    day (``/day/{date}``), the days calendar (``/days``), the month summary,
+    and a demo person's own detail page (``/people/{id}``) reached from one
+    of those.
+    """
     filters: dict[str, Any] = {}
     if favorite is not None:
         filters["favorite"] = favorite
-    real = await repos.people.list(filters, sort=[("last_seen", DESCENDING)], limit=limit)
-    if not demo_enabled:
-        return real
-    real_ids = {p.local_id for p in real}
-    # demo_history's cast never has a real Mongo doc, so it can never duplicate
-    # a real person here — only ever adds names Mongo doesn't already have.
-    demo = [
-        p
-        for p in demo_history.people()
-        if p.local_id not in real_ids and (favorite is None or p.favorite == favorite)
-    ]
-    combined = sorted(
-        real + demo, key=lambda p: p.last_seen or datetime.min.replace(tzinfo=UTC), reverse=True
-    )
-    return combined[:limit]
+    return await repos.people.list(filters, sort=[("last_seen", DESCENDING)], limit=limit)
 
 
 @router.get("/people/{local_id}", response_model=PersonDetail, tags=["read"])

@@ -72,6 +72,10 @@ export function DayScenePage() {
   const [error, setError] = useState<string | null>(null);
   const [scrubT, setScrubT] = useState<number | null>(null);
   const [showTranscript, setShowTranscript] = useState(false);
+  // The day's recap plays as a closing "narrator" beat after the last real
+  // event — true once the player has tapped past it (or immediately, for a
+  // day with a recap but no events of its own).
+  const [showRecap, setShowRecap] = useState(false);
   // Tap-to-name (SAV-57): the raw "Speaker N" label being assigned, or null
   // when the picker is closed. Captured on tap so scrubbing mid-pick can't
   // silently retarget the assignment.
@@ -85,6 +89,7 @@ export function DayScenePage() {
     (isToday ? api.today(ac.signal) : api.day(date!, ac.signal)).then(
       (v) => {
         setView(v);
+        setShowRecap(false);
         // Land on the deep-linked moment (snapped to the nearest event so
         // the matching line is active), else on the day's first event.
         const first = v.events[0];
@@ -138,8 +143,18 @@ export function DayScenePage() {
 
   const jumpTo = (i: number) => {
     const e = events[i];
-    if (e) setScrubT(new Date(e.ts).getTime());
+    if (e) {
+      setScrubT(new Date(e.ts).getTime());
+      setShowRecap(false);
+    }
   };
+
+  const recap = view?.recap ?? null;
+  const hasRecap = !!recap?.narrative;
+  const isLastEvent = events.length > 0 && activeIdx === events.length - 1;
+  // A day with no events of its own has nothing to tap through — its recap
+  // (a canned one, if the backend generated it that way) is the whole scene.
+  const showingRecap = hasRecap && (showRecap || events.length === 0);
 
   // Back = wherever the user came from (person page, garden…) when there IS
   // in-app history; a cold-opened deep link falls back to the plaza.
@@ -231,12 +246,17 @@ export function DayScenePage() {
         {/* dialogue box — the two stage characters stand right on top of it,
             [you] LEFT / partner RIGHT, feet tucked behind it */}
         <div className="flex-none px-2 pt-4">
-          {active && (
+          {(active || showingRecap) && (
             <div className="relative">
               {/* the talking pair shows their REAL PixelLab sprite, blown up
                   to stage scale (integer pixel scale, so it stays crisp);
-                  anyone un-sprited keeps the parametric fallback */}
-              <StageActor side="left" name="You" lit={youSpeaking}>
+                  anyone un-sprited keeps the parametric fallback. Both dim
+                  for the closing recap beat — nobody's "speaking" then. */}
+              <StageActor
+                side="left"
+                name="You"
+                lit={!showingRecap && youSpeaking}
+              >
                 {customYou ? (
                   // The customizer-built You (SAV-61): feet on the layout
                   // box's bottom edge, centered like the sprite tiles.
@@ -272,7 +292,7 @@ export function DayScenePage() {
                   key={partnerId}
                   side="right"
                   name={nameFor(partnerId, peopleById, displayName)}
-                  lit={!youSpeaking}
+                  lit={!showingRecap && !youSpeaking}
                   enter
                 >
                   <PixelSprite
@@ -287,22 +307,45 @@ export function DayScenePage() {
                   />
                 </StageActor>
               )}
-              <DialogueBox
-                event={active}
-                name={speakerName}
-                side={youSpeaking ? "left" : "right"}
-                hasNext={activeIdx < events.length - 1}
-                onAdvance={() =>
-                  jumpTo(Math.min(activeIdx + 1, events.length - 1))
-                }
-                onDone={() => navigate("/plaza")}
-                onNameTap={
-                  canName ? () => setNamingLabel(active.person_id) : undefined
-                }
-              />
+              {active && !showingRecap && (
+                <DialogueBox
+                  id={active._id}
+                  text={
+                    active.type === "spoke" && active.text
+                      ? active.text
+                      : `(${speakerName} stopped by.)`
+                  }
+                  meta={[active.place, formatClock(active.ts)]
+                    .filter(Boolean)
+                    .join(" · ")}
+                  name={speakerName}
+                  side={youSpeaking ? "left" : "right"}
+                  hasNext={!isLastEvent || hasRecap}
+                  onAdvance={() => {
+                    if (!isLastEvent) jumpTo(activeIdx + 1);
+                    else if (hasRecap) setShowRecap(true);
+                  }}
+                  onDone={() => navigate("/plaza")}
+                  onNameTap={
+                    canName ? () => setNamingLabel(active.person_id) : undefined
+                  }
+                />
+              )}
+              {showingRecap && recap && (
+                <DialogueBox
+                  id={`recap-${recap.date}`}
+                  text={recap.narrative}
+                  meta="Recap"
+                  name="Recap"
+                  side="left"
+                  hasNext={false}
+                  onAdvance={() => {}}
+                  onDone={() => navigate("/plaza")}
+                />
+              )}
             </div>
           )}
-          {!active && view && events.length === 0 && (
+          {!active && !showingRecap && view && events.length === 0 && (
             <p className="px-4 py-6 text-center text-sm text-white/60">
               A quiet day — no moments were saved.{" "}
               <Link to="/plaza" className="underline">
@@ -453,7 +496,9 @@ function StageActor({
 const MAX_BOX_LINES = 5;
 
 function DialogueBox({
-  event,
+  id,
+  text,
+  meta: metaProp,
   name,
   side,
   hasNext,
@@ -461,7 +506,13 @@ function DialogueBox({
   onDone,
   onNameTap,
 }: {
-  event: ApiEvent;
+  /** Re-runs the typewriter effect when this changes — an event's `_id`, or
+      a synthetic id for the recap beat. */
+  id: string;
+  text: string;
+  /** Small line above the text (place · time, or a fixed label for the
+      recap beat); omit/empty to hide it. */
+  meta?: string;
   name: string;
   /** Which stage side the speaker stands on — anchors the nameplate. */
   side: "left" | "right";
@@ -474,8 +525,6 @@ function DialogueBox({
   onNameTap?: () => void;
 }) {
   const reduce = useReducedMotion();
-  const text =
-    event.type === "spoke" && event.text ? event.text : `(${name} stopped by.)`;
 
   // Wrap-aware pagination: a hidden measurer with the exact width +
   // typography of the visible paragraph splits a long line into pages of at
@@ -544,9 +593,9 @@ function DialogueBox({
       });
     }, 22);
     return () => window.clearInterval(iv);
-  }, [event._id, page, pageText.length, reduce]);
+  }, [id, page, pageText.length, reduce]);
 
-  const meta = [event.place, formatClock(event.ts)].filter(Boolean).join(" · ");
+  const meta = metaProp ?? "";
   const revealed = shown >= pageText.length;
 
   return (
