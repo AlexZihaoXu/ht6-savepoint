@@ -74,13 +74,14 @@ def _edge_event(
     place: str | None = None,
     face_embedding: list[float] | None = None,
     ts_unix_ms: int | None = None,
+    avatar: dict[str, object] | None = None,
 ) -> dict[str, object]:
     """Build an EdgeEvent JSON payload (edge/types.py wire shape)."""
     return {
         "ts_unix_ms": ts_unix_ms if ts_unix_ms is not None else _ms(seen_at),
         "local_id": local_id,
         "type": "seen",
-        "avatar_params": _avatar_dict(),
+        "avatar_params": avatar if avatar is not None else _avatar_dict(),
         "face_embedding": face_embedding,
         "place": place,
         "schema_version": "savepoint.edge.v1",
@@ -151,7 +152,7 @@ async def test_ingest_video_creates_person_and_seen_event(repos: Repositories) -
     person = await repos.people.get_by_local_id("alex")
     assert person is not None
     assert person.avatar_params.skin_tone == "fair"
-    assert person.face_embedding == embedding
+    assert person.face_embeddings == [embedding]
     assert person.first_seen is not None and person.last_seen is not None
 
     # A SEEN event tied to the person + day, carrying the place.
@@ -207,7 +208,109 @@ async def test_ingest_video_embedding_not_wiped_when_absent(repos: Repositories)
         )
     person = await repos.people.get_by_local_id("alex")
     assert person is not None
-    assert person.face_embedding == embedding
+    assert person.face_embeddings == [embedding]
+
+
+async def test_ingest_video_reseen_person_accumulates_embedding_gallery(
+    repos: Repositories,
+) -> None:
+    """Re-seeing a known local_id APPENDS to the face-embedding gallery
+    instead of overwriting it — the fix for people fragmenting into
+    duplicates as their single stored sample drifted with lighting/pose."""
+    first, second = _vector(0.2), _vector(0.75)
+    async with _client(repos) as client:
+        await client.post("/ingest/video", json=[_edge_event("alex", BASE, face_embedding=first)])
+        await client.post(
+            "/ingest/video",
+            json=[_edge_event("alex", BASE + timedelta(hours=1), face_embedding=second)],
+        )
+    person = await repos.people.get_by_local_id("alex")
+    assert person is not None
+    assert person.face_embeddings == [first, second]
+
+
+async def test_ingest_video_gallery_capped_at_max_size(repos: Repositories) -> None:
+    """The gallery keeps only the most recent samples, oldest dropped first."""
+    samples = [_vector(seed / 10) for seed in range(10)]
+    async with _client(repos) as client:
+        for i, sample in enumerate(samples):
+            await client.post(
+                "/ingest/video",
+                json=[_edge_event("alex", BASE + timedelta(minutes=i), face_embedding=sample)],
+            )
+    person = await repos.people.get_by_local_id("alex")
+    assert person is not None
+    assert person.face_embeddings == samples[-8:]
+
+
+async def test_ingest_video_matches_via_older_gallery_sample_after_drift(
+    repos: Repositories,
+) -> None:
+    """A duplicate-local_id re-mint whose embedding only resembles an OLDER
+    gallery sample (not the most recent one) must still resolve onto the
+    existing Person — proves matching isn't limited to the latest sample."""
+    original = _vector(0.2)
+    unrelated_later_sample = _vector(0.75)  # cos(original, this) is strongly negative
+    drifted_but_matches_original = _jittered(0.2, 0.02)
+
+    async with _client(repos) as client:
+        await client.post(
+            "/ingest/video", json=[_edge_event("alex", BASE, face_embedding=original)]
+        )
+        await client.post(
+            "/ingest/video",
+            json=[
+                _edge_event(
+                    "alex", BASE + timedelta(hours=1), face_embedding=unrelated_later_sample
+                )
+            ],
+        )
+        resp = await client.post(
+            "/ingest/video",
+            json=[
+                _edge_event(
+                    "alex-session2",
+                    BASE + timedelta(hours=2),
+                    face_embedding=drifted_but_matches_original,
+                )
+            ],
+        )
+
+    assert resp.status_code == 200
+    assert [p["local_id"] for p in resp.json()["people"]] == ["alex"]
+    assert await repos.people.count() == 1
+
+
+async def test_ingest_video_reseen_person_keeps_original_avatar(repos: Repositories) -> None:
+    """A re-seen person's avatar must NOT change, even if the edge sends a
+    different avatar_params payload on the later sighting — edge-side
+    avatar_params are a hash of that sighting's raw (noisy) embedding, so a
+    second sighting legitimately hashes to a different look; overwriting on
+    every touch would make a recurring character's appearance reset/flicker
+    on every re-sighting instead of staying the one fixed look they were
+    first met with."""
+    second_look = {
+        "skin_tone": "deep",
+        "hair_color": "black",
+        "hair_style": "long",
+        "glasses": True,
+        "hat": "cap",
+        "shirt_color": "red",
+    }
+    payload = [
+        _edge_event("alex", BASE, avatar=_avatar_dict()),
+        _edge_event("alex", BASE + timedelta(hours=2), avatar=second_look),
+    ]
+
+    async with _client(repos) as client:
+        resp = await client.post("/ingest/video", json=payload)
+
+    assert resp.status_code == 200
+    person = await repos.people.get_by_local_id("alex")
+    assert person is not None
+    assert person.avatar_params.skin_tone == "fair"  # the FIRST sighting's look
+    assert person.avatar_params.hair_color == "brown"
+    assert person.avatar_params.shirt_color == "blue"
 
 
 async def test_ingest_video_unrecognized_local_id_reuses_person_by_embedding(

@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from savepoint_server.models.base import MongoModel
 
@@ -35,12 +36,17 @@ class Person(MongoModel):
     # Speaker voiceprint (ECAPA, 192-d). Kept on-device where feasible (DESIGN §8);
     # optional here for enrolled speakers bound server-side.
     voice_embedding: list[float] | None = None
-    # Face-attribute embedding from the edge detector (512-d, MobileFaceNet /
-    # w600k_mbf.onnx; see edge/types.py). Stored from EdgeEvents so a later
-    # detection under an unrecognized local_id can nearest-neighbour match
-    # this Person instead of minting a duplicate (DESIGN §9; see
-    # services/ingest.py's _find_matching_person).
-    face_embedding: list[float] | None = None
+    # Gallery of recent face-attribute embeddings from the edge detector
+    # (512-d, MobileFaceNet / w600k_mbf.onnx; see edge/types.py), newest last,
+    # capped at services/ingest.py's _MAX_FACE_GALLERY. Stored from EdgeEvents
+    # so a later detection under an unrecognized local_id can nearest-neighbour
+    # match this Person instead of minting a duplicate (DESIGN §9; see
+    # services/ingest.py's _find_matching_person). Kept as several recent
+    # samples rather than one overwritten embedding — a single sample drifts
+    # to whatever lighting/pose was last seen, making every subsequent match
+    # a coin-flip and causing the same person to fragment into duplicates
+    # over a day.
+    face_embeddings: list[list[float]] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)
     favorite: bool = False
     first_seen: datetime | None = None
@@ -59,3 +65,20 @@ class Person(MongoModel):
     # (generation is config-gated + fire-and-forget on ingest; see services/pixellab.py).
     # Flows through the read API automatically (GET /people, /people/{id}).
     sprite: dict | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _migrate_legacy_face_embedding(cls, data: Any) -> Any:
+        """Fold the old single ``face_embedding`` field into the new gallery.
+
+        Pre-gallery Mongo documents still have a ``face_embedding`` key; under
+        this model's ``extra="forbid"`` that key alone would fail validation
+        on read. Self-healing: the next upsert writes the document back out
+        via the current field, so no separate migration script is needed.
+        """
+        if isinstance(data, dict) and "face_embedding" in data:
+            data = dict(data)
+            legacy = data.pop("face_embedding")
+            if legacy is not None and not data.get("face_embeddings"):
+                data["face_embeddings"] = [legacy]
+        return data
