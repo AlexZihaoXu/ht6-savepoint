@@ -18,6 +18,16 @@ from savepoint_server.db.mongo import close_client, ensure_indexes, get_db
 
 logger = logging.getLogger(__name__)
 
+# Python's root logger defaults to WARNING when nothing configures it, and
+# uvicorn only sets up ITS OWN loggers (uvicorn/uvicorn.access/uvicorn.error)
+# — every app-level `logging.getLogger(__name__)` call elsewhere in this
+# package (e.g. services/voice.py's match_voice_to_you diagnostics) was
+# silently dropped as a result: the request succeeded, the log call ran, and
+# nothing ever reached stdout. INFO here is deliberately the app's floor —
+# uvicorn's own --log-level flag still controls its access/error logs
+# independently.
+logging.basicConfig(level=logging.INFO)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
