@@ -147,6 +147,16 @@
   border-top-color: var(--bubble-bg);
   border-bottom-width: 0;
 }
+/* Flipped variant for a bubble that opens downward (person near the top of
+   the plot) — tail moves to the bubble's top edge and points up instead. */
+.pixel-bubble-tail--up {
+  top: auto;
+  bottom: 100%;
+  border-top-color: transparent;
+  border-top-width: 0;
+  border-bottom-color: var(--bubble-bg);
+  border-bottom-width: 9px;
+}
 
 /* Floating name tags in the scene: white pixel text with a hard ink outline. */
 .pixel-name {

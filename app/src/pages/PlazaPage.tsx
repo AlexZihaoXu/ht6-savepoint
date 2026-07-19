@@ -350,9 +350,9 @@ function PlazaPanel({
   onOpenProfile: (localId: string) => void;
 }) {
   const reduce = useReducedMotion();
-  const [selected, setSelected] = useState<{ id: string; xPct: number } | null>(
-    null,
-  );
+  const [selected, setSelected] = useState<
+    { id: string; xPct: number; yPct: number } | null
+  >(null);
 
   const plotRef = useRef<HTMLDivElement>(null);
   const actorEls = useRef(new Map<string, HTMLDivElement>());
@@ -651,9 +651,11 @@ function PlazaPanel({
                     return;
                   }
                   const plotW = plotRef.current?.clientWidth || 1;
+                  const plotH = plotRef.current?.clientHeight || 1;
                   const s = simRef.current.find((s) => s.id === p.local_id);
                   const xPct = s && !reduce ? (s.x / plotW) * 100 : sx;
-                  setSelected({ id: p.local_id, xPct });
+                  const yPct = s && !reduce ? (s.y / plotH) * 100 : sy;
+                  setSelected({ id: p.local_id, xPct, yPct });
                 }}
               >
                 <span
@@ -704,6 +706,7 @@ function PlazaPanel({
                 <PersonBubble
                   person={p}
                   x={selected.xPct}
+                  y={selected.yPct}
                   onOpen={() => onOpenProfile(p.local_id)}
                   onRenamed={onRenamed}
                 />
@@ -1027,14 +1030,20 @@ function tailLeft(x: number): string {
 function PersonBubble({
   person,
   x,
+  y,
   onOpen,
   onRenamed,
 }: {
   person: ApiPerson;
   x: number;
+  y: number;
   onOpen: () => void;
   onRenamed: (localId: string, name: string | null) => void;
 }) {
+  // Bubbles normally open upward above the character's head — but for
+  // someone standing near the top of the plot there isn't enough room above
+  // before the section's overflow-hidden edge clips it, so flip downward.
+  const flip = y < 30;
   const toast = useToast();
   const note = person.notes?.trim();
   // Draft lives apart from `person` so a failed save keeps the last-good name.
@@ -1069,7 +1078,9 @@ function PersonBubble({
 
   return (
     <div
-      className="pixel-bubble absolute bottom-full left-1/2 z-30 mb-16 w-48 px-3 py-2.5 text-left"
+      className={`pixel-bubble absolute left-1/2 z-30 w-48 px-3 py-2.5 text-left ${
+        flip ? "top-full mt-3" : "bottom-full mb-16"
+      }`}
       style={{ transform: `translateX(${bubbleShift(x)})` }}
       onClick={(e) => e.stopPropagation()}
     >
@@ -1140,7 +1151,7 @@ function PersonBubble({
         open profile
       </button>
       <span
-        className="pixel-bubble-tail -translate-x-1/2"
+        className={`pixel-bubble-tail -translate-x-1/2 ${flip ? "pixel-bubble-tail--up" : ""}`}
         style={{ left: tailLeft(x) }}
       />
     </div>
