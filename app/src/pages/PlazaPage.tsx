@@ -835,7 +835,7 @@ function GardenPanel({
                     </span>
                     <PlantSprite
                       stage={byIso.get(cell.iso)?.plant_stage ?? 0}
-                      size={16 + (byIso.get(cell.iso)?.plant_stage ?? 0) * 8}
+                      size={26}
                       seed={cell.iso}
                     />
                   </button>
