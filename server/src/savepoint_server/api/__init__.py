@@ -17,6 +17,7 @@ from savepoint_server.api.recap import router as recap_router
 from savepoint_server.api.rename import router as rename_router
 from savepoint_server.api.speech import router as speech_router
 from savepoint_server.api.vision import router as vision_router
+from savepoint_server.api.voice import router as voice_router
 
 api_router = APIRouter()
 api_router.include_router(health_router)
@@ -29,5 +30,6 @@ api_router.include_router(binding_router)
 api_router.include_router(bio_router)
 api_router.include_router(rename_router)
 api_router.include_router(admin_router)
+api_router.include_router(voice_router)
 
 __all__ = ["api_router"]

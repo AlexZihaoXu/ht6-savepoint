@@ -24,6 +24,11 @@ const DayScenePage = lazy(() =>
 const RecordPage = lazy(() =>
   import("@/pages/RecordPage").then((m) => ({ default: m.RecordPage })),
 );
+const VoiceSetupPage = lazy(() =>
+  import("@/pages/VoiceSetupPage").then((m) => ({
+    default: m.VoiceSetupPage,
+  })),
+);
 
 /**
  * Animated, suspense-wrapped route element. The Suspense boundary sits INSIDE
@@ -58,7 +63,8 @@ export function AppShell() {
     location.pathname.startsWith("/plaza") ||
     location.pathname.startsWith("/scene") ||
     location.pathname.startsWith("/people") ||
-    location.pathname.startsWith("/record");
+    location.pathname.startsWith("/record") ||
+    location.pathname.startsWith("/voice-setup");
 
   // New screen → start reading from the top (the window is the scroller).
   useEffect(() => {
@@ -88,6 +94,7 @@ export function AppShell() {
             <Route path="/people" element={page(PeoplePage, true)} />
             <Route path="/people/:id" element={page(PersonPage, true)} />
             <Route path="/record" element={page(RecordPage, true)} />
+            <Route path="/voice-setup" element={page(VoiceSetupPage, true)} />
             <Route path="*" element={<Navigate to="/plaza" replace />} />
           </Routes>
         </AnimatePresence>

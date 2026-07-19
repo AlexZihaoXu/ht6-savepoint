@@ -48,6 +48,7 @@ from savepoint_server.services.transcript_refine import (
     get_transcript_refiner,
 )
 from savepoint_server.services.vision import ImageDecodeError
+from savepoint_server.services.voice import match_voice_to_you
 
 router = APIRouter(prefix="/ingest", tags=["ingest"])
 
@@ -191,9 +192,13 @@ async def ingest_audio_clip(
     :class:`~savepoint_server.services.speech.StubTranscriber` by default, the real
     pipeline on opt-in — into segments whose ``start``/``end`` are offsets *relative*
     to the clip, then anchors every offset onto ``started_at`` so each turn gets an
-    absolute timestamp. Those become :class:`AudioSegment` rows landed through the
-    exact same :func:`ingest_audio_segments` path as ``POST /ingest/audio``, so the
-    resulting SPOKE events line up with the Pi's SEEN events on one shared timeline.
+    absolute timestamp. Before those become :class:`AudioSegment` rows, the wearer's
+    own speech is auto-labeled ``"you"`` if an enrolled voiceprint matches
+    (:func:`~savepoint_server.services.voice.match_voice_to_you`; a no-op unless
+    both a wearer voiceprint is enrolled and the real pipeline is running). Those
+    segments are landed through the exact same :func:`ingest_audio_segments` path
+    as ``POST /ingest/audio``, so the resulting SPOKE events line up with the Pi's
+    SEEN events on one shared timeline.
     """
     audio_bytes = await audio.read()
     if not audio_bytes:
@@ -209,6 +214,9 @@ async def ingest_audio_clip(
                 "datetime (include a UTC offset) so events align on the NTP timeline."
             )
         transcript = transcriber.transcribe(audio_bytes)
+        transcript = await match_voice_to_you(
+            transcript, transcriber, repos, get_settings().voice_match_threshold
+        )
         segments = [
             AudioSegment(
                 speaker=seg.speaker,

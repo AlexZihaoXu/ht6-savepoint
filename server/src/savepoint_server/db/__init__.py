@@ -15,6 +15,7 @@ from savepoint_server.db.repositories import (
     PeopleRepository,
     RecapsRepository,
     Repositories,
+    WearerVoiceRepository,
     get_repositories,
 )
 
@@ -25,6 +26,7 @@ __all__ = [
     "PeopleRepository",
     "RecapsRepository",
     "Repositories",
+    "WearerVoiceRepository",
     "close_client",
     "ensure_indexes",
     "get_client",

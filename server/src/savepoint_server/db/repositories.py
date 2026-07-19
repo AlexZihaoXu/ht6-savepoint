@@ -22,7 +22,7 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 from pymongo import ASCENDING, DESCENDING
 
 from savepoint_server.db.mongo import get_db
-from savepoint_server.models import Day, Event, EventType, Person, Recap
+from savepoint_server.models import Day, Event, EventType, Person, Recap, WearerVoice
 from savepoint_server.models.base import MongoModel
 from savepoint_server.models.recap import RecapScope
 
@@ -194,6 +194,23 @@ class RecapsRepository(BaseRepository[Recap]):
         return await self.get(self._key(day, scope))
 
 
+class WearerVoiceRepository(BaseRepository[WearerVoice]):
+    """Wearer voice — a singleton document keyed by the literal id ``"you"``."""
+
+    collection_name = "wearer_voice"
+    model_cls = WearerVoice
+
+    def _make_id(self, doc: WearerVoice) -> str:
+        return "you"
+
+    async def upsert(self, voice: WearerVoice) -> WearerVoice:
+        """Insert or replace the singleton wearer-voice document."""
+        payload = voice.to_mongo()
+        payload["_id"] = "you"
+        await self._col.replace_one({"_id": "you"}, payload, upsert=True)
+        return WearerVoice.from_mongo(payload)
+
+
 @dataclass(slots=True)
 class Repositories:
     """Bundle of all entity repositories bound to one database handle."""
@@ -202,6 +219,7 @@ class Repositories:
     events: EventsRepository
     days: DaysRepository
     recaps: RecapsRepository
+    wearer_voice: WearerVoiceRepository
 
 
 def get_repositories(db: AsyncIOMotorDatabase | None = None) -> Repositories:
@@ -212,4 +230,5 @@ def get_repositories(db: AsyncIOMotorDatabase | None = None) -> Repositories:
         events=EventsRepository(database),
         days=DaysRepository(database),
         recaps=RecapsRepository(database),
+        wearer_voice=WearerVoiceRepository(database),
     )

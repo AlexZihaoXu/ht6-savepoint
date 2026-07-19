@@ -204,6 +204,42 @@ export async function previewTranscribe(
   return (await res.json()) as PreviewTranscribeResult;
 }
 
+/* ---- voice enrollment ("set up your voice" screen) ------------------------ */
+
+/** GET /voice/status — whether this listener's voiceprint is on file. */
+export interface VoiceStatus {
+  enrolled: boolean;
+  enrolled_at: string | null;
+}
+
+/** What `POST /voice/enroll` hands back once the sample is accepted. */
+export interface VoiceEnrollResult {
+  enrolled: true;
+  enrolled_at: string;
+}
+
+/**
+ * Upload a recorded voice sample to `POST /voice/enroll` so the backend can
+ * extract a voiceprint (re-recording overwrites any prior enrollment). A 400
+ * means the sample was empty or too short/unusable to enroll — surfaces as
+ * the usual `ApiError`.
+ */
+export async function enrollVoice(
+  blob: Blob,
+  signal?: AbortSignal,
+): Promise<VoiceEnrollResult> {
+  const path = "/voice/enroll";
+  const form = new FormData();
+  form.append("audio", blob, `voice.${audioExt(blob.type)}`);
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    body: form,
+    signal,
+  });
+  if (!res.ok) throw new ApiError(res.status, path);
+  return (await res.json()) as VoiceEnrollResult;
+}
+
 /* ---- tap-to-name (SAV-57 — bind a "Speaker N" to a real Person) ----------- */
 
 /** What `POST /day/{date}/assign-speaker` hands back: the binding + fresh day. */
@@ -297,6 +333,8 @@ export const api = {
       `/month/${encodeURIComponent(month)}/summary`,
       signal,
     ),
+  voiceStatus: (signal?: AbortSignal) =>
+    getJSON<VoiceStatus>("/voice/status", signal),
 };
 
 /** A friendly display name: the stored name, else a stable label from the id. */

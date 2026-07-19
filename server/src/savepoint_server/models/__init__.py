@@ -11,6 +11,7 @@ from savepoint_server.models.recap import Recap, RecapScope
 from savepoint_server.models.sprite import FaceAnalysis, SpriteParams
 from savepoint_server.models.transcript import Transcript, TranscriptSegment
 from savepoint_server.models.views import DayView, PersonDetail
+from savepoint_server.models.wearer_voice import WearerVoice
 
 __all__ = [
     "MAX_PLANT_STAGE",
@@ -33,4 +34,5 @@ __all__ = [
     "TopPerson",
     "Transcript",
     "TranscriptSegment",
+    "WearerVoice",
 ]

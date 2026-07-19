@@ -146,6 +146,15 @@ class Settings(BaseSettings):
     # machine-specific build the system ffmpeg can't otherwise provide.
     speech_ffmpeg_path: str = "ffmpeg"
 
+    # --- Wearer voice enrollment (SAV-?) ---
+    # Cosine-similarity threshold for auto-matching a diarized "Speaker N" label
+    # to the enrolled wearer voiceprint (services/voice.py's match_voice_to_you).
+    # NOTE: a starting point, not empirically tuned — voice-embedding similarity
+    # distributions for short phone-mic clips against the wespeaker-voxceleb-
+    # resnet34-LM embedding aren't validated on this deployment yet. Revisit once
+    # real enrollment + diarization samples are in hand.
+    voice_match_threshold: float = 0.45
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

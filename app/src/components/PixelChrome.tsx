@@ -8,6 +8,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   PiList,
+  PiMicrophone,
   PiMoonStars,
   PiNotePencil,
   PiSun,
@@ -70,6 +71,14 @@ export function PixelHeader() {
             onClick={() => setMenuOpen(false)}
           >
             People list
+          </Link>
+          <Link
+            to="/voice-setup"
+            className="flex items-center gap-2 px-3 py-2.5 font-medium"
+            onClick={() => setMenuOpen(false)}
+          >
+            <Icon icon={PiMicrophone} />
+            Set up your voice
           </Link>
         </div>
       )}

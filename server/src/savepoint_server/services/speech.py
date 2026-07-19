@@ -40,6 +40,29 @@ from savepoint_server.models import Event, EventType, Transcript, TranscriptSegm
 AudioInput = str | Path | bytes
 
 
+def normalize_audio_to_wav(src: Path, dst: Path, *, ffmpeg_path: str = "ffmpeg") -> None:
+    """Transcode ``src`` to a clean 16kHz mono WAV via ffmpeg.
+
+    Shared by :class:`RealTranscriber` (both pipeline stages need it: diarize.py's
+    torchcodec-based reader can decode WebM/Opus but the container doesn't
+    reliably expose a duration, and align.py's old torchaudio (soundfile
+    backend) can't read WebM/Opus at all) and ``services.voice.VoiceEnroller``
+    (voiceprint.py has the same soundfile-backend limitation). Normalizing once
+    up front sidesteps both — a free function (not a method) so both modules can
+    import it without either owning the other.
+    """
+    result = subprocess.run(
+        [ffmpeg_path, "-y", "-i", str(src), "-ar", "16000", "-ac", "1", str(dst)],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise SpeechPipelineError(
+            f"ffmpeg audio normalization failed (exit {result.returncode}): "
+            f"{result.stderr.strip()}"
+        )
+
+
 def _sniff_audio_extension(data: bytes) -> str:
     """Guess a filesystem extension from an audio blob's magic bytes.
 
@@ -150,6 +173,13 @@ class RealTranscriber:
         self._hf_token = hf_token
         self._whisper_model = whisper_model
         self._ffmpeg_path = ffmpeg_path
+        # Per-speaker-label voiceprints from align.py's last transcribe() call
+        # (``{"Speaker 1": [...256 floats...], ...}``), if any — set inside
+        # transcribe() below. Consumed by services.voice.match_voice_to_you to
+        # auto-label the wearer's own speech. A fresh RealTranscriber is
+        # constructed per request (get_transcriber() is not cached), so this
+        # instance state never leaks across requests.
+        self.last_voiceprints: dict[str, list[float]] = {}
 
     def transcribe(self, audio: AudioInput) -> Transcript:
         with tempfile.TemporaryDirectory(prefix="savepoint-speech-") as tmp:
@@ -164,6 +194,7 @@ class RealTranscriber:
             self._run_align(audio_path, diar_json, transcript_json)
 
             data = json.loads(transcript_json.read_text(encoding="utf-8"))
+            self.last_voiceprints = data.get("voiceprints", {})
             turns = data.get("turns", [])
             return Transcript(
                 segments=[
@@ -200,18 +231,11 @@ class RealTranscriber:
         can decode WebM/Opus but the container doesn't reliably expose a
         duration (breaks deep inside pyannote's audio I/O), and align.py's
         old torchaudio (soundfile backend) can't read WebM/Opus at all.
-        Normalizing once up front sidesteps both.
+        Normalizing once up front sidesteps both. Delegates to the shared
+        :func:`normalize_audio_to_wav` free function (also used by
+        ``services.voice.VoiceEnroller``).
         """
-        result = subprocess.run(
-            [self._ffmpeg_path, "-y", "-i", str(src), "-ar", "16000", "-ac", "1", str(dst)],
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode != 0:
-            raise SpeechPipelineError(
-                f"ffmpeg audio normalization failed (exit {result.returncode}): "
-                f"{result.stderr.strip()}"
-            )
+        normalize_audio_to_wav(src, dst, ffmpeg_path=self._ffmpeg_path)
 
     def _env(self) -> dict[str, str]:
         import os
@@ -356,13 +380,23 @@ async def transcribe_and_store(
 ) -> list[Event]:
     """Transcribe ``audio`` and persist each segment as an Event in Mongo.
 
-    Runs the configured transcriber (stub by default), maps every
+    Runs the configured transcriber (stub by default), auto-labels the wearer's
+    own speech as ``"you"`` if a voiceprint is enrolled and matches
+    (:func:`~savepoint_server.services.voice.match_voice_to_you`), maps every
     :class:`TranscriptSegment` to a SPOKE :class:`Event` under ``day_id``, inserts
     them via :class:`EventsRepository`, and returns the stored events (with ids) in
     transcript order.
     """
+    # Deferred import: services.voice imports RealTranscriber from this module,
+    # so a top-level import here would be circular.
+    from savepoint_server.services.voice import match_voice_to_you
+
     transcriber = transcriber or get_transcriber()
     transcript = transcriber.transcribe(audio)
+    settings = get_settings()
+    transcript = await match_voice_to_you(
+        transcript, transcriber, repos, settings.voice_match_threshold
+    )
     stored: list[Event] = []
     for segment in transcript.segments:
         event = await repos.events.insert(event_from_segment(segment, day_id=day_id))
